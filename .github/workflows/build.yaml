@@ -26,7 +26,7 @@ jobs:
         run: yarn build
 
   mysql:
-    name: ${{ matrix.mysql-image }}
+    name: ${{ matrix.mysql-image }} (${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
@@ -103,7 +103,7 @@ jobs:
           name: codecov
 
   test:
-    name: ${{ matrix.driver-name }}
+    name: ${{ matrix.driver-name }} (${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:

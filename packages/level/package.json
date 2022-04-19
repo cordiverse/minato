@@ -4,6 +4,12 @@
   "description": "ORM",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "runtime/lib/*.js",
+    "runtime/index.d.ts",
+    "runtime/package.json"
+  ],
   "peerDependencies": {
     "cosmotype": "^1.0.0"
   },

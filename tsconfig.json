@@ -6,6 +6,7 @@
       "cosmotype": ["packages/cosmotype/src"],
       "@cosmotype/*": ["packages/*/src"],
       "@cosmotype/driver-*": ["packages/*/src"],
+      "@cosmotype/driver-*/runtime": ["packages/*/runtime/src"],
     },
   },
 }
