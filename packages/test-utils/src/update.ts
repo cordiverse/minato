@@ -1,5 +1,5 @@
 import { $, Database } from 'cosmotype'
-import { omit } from 'tikloot'
+import { omit } from 'cosmokit'
 import { expect } from 'chai'
 
 interface Bar {

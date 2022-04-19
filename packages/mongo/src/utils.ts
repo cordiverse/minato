@@ -1,4 +1,4 @@
-import { valueMap } from 'tikloot'
+import { valueMap } from 'cosmokit'
 import { Query } from 'cosmotype'
 import { Filter, FilterOperators } from 'mongodb'
 

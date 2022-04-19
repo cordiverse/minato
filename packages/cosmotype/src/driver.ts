@@ -1,4 +1,4 @@
-import { Dict, makeArray, MaybeArray } from 'tikloot'
+import { Dict, makeArray, MaybeArray } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'

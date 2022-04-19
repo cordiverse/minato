@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "mongodb": "^4.5.0",
-    "tikloot": "^1.0.2"
+    "cosmokit": "^1.1.0"
   }
 }

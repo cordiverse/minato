@@ -5,6 +5,6 @@
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "dependencies": {
-    "tikloot": "^1.0.0"
+    "cosmokit": "^1.1.0"
   }
 }

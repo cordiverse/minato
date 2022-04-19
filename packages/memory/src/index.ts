@@ -1,4 +1,4 @@
-import { clone, Dict, makeArray, noop, pick } from 'tikloot'
+import { clone, Dict, makeArray, noop, pick } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, RuntimeError } from 'cosmotype'
 
 class MemoryDriver extends Driver {

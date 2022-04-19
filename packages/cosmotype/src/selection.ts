@@ -1,4 +1,4 @@
-import { defineProperty, Dict, pick, valueMap } from 'tikloot'
+import { defineProperty, Dict, pick, valueMap } from 'cosmokit'
 import { Driver } from './driver'
 import { Eval, executeEval } from './eval'
 import { Model } from './model'

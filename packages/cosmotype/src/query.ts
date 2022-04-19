@@ -1,4 +1,4 @@
-import { Extract } from 'tikloot'
+import { Extract } from 'cosmokit'
 import { Eval, executeEval } from './eval'
 import { Comparable, Indexable } from './utils'
 import { Selection } from './selection'

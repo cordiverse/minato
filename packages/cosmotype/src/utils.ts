@@ -1,4 +1,4 @@
-import { Intersect } from 'tikloot'
+import { Intersect } from 'cosmokit'
 
 export type Values<S> = S[keyof S]
 

@@ -7,8 +7,13 @@
   "peerDependencies": {
     "cosmotype": "^1.0.0"
   },
+  "devDependencies": {
+    "@cosmotype/test-utils": "^1.0.0",
+    "@types/mysql": "^2.15.21"
+  },
   "dependencies": {
     "@cosmotype/sql-utils": "^1.0.0",
-    "tikloot": "^1.0.0"
+    "@vlasky/mysql": "^2.18.5",
+    "cosmokit": "^1.1.0"
   }
 }

@@ -16,6 +16,6 @@
     "chai": "^4.3.6",
     "chai-as-promised": "^7.1.1",
     "chai-shape": "^1.0.0",
-    "tikloot": "^1.0.2"
+    "cosmokit": "^1.1.0"
   }
 }
