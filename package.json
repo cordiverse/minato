@@ -12,6 +12,10 @@
     "build": "yakumo build",
     "bump": "yakumo bump",
     "dep": "yakumo dep",
-    "docs": "yarn workspace docs"
+    "docs": "yarn workspace docs",
+    "test": "mocha",
+    "test:text": "rimraf coverage && c8 -r text test",
+    "test:json": "rimraf coverage && c8 -r json test",
+    "test:html": "rimraf coverage && c8 -r html test"
   }
 }
