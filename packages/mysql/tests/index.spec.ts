@@ -1,10 +1,14 @@
 import { Database } from 'cosmotype'
 import test from '@cosmotype/test-utils'
-import MemoryDriver from '@cosmotype/driver-memory'
+import MySQLDriver from '@cosmotype/driver-mysql'
 
 describe('Memory Database', () => {
   const database = new Database()
-  const driver = new MemoryDriver(database)
+  const driver = new MySQLDriver(database, {
+    user: 'koishi',
+    password: 'koishi@114514',
+    database: 'test',
+  })
 
   before(async () => {
     await driver.start()
@@ -15,5 +19,11 @@ describe('Memory Database', () => {
     await driver.stop()
   })
 
-  test(database)
+  test(database, {
+    query: {
+      list: {
+        elementQuery: false,
+      },
+    },
+  })
 })

@@ -1,0 +1,64 @@
+name: Test
+
+on: [push]
+
+env:
+  CI: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [14, 16]
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v1
+      - name: Set up Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install
+        run: yarn
+      - name: Build
+        run: yarn build
+
+  mysql:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [14, 16]
+        mysql-image: [mysql:5.7, mysql:8.0, mariadb:10.5]
+    services:
+      mysql:
+        image: ${{ matrix.mysql-image }}
+        ports:
+          - 3306:3306
+        options: --health-cmd "mysqladmin ping" --health-interval 10s --health-timeout 5s --health-retries 5
+        env:
+          MYSQL_USER: koishi
+          MYSQL_DATABASE: test
+          MYSQL_PASSWORD: koishi@114514
+          MYSQL_ROOT_PASSWORD: password
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v1
+      - name: Set up Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install
+        run: yarn
+      - name: Unit Test
+        run: yarn test:json mysql
+      - name: Report Coverage
+        if: ${{ matrix.node-version == 14 }}
+        uses: codecov/codecov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/coverage-final.json
+          name: codecov

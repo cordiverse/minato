@@ -14,5 +14,5 @@ const { args } = cac().help().parse()
 
   const mocha = new Mocha()
   mocha.files = await globby(patterns, { cwd })
-  mocha.run()
+  mocha.run(failures => process.exit(failures))
 })()

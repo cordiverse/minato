@@ -14,6 +14,7 @@
   "dependencies": {
     "@cosmotype/sql-utils": "^1.0.0",
     "@vlasky/mysql": "^2.18.5",
-    "cosmokit": "^1.1.0"
+    "cosmokit": "^1.1.0",
+    "reggol": "^1.0.1"
   }
 }
