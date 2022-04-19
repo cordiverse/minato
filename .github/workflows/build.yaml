@@ -31,7 +31,11 @@ jobs:
     strategy:
       matrix:
         node-version: [14, 16]
-        mysql-image: [mysql:5.7, mysql:8.0, mariadb:10.5]
+        mysql-image:
+          - mysql:5.7
+          - mysql:8.0
+          - mariadb:10.5
+
     services:
       mysql:
         image: ${{ matrix.mysql-image }}
@@ -56,7 +60,7 @@ jobs:
       - name: Unit Test
         run: yarn test:json mysql
       - name: Report Coverage
-        if: ${{ matrix.node-version == 14 }}
+        if: ${{ matrix.node-version == 14 && matrix.mysql-image == mysql:5.7 }}
         uses: codecov/codecov-action@v2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
