@@ -7,8 +7,15 @@
   "peerDependencies": {
     "cosmotype": "^1.0.0"
   },
+  "devDependencies": {
+    "@cosmotype/test-utils": "^1.0.0",
+    "@types/better-sqlite3": "^7.5.0"
+  },
   "dependencies": {
     "@cosmotype/sql-utils": "^1.0.0",
-    "tikloot": "^1.0.0"
+    "better-sqlite3": "^7.5.0",
+    "sqlstring-sqlite": "^0.1.1",
+    "cosmokit": "^1.1.0",
+    "reggol": "^1.0.1"
   }
 }

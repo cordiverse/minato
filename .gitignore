@@ -11,6 +11,7 @@ temp
 /coverage
 /.yalc
 
+test.db
 todo.md
 yarn.lock
 yalc.lock
