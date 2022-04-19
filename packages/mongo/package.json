@@ -4,10 +4,14 @@
   "description": "ORM",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
+  "devDependencies": {
+    "@cosmotype/test-utils": "^1.0.0"
+  },
   "peerDependencies": {
     "cosmotype": "^1.0.0"
   },
   "dependencies": {
-    "tikloot": "^1.0.0"
+    "mongodb": "^4.5.0",
+    "tikloot": "^1.0.2"
   }
 }
