@@ -39,10 +39,20 @@ class MongoDriver extends Driver {
   }
 
   private connectionStringFromConfig() {
-    const { authDatabase, connectOptions, host, database: name, password, port, protocol, username } = this.config
+    const {
+      authDatabase,
+      connectOptions,
+      host = 'localhost',
+      database,
+      password,
+      port = 27017,
+      protocol = 'mongodb',
+      username,
+    } = this.config
+
     let mongourl = `${protocol}://`
     if (username) mongourl += `${encodeURIComponent(username)}${password ? `:${encodeURIComponent(password)}` : ''}@`
-    mongourl += `${host}${port ? `:${port}` : ''}/${authDatabase || name}`
+    mongourl += `${host}${port ? `:${port}` : ''}/${authDatabase || database}`
     if (connectOptions) {
       const params = new URLSearchParams(connectOptions)
       mongourl += `?${params}`
@@ -51,8 +61,8 @@ class MongoDriver extends Driver {
   }
 
   async start() {
-    const mongourl = this.config.uri || this.connectionStringFromConfig()
-    this.client = await MongoClient.connect(mongourl)
+    const url = this.config.uri || this.connectionStringFromConfig()
+    this.client = await MongoClient.connect(url)
     this.db = this.client.db(this.config.database)
     super.start()
   }
