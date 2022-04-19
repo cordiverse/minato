@@ -1,0 +1,14 @@
+{
+  "name": "@cosmotype/driver-mysql",
+  "version": "1.0.0",
+  "description": "ORM",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "peerDependencies": {
+    "cosmotype": "^1.0.0"
+  },
+  "dependencies": {
+    "@cosmotype/sql-utils": "^1.0.0",
+    "tikloot": "^1.0.0"
+  }
+}

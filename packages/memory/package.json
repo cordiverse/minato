@@ -1,0 +1,13 @@
+{
+  "name": "@cosmotype/driver-memory",
+  "version": "1.0.0",
+  "description": "ORM",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "peerDependencies": {
+    "cosmotype": "^1.0.0"
+  },
+  "dependencies": {
+    "tikloot": "^1.0.0"
+  }
+}
