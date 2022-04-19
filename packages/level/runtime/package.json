@@ -1,0 +1,7 @@
+{
+  "name": "@cosmotype/driver-level.runtime",
+  "private": true,
+  "main": "lib/node.js",
+  "module": "lib/browser.js",
+  "typings": "index.d.ts"
+}

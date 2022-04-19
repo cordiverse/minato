@@ -26,7 +26,7 @@ jobs:
         run: yarn build
 
   mysql:
-    name: Node ${{ matrix.node-version }} ${{ matrix.mysql-image }}
+    name: ${{ matrix.mysql-image }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -94,6 +94,34 @@ jobs:
         run: yarn
       - name: Unit Test
         run: yarn test:json mongo
+      - name: Report Coverage
+        if: ${{ matrix.node-version == 14 }}
+        uses: codecov/codecov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/coverage-final.json
+          name: codecov
+
+  test:
+    name: ${{ matrix.driver-name }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [14, 16]
+        driver-name: [sqlite, level, memory]
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v1
+      - name: Set up Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install
+        run: yarn
+      - name: Unit Test
+        run: yarn test:json ${{ matrix.driver-name }}
       - name: Report Coverage
         if: ${{ matrix.node-version == 14 }}
         uses: codecov/codecov-action@v2
