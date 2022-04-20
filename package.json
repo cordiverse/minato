@@ -14,7 +14,7 @@
     "dep": "yakumo dep",
     "pub": "yakumo pub",
     "docs": "yarn workspace docs",
-    "test": "node -r esbuild-register build/test",
+    "test": "node -r esbuild-register scripts/test",
     "test:text": "rimraf coverage && c8 -r text yarn test",
     "test:json": "rimraf coverage && c8 -r json yarn test",
     "test:html": "rimraf coverage && c8 -r html yarn test"

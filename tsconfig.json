@@ -9,4 +9,7 @@
       "@cosmotype/driver-*/runtime": ["packages/*/runtime/src"],
     },
   },
+  "include": [
+    "scripts"
+  ]
 }

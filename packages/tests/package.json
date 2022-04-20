@@ -1,7 +1,7 @@
 {
-  "name": "@cosmotype/driver-mongo",
+  "name": "@cosmotype/tests",
   "version": "1.0.0",
-  "description": "MongoDB Driver for Cosmotype",
+  "description": "Test Cases for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -16,22 +16,25 @@
   "bugs": {
     "url": "https://github.com/cosmotype/cosmotype/issues"
   },
-  "homepage": "https://github.com/cosmotype/cosmotype/packages/mongo#readme",
+  "homepage": "https://github.com/cosmotype/cosmotype/packages/tests#readme",
   "keywords": [
     "orm",
     "database",
-    "driver",
-    "mongo",
-    "mongodb"
+    "test",
+    "unit"
   ],
   "devDependencies": {
-    "@cosmotype/tests": "^1.0.0"
+    "@types/chai": "^4.3.0",
+    "@types/chai-as-promised": "^7.1.5",
+    "@types/node": "^17.0.23"
   },
   "peerDependencies": {
     "cosmotype": "^1.0.0"
   },
   "dependencies": {
-    "mongodb": "^4.5.0",
+    "chai": "^4.3.6",
+    "chai-as-promised": "^7.1.1",
+    "chai-shape": "^1.0.0",
     "cosmokit": "^1.1.0"
   }
 }

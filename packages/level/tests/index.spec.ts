@@ -1,5 +1,5 @@
 import { Database } from 'cosmotype'
-import test from '@cosmotype/test-utils'
+import test from '@cosmotype/tests'
 import LevelDriver from '@cosmotype/driver-level'
 import { resolve } from 'path'
 

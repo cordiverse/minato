@@ -1,9 +1,32 @@
 {
   "name": "@cosmotype/sql-utils",
   "version": "1.0.0",
-  "description": "ORM",
+  "description": "SQL Utilities for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cosmotype/cosmotype.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cosmotype/cosmotype/issues"
+  },
+  "homepage": "https://github.com/cosmotype/cosmotype/packages/sql-utils#readme",
+  "keywords": [
+    "orm",
+    "database",
+    "driver",
+    "sql",
+    "utils",
+    "utilities",
+    "query",
+    "builder"
+  ],
   "peerDependencies": {
     "cosmotype": "^1.0.0"
   },

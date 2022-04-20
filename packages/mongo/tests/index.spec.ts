@@ -1,5 +1,5 @@
 import { Database } from 'cosmotype'
-import test from '@cosmotype/test-utils'
+import test from '@cosmotype/tests'
 import MongoDriver from '@cosmotype/driver-mongo'
 
 describe('Memory Database', () => {

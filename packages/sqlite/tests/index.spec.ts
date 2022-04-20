@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { Database } from 'cosmotype'
-import test from '@cosmotype/test-utils'
+import test from '@cosmotype/tests'
 import SQLiteDriver from '@cosmotype/driver-sqlite'
 
 describe('Memory Database', () => {

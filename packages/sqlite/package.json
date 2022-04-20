@@ -1,14 +1,33 @@
 {
   "name": "@cosmotype/driver-sqlite",
   "version": "1.0.0",
-  "description": "ORM",
+  "description": "SQLite Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cosmotype/cosmotype.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cosmotype/cosmotype/issues"
+  },
+  "homepage": "https://github.com/cosmotype/cosmotype/packages/sqlite#readme",
+  "keywords": [
+    "orm",
+    "database",
+    "driver",
+    "sqlite"
+  ],
   "peerDependencies": {
     "cosmotype": "^1.0.0"
   },
   "devDependencies": {
-    "@cosmotype/test-utils": "^1.0.0",
+    "@cosmotype/tests": "^1.0.0",
     "@types/better-sqlite3": "^7.5.0"
   },
   "dependencies": {
