@@ -80,6 +80,12 @@ class MySQLBuilder extends Builder {
   }
 }
 
+interface ColumnInfo {
+  COLUMN_NAME: string
+  IS_NULLABLE: 'YES' | 'NO'
+  DATA_TYPE: string
+}
+
 interface QueryTask {
   sql: string
   resolve: (value: any) => void
@@ -147,22 +153,30 @@ class MySQLDriver extends Driver {
     this.pool.end()
   }
 
-  private _getColDefs(name: string, columns: string[]) {
+  private _getColDefs(name: string, columns: ColumnInfo[]) {
     const table = this.model(name)
     const { primary, foreign, autoInc } = table
     const fields = { ...table.fields }
     const unique = [...table.unique]
-    const result: string[] = []
+    const create: string[] = []
+    const update: string[] = []
 
     // orm definitions
     for (const key in fields) {
-      if (columns.includes(key)) continue
+      let shouldUpdate = false
+      const legacy = columns.find(info => info.COLUMN_NAME === key)
       const { initial, nullable = true } = fields[key]
+
       let def = backtick(key)
       if (key === primary && autoInc) {
         def += ' int unsigned not null auto_increment'
       } else {
         const typedef = getTypeDefinition(fields[key])
+        const typename = typedef.split('(')[0]
+        if (legacy && legacy.DATA_TYPE !== typename) {
+          logger.warn(`${name}.${key} data type mismatch: ${legacy.DATA_TYPE} => ${typedef}`)
+          shouldUpdate = true
+        }
         def += ' ' + typedef
         if (makeArray(primary).includes(key)) {
           def += ' not null'
@@ -174,35 +188,49 @@ class MySQLDriver extends Driver {
           def += ' default ' + this.sql.escape(initial, name, key)
         }
       }
-      result.push(def)
+
+      if (!legacy) {
+        create.push(def)
+      } else if (shouldUpdate) {
+        update.push(def)
+      }
     }
 
     if (!columns.length) {
-      result.push(`primary key (${createIndex(primary)})`)
+      create.push(`primary key (${createIndex(primary)})`)
       for (const key of unique) {
-        result.push(`unique index (${createIndex(key)})`)
+        create.push(`unique index (${createIndex(key)})`)
       }
       for (const key in foreign) {
         const [table, key2] = foreign[key]
-        result.push(`foreign key (${backtick(key)}) references ${escapeId(table)} (${backtick(key2)})`)
+        create.push(`foreign key (${backtick(key)}) references ${escapeId(table)} (${backtick(key2)})`)
       }
     }
 
-    return result
+    return [create, update]
   }
 
   /** synchronize table schema */
   async prepare(name: string) {
-    // eslint-disable-next-line max-len
-    const data = await this.queue<any[]>('SELECT * from information_schema.columns WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?', [this.config.database, name])
-    const columns = data.map(row => row.COLUMN_NAME)
-    const result = this._getColDefs(name, columns)
+    const columns = await this.queue<ColumnInfo[]>(`
+      SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE
+      FROM information_schema.columns
+      WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?
+    `, [this.config.database, name])
+
+    const [create, update] = this._getColDefs(name, columns)
     if (!columns.length) {
       logger.info('auto creating table %c', name)
-      await this.queue(`CREATE TABLE ?? (${result.join(',')}) COLLATE = ?`, [name, this.config.charset])
-    } else if (result.length) {
+      return this.queue(`CREATE TABLE ?? (${create.join(',')}) COLLATE = ?`, [name, this.config.charset])
+    }
+
+    const operations = [
+      ...create.map(def => 'ADD ' + def),
+      ...update.map(def => 'ALTER COLUMN ' + def),
+    ]
+    if (operations.length) {
       logger.info('auto updating table %c', name)
-      await this.queue(`ALTER TABLE ?? ${result.map(def => 'ADD ' + def).join(',')}`, [name])
+      await this.queue(`ALTER TABLE ?? ${operations.join(',')}`, [name])
     }
   }
 

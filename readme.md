@@ -33,10 +33,38 @@ const driver = new MySQLDriver(database, {
 await driver.start()
 ```
 
-## Simple API
+## Data Definition
 
 ```ts
+database.extend('user', {
+  id: 'number',
+  name: 'string',
+  age: 'number',
+  money: { type: 'number', initial: 100 },
+}, {
+  primary: 'id',
+  autoInc: true,
+})
 ```
+
+## Simple API
+
+### create
+
+```ts
+const user = await driver.create('user', {
+  name: 'John',
+  age: 20,
+}) // { id: 1, name: 'John', age: 20, money: 100 }
+```
+
+### get
+
+### remove
+
+### set
+
+### upsert
 
 ## Selection API
 
