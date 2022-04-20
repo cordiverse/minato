@@ -8,7 +8,7 @@ class MemoryDriver extends Driver {
     super(database, 'memory')
   }
 
-  prepare(name: string) {}
+  async prepare(name: string) {}
 
   async start() {
     // await this.#loader?.start(this.#store)

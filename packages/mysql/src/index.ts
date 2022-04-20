@@ -92,7 +92,6 @@ class MySQLDriver extends Driver {
 
   sql: MySQLBuilder
 
-  private _tableTasks: Dict<Promise<any>> = {}
   private _queryTasks: QueryTask[] = []
 
   constructor(database: Database, config?: MySQLDriver.Config) {
@@ -136,10 +135,6 @@ class MySQLDriver extends Driver {
     }
 
     this.sql = new MySQLBuilder(database.tables)
-  }
-
-  prepare(name: string) {
-    this._tableTasks[name] = this._syncTable(name)
   }
 
   async start() {
@@ -197,10 +192,9 @@ class MySQLDriver extends Driver {
   }
 
   /** synchronize table schema */
-  private async _syncTable(name: string) {
-    await this._tableTasks[name]
+  async prepare(name: string) {
     // eslint-disable-next-line max-len
-    const data = await this.queue<any[]>('SELECT COLUMN_NAME from information_schema.columns WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?', [this.config.database, name])
+    const data = await this.queue<any[]>('SELECT * from information_schema.columns WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?', [this.config.database, name])
     const columns = data.map(row => row.COLUMN_NAME)
     const result = this._getColDefs(name, columns)
     if (!columns.length) {
@@ -299,7 +293,6 @@ class MySQLDriver extends Driver {
   async get(sel: Executable, modifier: Modifier) {
     const { table, fields, query, model } = sel
     const filter = this.sql.parseQuery(query)
-    await this._tableTasks[table]
     if (filter === '0') return []
     const { limit, offset, sort } = modifier
     const keys = this._joinKeys(this._inferFields(table, fields ? Object.keys(fields) : null))
@@ -315,7 +308,6 @@ class MySQLDriver extends Driver {
   async eval(sel: Executable, expr: Eval.Expr) {
     const { table, query } = sel
     const filter = this.sql.parseQuery(query)
-    await this._tableTasks[table]
     const output = this.sql.parseEval(expr)
     const [data] = await this.queue(`SELECT ${output} AS value FROM ${table} WHERE ${filter}`)
     return data.value
@@ -353,7 +345,6 @@ class MySQLDriver extends Driver {
     const { model, query, table } = sel
     const filter = this.sql.parseQuery(query)
     const { fields } = model
-    await this._tableTasks[table]
     if (filter === '0') return
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))
@@ -369,7 +360,6 @@ class MySQLDriver extends Driver {
 
   async remove(sel: Executable) {
     const { query, table } = sel
-    await this._tableTasks[table]
     const filter = this.sql.parseQuery(query)
     if (filter === '0') return
     await this.query('DELETE FROM ?? WHERE ' + filter, [table])
@@ -377,7 +367,6 @@ class MySQLDriver extends Driver {
 
   async create(sel: Executable, data: {}) {
     const { table, model } = sel
-    await this._tableTasks[table]
     data = model.create(data)
     const formatted = model.format(data)
     const { autoInc, primary } = model
@@ -393,7 +382,6 @@ class MySQLDriver extends Driver {
   async upsert(sel: Executable, data: any[], keys: string[]) {
     if (!data.length) return
     const { model, table, ref } = sel
-    await this._tableTasks[table]
 
     const merged = {}
     const insertion = data.map((item) => {

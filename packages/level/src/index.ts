@@ -23,7 +23,7 @@ class LevelDriver extends Driver {
     this.#path = resolveLocation(config.location)
   }
 
-  prepare(name: string) {
+  async prepare(name: string) {
     delete this.#tables[name]
   }
 

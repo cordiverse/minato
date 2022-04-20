@@ -1,5 +1,5 @@
 import { Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
+import { Dict, isNullable, makeArray, MaybeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, Modifier, Query, RuntimeError } from 'cosmotype'
 import { URLSearchParams } from 'url'
 import { transformEval, transformQuery } from './utils'
@@ -31,8 +31,9 @@ class MongoDriver extends Driver {
   public client: MongoClient
   public db: Db
   public mongo = this
-  private _tableTasks: Dict<Promise<any>> = {}
+
   private _evalTasks: EvalTask[] = []
+  private _createTasks: Dict<Promise<void>> = {}
 
   constructor(database: Database, private config: Config) {
     super(database, 'mongo')
@@ -77,7 +78,7 @@ class MongoDriver extends Driver {
     const coll = this.db.collection(name)
     const newSpecs: IndexDescription[] = []
     const oldSpecs = await coll.indexes()
-    ;[primary, ...unique].forEach((keys, index) => {
+    ;[primary, ...unique].forEach((keys: MaybeArray<string>, index) => {
       keys = makeArray(keys)
       const name = (index ? 'unique:' : 'primary:') + keys.join('+')
       if (oldSpecs.find(spec => spec.name === name)) return
@@ -103,17 +104,12 @@ class MongoDriver extends Driver {
   }
 
   /** synchronize table schema */
-  private async _syncTable(name: string) {
-    await Promise.resolve(this._tableTasks[name]).catch(noop)
+  async prepare(name: string) {
     await this.db.createCollection(name).catch(noop)
     await Promise.all([
       this._createIndexes(name),
       this._createFields(name),
     ])
-  }
-
-  prepare(name: string): void {
-    this._tableTasks[name] = this._syncTable(name)
   }
 
   async drop() {
@@ -224,14 +220,12 @@ class MongoDriver extends Driver {
     await this.db.collection(table).deleteMany(filter)
   }
 
-  private queue(name: string, callback: () => Promise<any>) {
-    return this._tableTasks[name] = Promise.resolve(this._tableTasks[name]).catch(noop).then(callback)
-  }
-
   async create(sel: Executable, data: any) {
-    const coll = this.db.collection(sel.table)
-    return this.queue(sel.table as any, async () => {
-      const { primary, fields, autoInc } = sel.model
+    const { table } = sel
+    return this._createTasks[table] = Promise.resolve(this._createTasks[table]).catch(noop).then(async () => {
+      const model = this.model(table)
+      const coll = this.db.collection(table)
+      const { primary, fields, autoInc } = model
       if (autoInc && !Array.isArray(primary) && !(primary in data)) {
         const [latest] = await coll.find().sort(primary, -1).limit(1).toArray()
         data[primary] = latest ? +latest[primary] + 1 : 1
@@ -240,7 +234,7 @@ class MongoDriver extends Driver {
           data[primary] = data[primary].padStart(8, '0')
         }
       }
-      const copy = sel.model.create(data)
+      const copy = model.create(data)
       try {
         await coll.insertOne(copy)
         delete copy['_id']
@@ -257,7 +251,6 @@ class MongoDriver extends Driver {
   async upsert(sel: Executable, data: any[], keys: string[]) {
     if (!data.length) return
     const { table, ref, model } = sel
-    await Promise.resolve(this._tableTasks[table]).catch(noop)
     const coll = this.db.collection(table)
     const original = await coll.find({ $or: data.map(item => pick(item, keys)) }).toArray()
     const bulk = coll.initializeUnorderedBulkOp()

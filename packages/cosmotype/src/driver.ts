@@ -33,6 +33,7 @@ export namespace Driver {
 export class Database<S = any> {
   public tables: { [K in Keys<S>]?: Model<S[K]> } = {}
   public drivers: Dict<Driver> = {}
+  private tasks: Dict<Promise<void>> = {}
 
   constructor(public mapper: Dict<string> = {}) {}
 
@@ -41,6 +42,9 @@ export class Database<S = any> {
       delete this.drivers[name]
     } else {
       this.drivers[name] = driver
+      for (const name in this.tables) {
+        this.tasks[name] = driver.prepare(name)
+      }
     }
   }
 
@@ -52,7 +56,8 @@ export class Database<S = any> {
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Model.Config<S[K]> = {}) {
     const model = this.tables[name] ||= new Model<any>(name)
     model.extend(fields, config)
-    this.getDriver(name)?.prepare(name)
+    const driver = this.getDriver(name)
+    if (driver) this.tasks[name] = driver.prepare(name)
   }
 
   select<T extends Selector<S>>(table: T, query?: Query<Selector.Resolve<S, T>>): Selection<Selector.Resolve<S, T>> {
@@ -87,36 +92,40 @@ export class Database<S = any> {
       .execute()
   }
 
-  set<T extends Keys<S>>(table: T, query: Query<Selector.Resolve<S, T>>, update: Selection.Yield<S[T], Update<S[T]>>): Promise<void> {
+  async set<T extends Keys<S>>(table: T, query: Query<Selector.Resolve<S, T>>, update: Selection.Yield<S[T], Update<S[T]>>) {
+    await this.tasks[table]
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)
     if (primary.some(key => key in update)) {
       throw new TypeError(`cannot modify primary key`)
     }
-    return sel.action('set', sel.model.format(update)).execute()
+    await sel.action('set', sel.model.format(update)).execute()
   }
 
-  remove<T extends Keys<S>>(table: T, query: Query<Selector.Resolve<S, T>>): Promise<void> {
+  async remove<T extends Keys<S>>(table: T, query: Query<Selector.Resolve<S, T>>) {
+    await this.tasks[table]
     const sel = this.select(table, query)
-    return sel.action('remove').execute()
+    await sel.action('remove').execute()
   }
 
-  create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
+  async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
+    await this.tasks[table]
     const sel = this.select(table)
     return sel.action('create', data).execute()
   }
 
-  upsert<T extends Keys<S>>(table: T, upsert: Selection.Yield<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>): Promise<void> {
+  async upsert<T extends Keys<S>>(table: T, upsert: Selection.Yield<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
+    await this.tasks[table]
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))
     keys = makeArray(keys || sel.model.primary) as any
-    return sel.action('upsert', upsert, keys).execute()
+    await sel.action('upsert', upsert, keys).execute()
   }
 
-  drop() {
-    return Promise.all(Object.values(this.drivers).map(driver => driver.drop()))
+  async drop() {
+    await Promise.all(Object.values(this.drivers).map(driver => driver.drop()))
   }
 
   async stats() {
@@ -133,7 +142,7 @@ export class Database<S = any> {
 export abstract class Driver {
   abstract drop(): Promise<void>
   abstract stats(): Promise<Driver.Stats>
-  abstract prepare(name: string): void
+  abstract prepare(name: string): Promise<void>
   abstract get(sel: Executable, modifier: Modifier): Promise<any>
   abstract eval(sel: Executable, expr: Eval.Expr): Promise<any>
   abstract set(sel: Executable, data: Update): Promise<void>
@@ -144,9 +153,6 @@ export abstract class Driver {
   constructor(public database: Database, public name: string) {}
 
   async start() {
-    for (const name in this.database.tables) {
-      this.prepare(name)
-    }
     this.database.setDriver(this.name, this)
   }
 
