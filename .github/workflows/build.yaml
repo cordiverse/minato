@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         node-version: [14, 16]
 
@@ -30,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         mysql-image:
           - mysql:5.7
@@ -72,6 +74,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         node-version: [14, 16]
 
@@ -107,6 +110,7 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
       matrix:
         driver-name: [sqlite, level, memory]
         node-version: [14, 16]
