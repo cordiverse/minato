@@ -1,4 +1,4 @@
-import { valueMap } from 'cosmokit'
+import { isNullable, valueMap } from 'cosmokit'
 import { Query } from 'cosmotype'
 import { Filter, FilterOperators } from 'mongodb'
 
@@ -22,6 +22,8 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
     return { $in: query }
   } else if (query instanceof RegExp) {
     return { $regex: query }
+  } else if (isNullable(query)) {
+    return { $exists: null }
   }
 
   // query operators

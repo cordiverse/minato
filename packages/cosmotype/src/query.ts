@@ -1,4 +1,4 @@
-import { Extract } from 'cosmokit'
+import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval'
 import { Comparable, Indexable } from './utils'
 import { Selection } from './selection'
@@ -11,6 +11,9 @@ export namespace Query {
     $or?: FieldQuery<T>[]
     $and?: FieldQuery<T>[]
     $not?: FieldQuery<T>
+
+    // existence
+    $exists?: boolean
 
     // membership
     $in?: Extract<T, Indexable, T[]>
@@ -69,6 +72,9 @@ const queryOperators: QueryOperators = {
   $and: (query, data) => query.reduce((prev, query) => prev && executeFieldQuery(query, data), true),
   $not: (query, data) => !executeFieldQuery(query, data),
 
+  // existence
+  $exists: (query, data) => query !== isNullable(data),
+
   // comparison
   $eq: (query, data) => data.valueOf() === query.valueOf(),
   $ne: (query, data) => data.valueOf() !== query.valueOf(),
@@ -104,6 +110,8 @@ function executeFieldQuery(query: Query.FieldQuery, data: any) {
     return query.test(data)
   } else if (typeof query === 'string' || typeof query === 'number' || query instanceof Date) {
     return data.valueOf() === query.valueOf()
+  } else if (isNullable(query)) {
+    return isNullable(data)
   }
 
   for (const key in query) {
@@ -131,7 +139,6 @@ export function executeQuery(data: any, query: Query.Expr, ref: string): boolean
 
     // execute field query
     try {
-      if (!(key in data)) return false
       return executeFieldQuery(value, data[key])
     } catch {
       return false

@@ -1,4 +1,4 @@
-import { Dict } from 'cosmokit'
+import { Dict, isNullable } from 'cosmokit'
 import { Eval, Field, Model, Query } from 'cosmotype'
 
 export type QueryOperators = {
@@ -27,6 +27,9 @@ export abstract class Builder {
       $and: (key, value) => this.logicalAnd(value.map(value => this.parseFieldQuery(key, value))),
       $not: (key, value) => this.logicalNot(this.parseFieldQuery(key, value)),
 
+      // existence
+      $exists: (key, value) => this.createNullQuery(key, value),
+
       // comparison
       $eq: this.createEqualQuery,
       $ne: this.comparator('!='),
@@ -40,7 +43,7 @@ export abstract class Builder {
       $nin: (key, value) => this.createMemberQuery(key, value, ' NOT'),
 
       // regexp
-      $regex: (key: string, value: RegExp) => this.createRegExpQuery(key, value),
+      $regex: (key, value) => this.createRegExpQuery(key, value),
       $regexFor: (key, value) => `${this.escape(value)} REGEXP ${key}`,
 
       // bitwise
@@ -102,6 +105,10 @@ export abstract class Builder {
     }
   }
 
+  protected createNullQuery(key: string, value: boolean) {
+    return `${key} is ${value ? 'not ' : ''} null`
+  }
+
   protected createMemberQuery(key: string, value: any[], notStr = '') {
     if (!value.length) return notStr ? '1' : '0'
     return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
@@ -153,8 +160,10 @@ export abstract class Builder {
       conditions.push(this.createRegExpQuery(key, query))
     } else if (typeof query === 'string' || typeof query === 'number' || query instanceof Date) {
       conditions.push(this.createEqualQuery(key, query))
+    } else if (isNullable(query)) {
+      conditions.push(this.createNullQuery(key, false))
     } else {
-    // query expression
+      // query expression
       for (const prop in query) {
         if (prop in this.queryOperators) {
           conditions.push(this.queryOperators[prop](key, query[prop]))

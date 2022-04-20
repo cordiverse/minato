@@ -113,6 +113,31 @@ namespace QueryOperators {
     })
   }
 
+  export const existence = function Existence(database: Database<Tables>) {
+    before(async () => {
+      await database.remove('temp1', {})
+      await database.create('temp1', { date: new Date('2010-01-01') })
+      await database.create('temp1', { date: new Date('2020-01-01') })
+      await database.create('temp1', {})
+    })
+
+    it('basic support', async () => {
+      await expect(database.get('temp1', {
+        date: { $exists: true },
+      })).eventually.to.have.length(2)
+
+      await expect(database.get('temp1', {
+        date: { $exists: false },
+      })).eventually.to.have.length(1)
+    })
+
+    it('shorthand syntax', async () => {
+      await expect(database.get('temp1', {
+        date: null,
+      })).eventually.to.have.length(1)
+    })
+  }
+
   export const membership = function Membership(database: Database<Tables>) {
     before(async () => {
       await database.remove('temp1', {})

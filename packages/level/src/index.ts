@@ -1,4 +1,4 @@
-import { makeArray, noop } from 'cosmokit'
+import { isNullable, makeArray, noop } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, Query, RuntimeError } from 'cosmotype'
 import { LevelUp } from 'levelup'
 import Logger from 'reggol'
@@ -52,10 +52,14 @@ class LevelDriver extends Driver {
     } else {
       return {
         encode: JSON.stringify,
-        decode: (str: string) => {
-          const obj = JSON.parse(str)
-          dates.forEach(key => obj[key] = new Date(obj[key]))
-          return obj
+        decode: (raw: string) => {
+          const result = JSON.parse(raw)
+          for (const key of dates) {
+            if (!isNullable(result[key])) {
+              result[key] = new Date(result[key])
+            }
+          }
+          return result
         },
         buffer: false,
         type: 'json-for-' + table,
