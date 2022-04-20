@@ -31,11 +31,11 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [14, 16]
         mysql-image:
           - mysql:5.7
           - mysql:8.0
           - mariadb:10.5
+        node-version: [14, 16]
 
     services:
       mysql:
@@ -108,8 +108,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [14, 16]
         driver-name: [sqlite, level, memory]
+        node-version: [14, 16]
 
     steps:
       - name: Check out
