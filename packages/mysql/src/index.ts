@@ -176,11 +176,11 @@ class MySQLDriver extends Driver {
         def += ' int unsigned not null auto_increment'
       } else {
         const typedef = getTypeDefinition(fields[key])
-        const typename = typedef.split('(')[0]
-        if (legacy && legacy.DATA_TYPE !== typename) {
-          logger.warn(`${name}.${key} data type mismatch: ${legacy.DATA_TYPE} => ${typedef}`)
-          shouldUpdate = true
-        }
+        // const typename = typedef.split(/[ (]/)[0]
+        // if (legacy && legacy.DATA_TYPE !== typename) {
+        //   logger.warn(`${name}.${key} data type mismatch: ${legacy.DATA_TYPE} => ${typedef}`)
+        //   shouldUpdate = true
+        // }
         def += ' ' + typedef
         if (makeArray(primary).includes(key)) {
           def += ' not null'
@@ -230,7 +230,7 @@ class MySQLDriver extends Driver {
 
     const operations = [
       ...create.map(def => 'ADD ' + def),
-      ...update.map(def => 'ALTER COLUMN ' + def),
+      ...update.map(def => 'MODIFY ' + def),
     ]
     if (operations.length) {
       logger.info('auto updating table %c', name)
