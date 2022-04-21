@@ -12,6 +12,12 @@ declare module 'abstract-leveldown' {
   }
 }
 
+namespace LevelDriver {
+  export interface Config {
+    location: string
+  }
+}
+
 class LevelDriver extends Driver {
   #path: string
   #level: LevelUp
@@ -253,12 +259,6 @@ class LevelDriver extends Driver {
     }
 
     await batch.write()
-  }
-}
-
-namespace LevelDriver {
-  export interface Config {
-    location: string
   }
 }
 

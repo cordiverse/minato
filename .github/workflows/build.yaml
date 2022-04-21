@@ -1,4 +1,4 @@
-name: Test
+name: Build
 
 on: [push]
 
@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [14, 16]
+        node-version: [14, 16, 18]
 
     steps:
       - name: Check out
@@ -25,111 +25,3 @@ jobs:
         run: yarn
       - name: Build
         run: yarn build
-
-  mysql:
-    name: ${{ matrix.mysql-image }} (${{ matrix.node-version }})
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        mysql-image:
-          - mysql:5.7
-          - mysql:8.0
-          - mariadb:10.5
-        node-version: [14, 16]
-
-    services:
-      mysql:
-        image: ${{ matrix.mysql-image }}
-        ports:
-          - 3306:3306
-        options: --health-cmd "mysqladmin ping" --health-interval 10s --health-timeout 5s --health-retries 5
-        env:
-          MYSQL_USER: koishi
-          MYSQL_DATABASE: test
-          MYSQL_PASSWORD: koishi@114514
-          MYSQL_ROOT_PASSWORD: password
-
-    steps:
-      - name: Check out
-        uses: actions/checkout@v1
-      - name: Set up Node
-        uses: actions/setup-node@v2
-        with:
-          node-version: ${{ matrix.node-version }}
-      - name: Install
-        run: yarn
-      - name: Unit Test
-        run: yarn test:json mysql
-      - name: Report Coverage
-        if: ${{ matrix.node-version == 14 && matrix.mysql-image == 'mysql:5.7' }}
-        uses: codecov/codecov-action@v2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/coverage-final.json
-          name: codecov
-
-  mongo:
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [14, 16]
-
-    services:
-      mongo:
-        image: mongo
-        ports:
-          - 27017:27017
-        # https://stackoverflow.com/questions/66317184/github-actions-cannot-connect-to-mongodb-service
-        options: --health-cmd "mongo" --health-interval 10s --health-timeout 5s --health-retries 5
-
-    steps:
-      - name: Check out
-        uses: actions/checkout@v1
-      - name: Set up Node
-        uses: actions/setup-node@v2
-        with:
-          node-version: ${{ matrix.node-version }}
-      - name: Install
-        run: yarn
-      - name: Unit Test
-        run: yarn test:json mongo
-      - name: Report Coverage
-        if: ${{ matrix.node-version == 14 }}
-        uses: codecov/codecov-action@v2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/coverage-final.json
-          name: codecov
-
-  test:
-    name: ${{ matrix.driver-name }} (${{ matrix.node-version }})
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        driver-name: [sqlite, level, memory]
-        node-version: [14, 16]
-
-    steps:
-      - name: Check out
-        uses: actions/checkout@v1
-      - name: Set up Node
-        uses: actions/setup-node@v2
-        with:
-          node-version: ${{ matrix.node-version }}
-      - name: Install
-        run: yarn
-      - name: Unit Test
-        run: yarn test:json ${{ matrix.driver-name }}
-      - name: Report Coverage
-        if: ${{ matrix.node-version == 14 }}
-        uses: codecov/codecov-action@v2
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/coverage-final.json
-          name: codecov

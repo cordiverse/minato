@@ -1,18 +1,16 @@
 import { Database } from 'cosmotype'
 import test from '@cosmotype/tests'
-import MemoryDriver from '@cosmotype/driver-memory'
 
 describe('Memory Database', () => {
   const database = new Database()
-  const driver = new MemoryDriver(database)
 
   before(async () => {
-    await driver.start()
+    await database.connect('memory')
   })
 
   after(async () => {
-    await driver.drop()
-    await driver.stop()
+    await database.dropAll()
+    await database.stopAll()
   })
 
   test(database)

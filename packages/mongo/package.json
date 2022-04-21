@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/driver-mongo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MongoDB Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -28,7 +28,7 @@
     "@cosmotype/tests": "^1.0.0"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.0"
+    "cosmotype": "^1.0.1"
   },
   "dependencies": {
     "mongodb": "^4.5.0",

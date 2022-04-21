@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/driver-sqlite",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "SQLite Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -24,7 +24,7 @@
     "sqlite"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.0"
+    "cosmotype": "^1.0.1"
   },
   "devDependencies": {
     "@cosmotype/tests": "^1.0.0",

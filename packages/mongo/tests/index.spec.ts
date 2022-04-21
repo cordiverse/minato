@@ -1,22 +1,20 @@
 import { Database } from 'cosmotype'
 import test from '@cosmotype/tests'
-import MongoDriver from '@cosmotype/driver-mongo'
 
 describe('Memory Database', () => {
   const database = new Database()
-  const driver = new MongoDriver(database, {
-    host: 'localhost',
-    port: 27017,
-    database: 'test',
-  })
 
   before(async () => {
-    await driver.start()
+    await database.connect('mongo', {
+      host: 'localhost',
+      port: 27017,
+      database: 'test',
+    })
   })
 
   after(async () => {
-    await driver.drop()
-    await driver.stop()
+    await database.dropAll()
+    await database.stopAll()
   })
 
   test(database)

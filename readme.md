@@ -19,18 +19,16 @@ Currently supports MySQL (MariaDB), SQLite, MongoDB, LevelDB.
 
 ```ts
 import { Database } from 'cosmotype'
-import MySQLDriver from '@cosmotype/driver-mysql'
 
 const database = new Database()
-const driver = new MySQLDriver(database, {
+
+await database.connect('mysql', {
   host: 'localhost',
   port: 3306,
   user: 'root',
   password: '',
   database: 'cosmotype',
 })
-
-await driver.start()
 ```
 
 ## Data Definition

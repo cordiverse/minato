@@ -1,21 +1,19 @@
 import { Database } from 'cosmotype'
-import test from '@cosmotype/tests'
-import LevelDriver from '@cosmotype/driver-level'
 import { resolve } from 'path'
+import test from '@cosmotype/tests'
 
 describe('Memory Database', () => {
   const database = new Database()
-  const driver = new LevelDriver(database, {
-    location: resolve(__dirname, 'temp'),
-  })
 
   before(async () => {
-    await driver.start()
+    await database.connect('level', {
+      location: resolve(__dirname, 'temp'),
+    })
   })
 
   after(async () => {
-    await driver.drop()
-    await driver.stop()
+    await database.dropAll()
+    await database.stopAll()
   })
 
   test(database)

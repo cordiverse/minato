@@ -35,8 +35,10 @@ export interface SQLiteFieldInfo {
   pk: boolean
 }
 
-export interface Config {
-  path?: string
+namespace SQLiteDriver {
+  export interface Config {
+    path?: string
+  }
 }
 
 class SQLiteDriver extends Driver {
@@ -44,12 +46,9 @@ class SQLiteDriver extends Driver {
   sqlite = this
   sql: Builder
   caster: Caster
-  #path: string
 
-  constructor(database: Database, public config: Config) {
+  constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database, 'sqlite')
-
-    this.#path = this.config.path
 
     this.sql = new class extends Builder {
       format = format
@@ -180,8 +179,8 @@ class SQLiteDriver extends Driver {
   }
 
   async stats() {
-    if (this.#path === ':memory:') return {}
-    const { size } = await fsp.stat(this.#path)
+    if (this.config.path === ':memory:') return {}
+    const { size } = await fsp.stat(this.config.path)
     return { size }
   }
 

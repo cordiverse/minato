@@ -24,7 +24,7 @@
     "memory"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.0"
+    "cosmotype": "^1.0.1"
   },
   "devDependencies": {
     "@cosmotype/tests": "^1.0.0"

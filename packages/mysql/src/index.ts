@@ -92,6 +92,10 @@ interface QueryTask {
   reject: (error: Error) => void
 }
 
+namespace MySQLDriver {
+  export interface Config extends PoolConfig {}
+}
+
 class MySQLDriver extends Driver {
   public pool: Pool
   public config: MySQLDriver.Config
@@ -460,10 +464,6 @@ class MySQLDriver extends Driver {
       [].concat(...insertion.map(item => this._formatValues(table, item, initFields))),
     )
   }
-}
-
-namespace MySQLDriver {
-  export interface Config extends PoolConfig {}
 }
 
 export default MySQLDriver

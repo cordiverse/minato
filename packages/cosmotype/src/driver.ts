@@ -4,6 +4,7 @@ import { Field, Model } from './model'
 import { Query } from './query'
 import { Flatten, Indexable, Keys } from './utils'
 import { Direction, Executable, Modifier, Selection, Selector } from './selection'
+import ns from 'ns-require'
 
 export type Result<S, K, T = (...args: any) => any> = {
   [P in keyof S as S[P] extends T ? P : P extends K ? P : never]: S[P]
@@ -30,12 +31,30 @@ export namespace Driver {
   }
 }
 
+const scope = ns({
+  namespace: 'cosmotype',
+  prefix: 'driver',
+  official: 'cosmotype',
+})
+
+type DriverConstructor<T = any> = new (database: Database, config?: T) => Driver
+
 export class Database<S = any> {
   public tables: { [K in Keys<S>]?: Model<S[K]> } = {}
   public drivers: Dict<Driver> = {}
   private tasks: Dict<Promise<void>> = {}
 
   constructor(public mapper: Dict<string> = {}) {}
+
+  connect<T>(constructor: DriverConstructor<T>, config?: T): Promise<void>
+  connect(constructor: string, config?: any): Promise<void>
+  connect(arg: string | DriverConstructor, config: any) {
+    if (typeof arg === 'string') {
+      arg = scope.require(arg) as DriverConstructor
+    }
+    const driver = new arg(this, config)
+    return driver.start()
+  }
 
   setDriver(name: string, driver: Driver) {
     if (!driver) {
@@ -124,7 +143,11 @@ export class Database<S = any> {
     await sel.action('upsert', upsert, keys).execute()
   }
 
-  async drop() {
+  async stopAll() {
+    await Promise.all(Object.values(this.drivers).map(driver => driver.stop()))
+  }
+
+  async dropAll() {
     await Promise.all(Object.values(this.drivers).map(driver => driver.drop()))
   }
 

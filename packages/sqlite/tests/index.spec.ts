@@ -1,21 +1,19 @@
 import { join } from 'path'
 import { Database } from 'cosmotype'
 import test from '@cosmotype/tests'
-import SQLiteDriver from '@cosmotype/driver-sqlite'
 
 describe('Memory Database', () => {
   const database = new Database()
-  const driver = new SQLiteDriver(database, {
-    path: join(__dirname, 'test.db'),
-  })
 
   before(async () => {
-    await driver.start()
+    await database.connect('sqlite', {
+      path: join(__dirname, 'test.db'),
+    })
   })
 
   after(async () => {
-    await driver.drop()
-    await driver.stop()
+    await database.dropAll()
+    await database.stopAll()
   })
 
   test(database, {

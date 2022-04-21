@@ -4,19 +4,21 @@ import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, 
 import { URLSearchParams } from 'url'
 import { transformEval, transformQuery } from './utils'
 
-export interface Config {
-  username?: string
-  password?: string
-  protocol?: string
-  host?: string
-  port?: number
-  /** database name */
-  database?: string
-  /** default auth database */
-  authDatabase?: string
-  connectOptions?: ConstructorParameters<typeof URLSearchParams>[0]
-  /** connection string (will overwrite all configs except 'name') */
-  uri?: string
+namespace MongoDriver {
+  export interface Config {
+    username?: string
+    password?: string
+    protocol?: string
+    host?: string
+    port?: number
+    /** database name */
+    database?: string
+    /** default auth database */
+    authDatabase?: string
+    connectOptions?: ConstructorParameters<typeof URLSearchParams>[0]
+    /** connection string (will overwrite all configs except 'name') */
+    uri?: string
+  }
 }
 
 interface EvalTask {
@@ -35,7 +37,7 @@ class MongoDriver extends Driver {
   private _evalTasks: EvalTask[] = []
   private _createTasks: Dict<Promise<void>> = {}
 
-  constructor(database: Database, private config: Config) {
+  constructor(database: Database, private config: MongoDriver.Config) {
     super(database, 'mongo')
   }
 
