@@ -5,8 +5,6 @@
 
 Type Driven Database Framework.
 
-Currently supports MySQL (MariaDB), SQLite, MongoDB, LevelDB.
-
 ## Features
 
 - **Compatibility.** Complete driver-independent. Supports many drivers with a unified API.
@@ -14,6 +12,16 @@ Currently supports MySQL (MariaDB), SQLite, MongoDB, LevelDB.
 - **Well-typed.** Cosmotype is written with TypeScript, and it provides top-level typing support.
 - **Extensible.** Simultaneous accesss to different databases based on your needs.
 - **Modern.** Perform all the operations with a JavaScript API or even in the brower with low code.
+
+## Driver Supports
+
+| Driver | Version | Notes |
+| ------ | ------ | ----- |
+| MySQL | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-mysql?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-mysql) | MySQL 5.7, MySQL 8.0, MariaDB 10.5 |
+| MongoDB | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-mongo?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-mongo) | |
+| SQLite | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-sqlite?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-sqlite) | |
+| LevelDB | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-level?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-level) | |
+| Memory | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-memory?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-memory) | In-memory driver support |
 
 ## Basic Usage
 
