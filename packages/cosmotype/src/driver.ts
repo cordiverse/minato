@@ -131,7 +131,7 @@ export class Database<S = any> {
   async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
     await this.tasks[table]
     const sel = this.select(table)
-    return sel.action('create', data).execute()
+    return sel.action('create', sel.model.create(data)).execute()
   }
 
   async upsert<T extends Keys<S>>(table: T, upsert: Selection.Yield<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {

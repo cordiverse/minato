@@ -1,10 +1,14 @@
 import { clone, Dict, makeArray, noop, pick } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, RuntimeError } from 'cosmotype'
 
+namespace MemoryDriver {
+  export interface Config {}
+}
+
 class MemoryDriver extends Driver {
   #store: Dict<any[]> = {}
 
-  constructor(public database: Database) {
+  constructor(public database: Database, public config: MemoryDriver.Config) {
     super(database, 'memory')
   }
 
@@ -66,7 +70,6 @@ class MemoryDriver extends Driver {
     const { table, model } = sel
     const { primary, fields, autoInc } = model
     const store = this.$table(table)
-    data = sel.model.format(clone(data))
     if (!Array.isArray(primary) && autoInc && !(primary in data)) {
       const max = store.length ? Math.max(...store.map(row => +row[primary])) : 0
       data[primary] = max + 1

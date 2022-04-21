@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/driver-mysql",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MySQL Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -24,7 +24,7 @@
     "mysql"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.2"
+    "cosmotype": "^1.0.3"
   },
   "devDependencies": {
     "@cosmotype/tests": "^1.0.0",
@@ -33,7 +33,7 @@
   "dependencies": {
     "@cosmotype/sql-utils": "^1.0.0",
     "@vlasky/mysql": "^2.18.5",
-    "cosmokit": "^1.1.0",
+    "cosmokit": "^1.1.1",
     "reggol": "^1.0.1"
   }
 }

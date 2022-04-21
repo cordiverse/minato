@@ -399,7 +399,6 @@ class MySQLDriver extends Driver {
 
   async create(sel: Executable, data: {}) {
     const { table, model } = sel
-    data = model.create(data)
     const formatted = model.format(data)
     const { autoInc, primary } = model
     const keys = Object.keys(formatted)

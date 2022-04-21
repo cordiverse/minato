@@ -24,7 +24,7 @@
     "sqlite"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.2"
+    "cosmotype": "^1.0.3"
   },
   "devDependencies": {
     "@cosmotype/tests": "^1.0.0",
@@ -34,7 +34,7 @@
     "@cosmotype/sql-utils": "^1.0.0",
     "better-sqlite3": "^7.5.0",
     "sqlstring-sqlite": "^0.1.1",
-    "cosmokit": "^1.1.0",
+    "cosmokit": "^1.1.1",
     "reggol": "^1.0.1"
   }
 }

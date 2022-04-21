@@ -78,7 +78,7 @@ export class Executable<S = any, T = any> {
   }
 
   resolveData(data: any, fields: Dict<Eval.Expr<any>>) {
-    data = this.model.format(data)
+    data = this.model.format(data, false)
     for (const key in this.model.fields) {
       data[key] ??= null
     }

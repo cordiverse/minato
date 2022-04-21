@@ -141,7 +141,7 @@ export class Model<S = any> {
     return value
   }
 
-  format(source: object, prefix = '', result = {} as S) {
+  format(source: object, strict = true, prefix = '', result = {} as S) {
     const fields = Object.keys(this.fields)
     Object.entries(source).map(([key, value]) => {
       key = prefix + key
@@ -151,11 +151,11 @@ export class Model<S = any> {
         const field = fields.find(field => key.startsWith(field + '.'))
         if (field) {
           result[key] = value
-        } else {
+        } else if (strict) {
           throw new TypeError(`unknown field "${key}" in model ${this.name}`)
         }
       } else {
-        this.format(value, key + '.', result)
+        this.format(value, strict, key + '.', result)
       }
     })
     return result

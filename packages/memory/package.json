@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/driver-memory",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "In-memory Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -24,12 +24,12 @@
     "memory"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.2"
+    "cosmotype": "^1.0.3"
   },
   "devDependencies": {
     "@cosmotype/tests": "^1.0.0"
   },
   "dependencies": {
-    "cosmokit": "^1.1.0"
+    "cosmokit": "^1.1.1"
   }
 }
