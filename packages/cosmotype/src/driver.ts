@@ -31,7 +31,7 @@ export namespace Driver {
   }
 }
 
-const scope = ns({
+const requireScoped = ns({
   namespace: 'cosmotype',
   prefix: 'driver',
   official: 'cosmotype',
@@ -50,7 +50,7 @@ export class Database<S = any> {
   connect(constructor: string, config?: any): Promise<void>
   connect(arg: string | DriverConstructor, config: any) {
     if (typeof arg === 'string') {
-      arg = scope.require(arg) as DriverConstructor
+      arg = requireScoped(arg) as DriverConstructor
     }
     const driver = new arg(this, config)
     return driver.start()
