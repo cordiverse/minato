@@ -23,6 +23,6 @@
   ],
   "dependencies": {
     "cosmokit": "^1.1.0",
-    "ns-require": "^1.0.1"
+    "ns-require": "^1.1.0"
   }
 }
