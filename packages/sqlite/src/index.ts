@@ -133,13 +133,9 @@ class SQLiteDriver extends Driver {
         constraints.push(...config.unique.map(keys => `UNIQUE (${this.#joinKeys(makeArray(keys))})`))
       }
       if (config.foreign) {
-        constraints.push(
-          ...Object.entries(config.foreign)
-            .map(([key, [table, key2]]) =>
-              `FOREIGN KEY (\`${key}\`)
-              REFERENCES ${this.sql.escapeId(table)} (\`${key2})\``,
-            ),
-        )
+        constraints.push(...Object.entries(config.foreign).map(([key, [table, key2]]) => {
+          return `FOREIGN KEY (\`${key}\`) REFERENCES ${this.sql.escapeId(table)} (\`${key2}\`)`
+        }))
       }
       this.#exec('run', `CREATE TABLE ${this.sql.escapeId(table)} (${[...defs, ...constraints].join(',')})`)
     }
