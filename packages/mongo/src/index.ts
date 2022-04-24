@@ -48,8 +48,8 @@ class MongoDriver extends Driver {
       host = 'localhost',
       database,
       password,
-      port = 27017,
       protocol = 'mongodb',
+      port = protocol.includes('srv') ? null : 27017,
       username,
     } = this.config
 
