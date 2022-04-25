@@ -1,7 +1,9 @@
 # cosmotype
 
 [![Codecov](https://img.shields.io/codecov/c/github/cosmotype/cosmotype?style=flat-square)](https://codecov.io/gh/cosmotype/cosmotype)
+[![downloads](https://img.shields.io/npm/dm/cosmotype?style=flat-square)](https://www.npmjs.com/package/cosmotype)
 [![npm](https://img.shields.io/npm/v/cosmotype?style=flat-square)](https://www.npmjs.com/package/cosmotype)
+[![GitHub](https://img.shields.io/github/license/cosmotype/cosmotype?style=flat-square)](https://github.com/cosmotype/cosmotype/blob/master/LICENSE)
 
 Type Driven Database Framework.
 
