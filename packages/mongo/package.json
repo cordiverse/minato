@@ -32,6 +32,6 @@
   },
   "dependencies": {
     "mongodb": "^4.5.0",
-    "cosmokit": "^1.1.1"
+    "cosmokit": "^1.1.2"
   }
 }

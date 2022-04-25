@@ -30,6 +30,6 @@
     "@cosmotype/tests": "^1.0.0"
   },
   "dependencies": {
-    "cosmokit": "^1.1.1"
+    "cosmokit": "^1.1.2"
   }
 }

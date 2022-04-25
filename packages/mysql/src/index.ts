@@ -233,6 +233,7 @@ class MySQLDriver extends Driver {
       ...update.map(def => 'MODIFY ' + def),
     ]
     if (operations.length) {
+      // https://dev.mysql.com/doc/refman/5.7/en/alter-table.html
       logger.info('auto updating table %c', name)
       await this.queue(`ALTER TABLE ?? ${operations.join(',')}`, [name])
     }
