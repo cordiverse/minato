@@ -86,6 +86,11 @@ interface ColumnInfo {
   DATA_TYPE: string
 }
 
+interface IndexInfo {
+  INDEX_NAME: string
+  COLUMN_NAME: string
+}
+
 interface QueryTask {
   sql: string
   resolve: (value: any) => void
@@ -157,7 +162,7 @@ class MySQLDriver extends Driver {
     this.pool.end()
   }
 
-  private _getColDefs(name: string, columns: ColumnInfo[]) {
+  private _getColDefs(name: string, columns: ColumnInfo[], indexes: IndexInfo[]) {
     const table = this.model(name)
     const { primary, foreign, autoInc } = table
     const fields = { ...table.fields }
@@ -165,7 +170,7 @@ class MySQLDriver extends Driver {
     const create: string[] = []
     const update: string[] = []
 
-    // orm definitions
+    // field definitions
     for (const key in fields) {
       let shouldUpdate = false
       const legacy = columns.find(info => info.COLUMN_NAME === key)
@@ -200,15 +205,18 @@ class MySQLDriver extends Driver {
       }
     }
 
+    // index definitions
     if (!columns.length) {
       create.push(`primary key (${createIndex(primary)})`)
-      for (const key of unique) {
-        create.push(`unique index (${createIndex(key)})`)
-      }
       for (const key in foreign) {
         const [table, key2] = foreign[key]
         create.push(`foreign key (${backtick(key)}) references ${escapeId(table)} (${backtick(key2)})`)
       }
+    }
+    for (const key of unique) {
+      const name = makeArray(key).join('_')
+      const legacy = indexes.find(info => info.INDEX_NAME === name)
+      if (!legacy) create.push(`unique index (${createIndex(key)})`)
     }
 
     return [create, update]
@@ -216,13 +224,20 @@ class MySQLDriver extends Driver {
 
   /** synchronize table schema */
   async prepare(name: string) {
-    const columns = await this.queue<ColumnInfo[]>(`
-      SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE
-      FROM information_schema.columns
-      WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?
-    `, [this.config.database, name])
+    const [columns, indexes] = await Promise.all([
+      this.queue<ColumnInfo[]>(`
+        SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE
+        FROM information_schema.columns
+        WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?
+      `, [this.config.database, name]),
+      this.queue<IndexInfo[]>(`
+        SELECT COLUMN_NAME, INDEX_NAME
+        FROM information_schema.statistics
+        WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?
+      `, [this.config.database, name]),
+    ])
 
-    const [create, update] = this._getColDefs(name, columns)
+    const [create, update] = this._getColDefs(name, columns, indexes)
     if (!columns.length) {
       logger.info('auto creating table %c', name)
       return this.queue(`CREATE TABLE ?? (${create.join(',')}) COLLATE = ?`, [name, this.config.charset])
