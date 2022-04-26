@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/sql-utils",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SQL Utilities for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -28,7 +28,7 @@
     "builder"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.3"
+    "cosmotype": "^1.0.4"
   },
   "dependencies": {
     "cosmokit": "^1.1.2"

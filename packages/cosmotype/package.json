@@ -1,8 +1,9 @@
 {
   "name": "cosmotype",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Type Driven Database Framework",
-  "main": "lib/index.js",
+  "main": "lib/node.js",
+  "module": "lib/browser.js",
   "typings": "lib/index.d.ts",
   "files": [
     "lib"
@@ -23,6 +24,6 @@
   ],
   "dependencies": {
     "cosmokit": "^1.1.2",
-    "ns-require": "^1.1.1"
+    "ns-require": "^1.1.2"
   }
 }
