@@ -19,10 +19,10 @@ namespace MongoDriver {
     /** connection string (will overwrite all configs except 'name') */
     uri?: string
     /**
-     * use internal `_id` for single primary fields
+     * store single primary key in `_id` field to enhance index performance
      * @default false
      */
-    optimizeIndex?: boolean
+    virtualKey?: boolean
   }
 }
 
@@ -91,7 +91,7 @@ class MongoDriver extends Driver {
 
     ;[primary, ...unique].forEach((keys, index) => {
       // use internal `_id` for single primary fields
-      if (this.config.optimizeIndex && !index && typeof keys === 'string') return
+      if (this.config.virtualKey && !index && typeof keys === 'string') return
 
       // if the index is already created, skip it
       keys = makeArray(keys)
@@ -158,14 +158,14 @@ class MongoDriver extends Driver {
 
   private getVirtualKey(table: string) {
     const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.optimizeIndex) {
+    if (typeof primary === 'string' && this.config.virtualKey) {
       return primary
     }
   }
 
   private patchVirtual(table: string, row: any) {
     const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.optimizeIndex) {
+    if (typeof primary === 'string' && this.config.virtualKey) {
       row[primary] = row['_id']
       delete row['_id']
     }
@@ -174,7 +174,7 @@ class MongoDriver extends Driver {
 
   private unpatchVirtual(table: string, row: any) {
     const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.optimizeIndex) {
+    if (typeof primary === 'string' && this.config.virtualKey) {
       row['_id'] = row[primary]
       delete row[primary]
     }
@@ -281,7 +281,7 @@ class MongoDriver extends Driver {
       const { primary, fields, autoInc } = model
 
       if (typeof primary === 'string' && !(primary in data)) {
-        const key = this.config.optimizeIndex ? '_id' : primary
+        const key = this.config.virtualKey ? '_id' : primary
         if (autoInc) {
           const [latest] = await coll.find().sort(key, -1).limit(1).toArray()
           data[primary] = latest ? +latest[key] + 1 : 1
