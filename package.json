@@ -25,6 +25,7 @@
     "esbuild-register": "^3.3.2",
     "mocha": "^9.2.2",
     "rimraf": "^3.0.2",
+    "tsconfig-paths": "^3.14.1",
     "typescript": "^4.6.3",
     "yakumo": "^0.2.0",
     "yakumo-esbuild": "^0.2.0",
@@ -33,5 +34,11 @@
     "yakumo-tsc": "^0.2.0",
     "yakumo-upgrade": "^0.2.1",
     "yakumo-version": "^0.2.0"
+  },
+  "yakumo": {
+    "require": [
+      "esbuild-register",
+      "tsconfig-paths/register"
+    ]
   }
 }

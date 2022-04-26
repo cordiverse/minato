@@ -43,16 +43,17 @@ export class Database<S = any> {
   public tables: { [K in Keys<S>]?: Model<S[K]> } = {}
   public drivers: Dict<Driver> = {}
   private tasks: Dict<Promise<void>> = {}
+  private stashed = new Set<string>()
 
   constructor(public mapper: Dict<string> = {}) {}
 
   connect<T>(constructor: DriverConstructor<T>, config?: T): Promise<void>
   connect(constructor: string, config?: any): Promise<void>
-  connect(arg: string | DriverConstructor, config: any) {
-    if (typeof arg === 'string') {
-      arg = scope.require(arg) as DriverConstructor
+  connect(constructor: string | DriverConstructor, config: any) {
+    if (typeof constructor === 'string') {
+      constructor = scope.require(constructor) as DriverConstructor
     }
-    const driver = new arg(this, config)
+    const driver = new constructor(this, config)
     return driver.start()
   }
 
@@ -62,7 +63,7 @@ export class Database<S = any> {
     } else {
       this.drivers[name] = driver
       for (const name in this.tables) {
-        this.tasks[name] = driver.prepare(name)
+        this.tasks[name] = this.prepare(name)
       }
     }
   }
@@ -72,11 +73,23 @@ export class Database<S = any> {
     return Object.values(this.drivers)[0]
   }
 
+  private async prepare(name: string) {
+    this.stashed.add(name)
+    await this.tasks[name]
+    return new Promise<void>((resolve) => {
+      process.nextTick(async () => {
+        if (this.stashed.delete(name)) {
+          await this.getDriver(name)?.prepare(name)
+        }
+        resolve()
+      })
+    })
+  }
+
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Model.Config<S[K]> = {}) {
     const model = this.tables[name] ||= new Model<any>(name)
     model.extend(fields, config)
-    const driver = this.getDriver(name)
-    if (driver) this.tasks[name] = driver.prepare(name)
+    this.tasks[name] = this.prepare(name)
   }
 
   select<T extends Selector<S>>(table: T, query?: Query<Selector.Resolve<S, T>>): Selection<Selector.Resolve<S, T>> {

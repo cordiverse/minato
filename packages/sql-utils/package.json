@@ -28,7 +28,7 @@
     "builder"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.4"
+    "cosmotype": "^1.0.6"
   },
   "dependencies": {
     "cosmokit": "^1.1.2"
