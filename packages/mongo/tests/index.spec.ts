@@ -9,6 +9,7 @@ describe('Memory Database', () => {
       host: 'localhost',
       port: 27017,
       database: 'test',
+      optimizeIndex: true,
     })
   })
 

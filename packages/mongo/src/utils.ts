@@ -23,7 +23,7 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   } else if (query instanceof RegExp) {
     return { $regex: query }
   } else if (isNullable(query)) {
-    return { $exists: null }
+    return { $exists: false }
   }
 
   // query operators
@@ -72,7 +72,7 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   return result
 }
 
-export function transformQuery(query: Query.Expr) {
+export function transformQuery(query: Query.Expr, virtualKey: string) {
   const filter: Filter<any> = {}
   const additional: Filter<any>[] = []
   for (const key in query) {
@@ -82,7 +82,7 @@ export function transformQuery(query: Query.Expr) {
       // { $and: [] } matches everything
       // { $or: [] } matches nothing
       if (value.length) {
-        filter[key] = value.map(transformQuery)
+        filter[key] = value.map(query => transformQuery(query, virtualKey))
       } else if (key === '$or') {
         return
       }
@@ -90,14 +90,15 @@ export function transformQuery(query: Query.Expr) {
       // MongoError: unknown top level operator: $not
       // https://stackoverflow.com/questions/25270396/mongodb-how-to-invert-query-with-not
       // this may solve this problem but lead to performance degradation
-      const query = transformQuery(value)
+      const query = transformQuery(value, virtualKey)
       if (query) filter.$nor = [query]
     } else if (key === '$expr') {
-      additional.push({ $expr: transformEval(value) })
+      additional.push({ $expr: transformEval(value, virtualKey) })
     } else {
-      const query = transformFieldQuery(value, key, additional)
+      const actualKey = getActualKey(key, virtualKey)
+      const query = transformFieldQuery(value, actualKey, additional)
       if (query === false) return
-      if (query !== true) filter[key] = query
+      if (query !== true) filter[actualKey] = query
     }
   }
   if (additional.length) {
@@ -106,41 +107,45 @@ export function transformQuery(query: Query.Expr) {
   return filter
 }
 
-function transformEvalExpr(expr: any, onAggr?: (pipeline: any[]) => void) {
+function transformEvalExpr(expr: any, virtualKey: string, onAggr?: (pipeline: any[]) => void) {
   return valueMap(expr as any, (value) => {
     if (Array.isArray(value)) {
-      return value.map(val => transformEval(val, onAggr))
+      return value.map(val => transformEval(val, virtualKey, onAggr))
     } else {
-      return transformEval(value, onAggr)
+      return transformEval(value, virtualKey, onAggr)
     }
   })
 }
 
-function transformAggr(expr: any) {
+function transformAggr(expr: any, virtualKey: string) {
   if (typeof expr === 'string') {
     return '$' + expr
   }
-  return transformEvalExpr(expr)
+  return transformEvalExpr(expr, virtualKey)
 }
 
 const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
 
 const letters = 'abcdefghijklmnopqrstuvwxyz'
 
-export function transformEval(expr: any, onAggr?: (pipeline: any[]) => void) {
+function getActualKey(key: string, virtualKey: string) {
+  return key === virtualKey ? '_id' : key
+}
+
+export function transformEval(expr: any, virtualKey: string, onAggr?: (pipeline: any[]) => void) {
   if (typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
     return expr
   } else if (expr.$) {
     if (typeof expr.$ === 'string') {
-      return '$' + expr.$
+      return '$' + getActualKey(expr.$, virtualKey)
     } else {
-      return '$' + expr.$[1]
+      return '$' + getActualKey(expr.$[1], virtualKey)
     }
   }
 
   for (const key of aggrKeys) {
     if (!expr[key]) continue
-    const value = transformAggr(expr[key])
+    const value = transformAggr(expr[key], virtualKey)
     const $ = Array(8).fill(0).map(() => letters[Math.floor(Math.random() * letters.length)]).join('')
     if (key === '$count') {
       onAggr([
@@ -153,5 +158,5 @@ export function transformEval(expr: any, onAggr?: (pipeline: any[]) => void) {
     return { $ }
   }
 
-  return transformEvalExpr(expr, onAggr)
+  return transformEvalExpr(expr, virtualKey, onAggr)
 }
