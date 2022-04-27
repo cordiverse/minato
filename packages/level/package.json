@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/driver-level",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "LevelDB Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -12,7 +12,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git"
+    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "directory": "packages/level"
   },
   "bugs": {
     "url": "https://github.com/cosmotype/cosmotype/issues"
@@ -26,10 +27,10 @@
     "leveldb"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.6"
+    "cosmotype": "^1.0.7"
   },
   "devDependencies": {
-    "@cosmotype/tests": "^1.0.0",
+    "@cosmotype/tests": "^1.0.1",
     "@types/abstract-leveldown": "^7.2.0",
     "@types/level": "^6.0.1",
     "@types/subleveldown": "^4.1.1"

@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/driver-mysql",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "MySQL Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -11,7 +11,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git"
+    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "directory": "packages/mysql"
   },
   "bugs": {
     "url": "https://github.com/cosmotype/cosmotype/issues"
@@ -24,14 +25,14 @@
     "mysql"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.6"
+    "cosmotype": "^1.0.7"
   },
   "devDependencies": {
-    "@cosmotype/tests": "^1.0.0",
+    "@cosmotype/tests": "^1.0.1",
     "@types/mysql": "^2.15.21"
   },
   "dependencies": {
-    "@cosmotype/sql-utils": "^1.0.1",
+    "@cosmotype/sql-utils": "^1.0.2",
     "@vlasky/mysql": "^2.18.5",
     "cosmokit": "^1.1.2",
     "reggol": "^1.0.2"

@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/sql-utils",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "SQL Utilities for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -11,7 +11,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git"
+    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "directory": "packages/sql-utils"
   },
   "bugs": {
     "url": "https://github.com/cosmotype/cosmotype/issues"
@@ -28,7 +29,7 @@
     "builder"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.6"
+    "cosmotype": "^1.0.7"
   },
   "dependencies": {
     "cosmokit": "^1.1.2"

@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/tests",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Test Cases for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -11,7 +11,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git"
+    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "directory": "packages/tests"
   },
   "bugs": {
     "url": "https://github.com/cosmotype/cosmotype/issues"
@@ -29,7 +30,7 @@
     "@types/node": "^17.0.23"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.6"
+    "cosmotype": "^1.0.7"
   },
   "dependencies": {
     "chai": "^4.3.6",

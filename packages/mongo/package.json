@@ -1,6 +1,6 @@
 {
   "name": "@cosmotype/driver-mongo",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "MongoDB Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -11,7 +11,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git"
+    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "directory": "packages/mongo"
   },
   "bugs": {
     "url": "https://github.com/cosmotype/cosmotype/issues"
@@ -25,10 +26,10 @@
     "mongodb"
   ],
   "devDependencies": {
-    "@cosmotype/tests": "^1.0.0"
+    "@cosmotype/tests": "^1.0.1"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.6"
+    "cosmotype": "^1.0.7"
   },
   "dependencies": {
     "mongodb": "^4.5.0",
