@@ -25,12 +25,12 @@
     "unit"
   ],
   "devDependencies": {
-    "@types/chai": "^4.3.0",
+    "@types/chai": "^4.3.1",
     "@types/chai-as-promised": "^7.1.5",
-    "@types/node": "^17.0.23"
+    "@types/node": "^17.0.29"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.7"
+    "cosmotype": "^1.0.8"
   },
   "dependencies": {
     "chai": "^4.3.6",

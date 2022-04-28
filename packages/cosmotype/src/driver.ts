@@ -96,7 +96,8 @@ export class Database<S = any> {
     return new Selection(this.getDriver(table), table, query)
   }
 
-  get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<Selector.Resolve<S, T>>, cursor?: Driver.Cursor<K>): Promise<Result<S[T], K>[]> {
+  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<Selector.Resolve<S, T>>, cursor?: Driver.Cursor<K>): Promise<Result<S[T], K>[]> {
+    await this.tasks[table]
     if (Array.isArray(cursor)) {
       cursor = { fields: cursor }
     } else if (!cursor) {
@@ -117,8 +118,9 @@ export class Database<S = any> {
 
   eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T>, query?: Query): Promise<T>
   /** @deprecated use selection callback instead */
-  eval(table: Keys<S>, expr: any, query?: Query): any
-  eval(table: Keys<S>, expr: any, query?: Query) {
+  eval(table: Keys<S>, expr: any, query?: Query): Promise<any>
+  async eval(table: Keys<S>, expr: any, query?: Query) {
+    await this.tasks[table]
     return this.select(table, query)
       .evaluate(typeof expr === 'function' ? expr : () => expr)
       .execute()

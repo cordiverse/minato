@@ -27,7 +27,7 @@
     "leveldb"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.7"
+    "cosmotype": "^1.0.8"
   },
   "devDependencies": {
     "@cosmotype/tests": "^1.0.1",

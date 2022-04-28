@@ -29,7 +29,7 @@
     "@cosmotype/tests": "^1.0.1"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.7"
+    "cosmotype": "^1.0.8"
   },
   "dependencies": {
     "mongodb": "^4.5.0",
