@@ -25,7 +25,7 @@
     "mysql"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.8"
+    "cosmotype": "^1.0.9"
   },
   "devDependencies": {
     "@cosmotype/tests": "^1.0.1",

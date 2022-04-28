@@ -30,7 +30,7 @@
     "@types/node": "^17.0.29"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.8"
+    "cosmotype": "^1.0.9"
   },
   "dependencies": {
     "chai": "^4.3.6",
