@@ -59,7 +59,7 @@ class MongoDriver extends Driver {
     } = this.config
 
     let mongourl = `${protocol}://`
-    if (username) mongourl += `${encodeURIComponent(username)}${password ? `:${encodeURIComponent(password)}` : ''}@`
+    if (username) mongourl += `${username ? encodeURIComponent(username) : ''}${password ? `:${encodeURIComponent(password)}` : ''}@`
     mongourl += `${host}${port ? `:${port}` : ''}/${authDatabase || database}`
     if (connectOptions) {
       const params = new URLSearchParams(connectOptions)
