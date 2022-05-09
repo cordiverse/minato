@@ -2,7 +2,7 @@ import { Common, Flatten } from './utils'
 
 // for backwards compatibility, TODO remove in v2
 export function isEvalExpr(value: any): value is Eval.Expr {
-  return Object.keys(value).some(key => key.startsWith('$'))
+  return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
 type $Date = Date

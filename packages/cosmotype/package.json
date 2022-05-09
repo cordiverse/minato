@@ -1,6 +1,6 @@
 {
   "name": "cosmotype",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Type Driven Database Framework",
   "main": "lib/node.js",
   "module": "lib/browser.js",

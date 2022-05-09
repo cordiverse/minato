@@ -87,7 +87,7 @@ class SQLiteDriver extends Driver {
 
   private _getColDefs(table: string, key: string) {
     const config = this.model(table)
-    const { initial, nullable = initial === undefined || initial === null } = config.fields[key]
+    const { initial, nullable = true } = config.fields[key]
     let def = `\`${key}\``
     if (key === config.primary && config.autoInc) {
       def += ' INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT'

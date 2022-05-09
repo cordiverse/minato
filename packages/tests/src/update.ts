@@ -143,6 +143,14 @@ namespace OrmOperations {
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
+    it('null override', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      const data = table.find(bar => bar.timestamp)
+      data.text = null
+      await expect(database.set('temp2', { timestamp: { $exists: true } }, { text: null })).eventually.fulfilled
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    })
+
     it('using expressions', async () => {
       const table = await setup(database, 'temp2', barTable)
       table[1].num = table[1].id * 2
