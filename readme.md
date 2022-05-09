@@ -1,1 +1,1 @@
-./packages/cosmotype/readme.md
+./packages/core/readme.md

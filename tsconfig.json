@@ -3,7 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "cosmotype": ["packages/cosmotype/src"],
+      "cosmotype": ["packages/core/src"],
       "@cosmotype/*": ["packages/*/src"],
       "@cosmotype/driver-*": ["packages/*/src"],
     },
