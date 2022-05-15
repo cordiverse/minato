@@ -3,9 +3,9 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "cosmotype": ["packages/core/src"],
-      "@cosmotype/*": ["packages/*/src"],
-      "@cosmotype/driver-*": ["packages/*/src"],
+      "minato": ["packages/core/src"],
+      "@minatojs/*": ["packages/*/src"],
+      "@minatojs/driver-*": ["packages/*/src"],
     },
   },
   "files": [],

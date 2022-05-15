@@ -1,5 +1,5 @@
 {
-  "name": "@cosmotype/tests",
+  "name": "@minatojs/tests",
   "version": "1.0.1",
   "description": "Test Cases for Cosmotype",
   "main": "lib/index.js",
@@ -11,13 +11,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "url": "git+https://github.com/shigma/minato.git",
     "directory": "packages/tests"
   },
   "bugs": {
-    "url": "https://github.com/cosmotype/cosmotype/issues"
+    "url": "https://github.com/shigma/minato/issues"
   },
-  "homepage": "https://github.com/cosmotype/cosmotype/packages/tests#readme",
+  "homepage": "https://github.com/shigma/minato/packages/tests#readme",
   "keywords": [
     "orm",
     "database",
@@ -30,7 +30,7 @@
     "@types/node": "^17.0.31"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.10"
+    "minato": "^1.0.10"
   },
   "dependencies": {
     "chai": "^4.3.6",

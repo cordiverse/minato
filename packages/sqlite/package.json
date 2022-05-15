@@ -1,5 +1,5 @@
 {
-  "name": "@cosmotype/driver-sqlite",
+  "name": "@minatojs/driver-sqlite",
   "version": "1.0.6",
   "description": "SQLite Driver for Cosmotype",
   "main": "lib/index.js",
@@ -11,13 +11,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "url": "git+https://github.com/shigma/minato.git",
     "directory": "packages/sqlite"
   },
   "bugs": {
-    "url": "https://github.com/cosmotype/cosmotype/issues"
+    "url": "https://github.com/shigma/minato/issues"
   },
-  "homepage": "https://github.com/cosmotype/cosmotype/packages/sqlite#readme",
+  "homepage": "https://github.com/shigma/minato/packages/sqlite#readme",
   "keywords": [
     "orm",
     "database",
@@ -25,14 +25,14 @@
     "sqlite"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.10"
+    "minato": "^1.0.10"
   },
   "devDependencies": {
-    "@cosmotype/tests": "^1.0.1",
+    "@minatojs/tests": "^1.0.1",
     "@types/better-sqlite3": "^7.5.0"
   },
   "dependencies": {
-    "@cosmotype/sql-utils": "^1.0.2",
+    "@minatojs/sql-utils": "^1.0.2",
     "better-sqlite3": "^7.5.1",
     "sqlstring-sqlite": "^0.1.1",
     "cosmokit": "^1.1.2",

@@ -1,5 +1,5 @@
 import { clone, Dict, makeArray, noop, pick } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, RuntimeError } from 'cosmotype'
+import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, RuntimeError } from 'minato'
 
 namespace MemoryDriver {
   export interface Config {}

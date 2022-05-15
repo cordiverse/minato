@@ -1,5 +1,5 @@
 import { isNullable, makeArray, noop } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, Query, RuntimeError } from 'cosmotype'
+import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, Query, RuntimeError } from 'minato'
 import { LevelUp } from 'levelup'
 import Logger from 'reggol'
 import level from 'level'

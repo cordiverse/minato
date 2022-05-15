@@ -1,5 +1,5 @@
 {
-  "name": "@cosmotype/driver-level",
+  "name": "@minatojs/driver-level",
   "version": "1.0.1",
   "description": "LevelDB Driver for Cosmotype",
   "main": "lib/index.js",
@@ -12,13 +12,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "url": "git+https://github.com/shigma/minato.git",
     "directory": "packages/level"
   },
   "bugs": {
-    "url": "https://github.com/cosmotype/cosmotype/issues"
+    "url": "https://github.com/shigma/minato/issues"
   },
-  "homepage": "https://github.com/cosmotype/cosmotype/packages/level#readme",
+  "homepage": "https://github.com/shigma/minato/packages/level#readme",
   "keywords": [
     "orm",
     "database",
@@ -27,10 +27,10 @@
     "leveldb"
   ],
   "peerDependencies": {
-    "cosmotype": "^1.0.10"
+    "minato": "^1.0.10"
   },
   "devDependencies": {
-    "@cosmotype/tests": "^1.0.1",
+    "@minatojs/tests": "^1.0.1",
     "@types/abstract-leveldown": "^7.2.0",
     "@types/level": "^6.0.1",
     "@types/subleveldown": "^4.1.1"

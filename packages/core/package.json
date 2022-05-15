@@ -1,5 +1,5 @@
 {
-  "name": "cosmotype",
+  "name": "minato",
   "version": "1.0.10",
   "description": "Type Driven Database Framework",
   "main": "lib/node.js",
@@ -12,12 +12,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git"
+    "url": "git+https://github.com/shigma/minato.git"
   },
   "bugs": {
-    "url": "https://github.com/cosmotype/cosmotype/issues"
+    "url": "https://github.com/shigma/minato/issues"
   },
-  "homepage": "https://github.com/cosmotype/cosmotype",
+  "homepage": "https://github.com/shigma/minato",
   "keywords": [
     "orm",
     "database"

@@ -32,9 +32,9 @@ export namespace Driver {
 }
 
 const scope = ns({
-  namespace: 'cosmotype',
+  namespace: 'minato',
   prefix: 'driver',
-  official: 'cosmotype',
+  official: 'minatojs',
 })
 
 type DriverConstructor<T = any> = new (database: Database, config?: T) => Driver

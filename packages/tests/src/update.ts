@@ -1,4 +1,4 @@
-import { $, Database } from 'cosmotype'
+import { $, Database } from 'minato'
 import { omit } from 'cosmokit'
 import { expect } from 'chai'
 

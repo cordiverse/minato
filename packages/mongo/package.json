@@ -1,5 +1,5 @@
 {
-  "name": "@cosmotype/driver-mongo",
+  "name": "@minatojs/driver-mongo",
   "version": "1.1.2",
   "description": "MongoDB Driver for Cosmotype",
   "main": "lib/index.js",
@@ -11,13 +11,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cosmotype/cosmotype.git",
+    "url": "git+https://github.com/shigma/minato.git",
     "directory": "packages/mongo"
   },
   "bugs": {
-    "url": "https://github.com/cosmotype/cosmotype/issues"
+    "url": "https://github.com/shigma/minato/issues"
   },
-  "homepage": "https://github.com/cosmotype/cosmotype/packages/mongo#readme",
+  "homepage": "https://github.com/shigma/minato/packages/mongo#readme",
   "keywords": [
     "orm",
     "database",
@@ -26,10 +26,10 @@
     "mongodb"
   ],
   "devDependencies": {
-    "@cosmotype/tests": "^1.0.1"
+    "@minatojs/tests": "^1.0.1"
   },
   "peerDependencies": {
-    "cosmotype": "^1.0.10"
+    "minato": "^1.0.10"
   },
   "dependencies": {
     "mongodb": "^4.5.0",

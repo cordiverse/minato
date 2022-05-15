@@ -1,6 +1,6 @@
 import { difference, makeArray, union } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from 'cosmotype'
-import { Builder, Caster } from '@cosmotype/sql-utils'
+import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from 'minato'
+import { Builder, Caster } from '@minatojs/sql-utils'
 import sqlite, { Statement } from 'better-sqlite3'
 import { resolve } from 'path'
 import { escapeId, format, escape as sqlEscape } from 'sqlstring-sqlite'

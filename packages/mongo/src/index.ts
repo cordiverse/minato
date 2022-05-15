@@ -1,6 +1,6 @@
 import { Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, Modifier, Query, RuntimeError } from 'cosmotype'
+import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, Modifier, Query, RuntimeError } from 'minato'
 import { URLSearchParams } from 'url'
 import { transformEval, transformQuery } from './utils'
 

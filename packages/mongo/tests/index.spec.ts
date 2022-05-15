@@ -1,5 +1,5 @@
-import { Database } from 'cosmotype'
-import test from '@cosmotype/tests'
+import { Database } from 'minato'
+import test from '@minatojs/tests'
 
 describe('Memory Database', () => {
   const database = new Database()

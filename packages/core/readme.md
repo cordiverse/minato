@@ -1,9 +1,9 @@
-# cosmotype
+# minato
 
-[![Codecov](https://img.shields.io/codecov/c/github/cosmotype/cosmotype?style=flat-square)](https://codecov.io/gh/cosmotype/cosmotype)
-[![downloads](https://img.shields.io/npm/dm/cosmotype?style=flat-square)](https://www.npmjs.com/package/cosmotype)
-[![npm](https://img.shields.io/npm/v/cosmotype?style=flat-square)](https://www.npmjs.com/package/cosmotype)
-[![GitHub](https://img.shields.io/github/license/cosmotype/cosmotype?style=flat-square)](https://github.com/cosmotype/cosmotype/blob/master/LICENSE)
+[![Codecov](https://img.shields.io/codecov/c/github/shigma/minato?style=flat-square)](https://codecov.io/gh/shigma/minato)
+[![downloads](https://img.shields.io/npm/dm/minato?style=flat-square)](https://www.npmjs.com/package/minato)
+[![npm](https://img.shields.io/npm/v/minato?style=flat-square)](https://www.npmjs.com/package/minato)
+[![GitHub](https://img.shields.io/github/license/shigma/minato?style=flat-square)](https://github.com/shigma/minato/blob/master/LICENSE)
 
 Type Driven Database Framework.
 
@@ -19,16 +19,16 @@ Type Driven Database Framework.
 
 | Driver | Version | Notes |
 | ------ | ------ | ----- |
-| [MySQL](https://github.com/cosmotype/cosmotype/tree/master/packages/mysql) | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-mysql?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-mysql) | MySQL 5.7, MySQL 8.0, MariaDB 10.5 |
-| [MongoDB](https://github.com/cosmotype/cosmotype/tree/master/packages/mongodb) | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-mongo?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-mongo) | |
-| [SQLite](https://github.com/cosmotype/cosmotype/tree/master/packages/sqlite) | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-sqlite?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-sqlite) | |
-| [LevelDB](https://github.com/cosmotype/cosmotype/tree/master/packages/level) | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-level?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-level) | |
-| [Memory](https://github.com/cosmotype/cosmotype/tree/master/packages/memory) | [![npm](https://img.shields.io/npm/v/@cosmotype/driver-memory?style=flat-square)](https://www.npmjs.com/package/@cosmotype/driver-memory) | In-memory driver support |
+| [MySQL](https://github.com/shigma/minato/tree/master/packages/mysql) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mysql?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mysql) | MySQL 5.7, MySQL 8.0, MariaDB 10.5 |
+| [MongoDB](https://github.com/shigma/minato/tree/master/packages/mongodb) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mongo?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mongo) | |
+| [SQLite](https://github.com/shigma/minato/tree/master/packages/sqlite) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-sqlite?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-sqlite) | |
+| [LevelDB](https://github.com/shigma/minato/tree/master/packages/level) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-level?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-level) | |
+| [Memory](https://github.com/shigma/minato/tree/master/packages/memory) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-memory?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-memory) | In-memory driver support |
 
 ## Basic Usage
 
 ```ts
-import { Database } from 'cosmotype'
+import { Database } from 'minato'
 
 const database = new Database()
 
@@ -37,7 +37,7 @@ await database.connect('mysql', {
   port: 3306,
   user: 'root',
   password: '',
-  database: 'cosmotype',
+  database: 'minato',
 })
 ```
 
