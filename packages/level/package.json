@@ -27,10 +27,10 @@
     "leveldb"
   ],
   "peerDependencies": {
-    "minato": "^1.0.10"
+    "minato": "^1.1.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^1.0.1",
+    "@minatojs/tests": "^1.1.0",
     "@types/abstract-leveldown": "^7.2.0",
     "@types/level": "^6.0.1",
     "@types/subleveldown": "^4.1.1"

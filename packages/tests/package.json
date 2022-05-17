@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/tests",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Test Cases for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -30,7 +30,7 @@
     "@types/node": "^17.0.31"
   },
   "peerDependencies": {
-    "minato": "^1.0.10"
+    "minato": "^1.1.0"
   },
   "dependencies": {
     "chai": "^4.3.6",

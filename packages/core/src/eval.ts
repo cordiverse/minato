@@ -1,4 +1,5 @@
-import { Common, Flatten } from './utils'
+import { isNullable } from 'cosmokit'
+import { isPlain, Plain, Flatten } from './utils'
 
 // for backwards compatibility, TODO remove in v2
 export function isEvalExpr(value: any): value is Eval.Expr {
@@ -15,7 +16,7 @@ export type Uneval<U> =
   : any
 
 export type Eval<U> =
-  | U extends Common ? U
+  | U extends Plain ? U
   : U extends Eval.Expr<infer T> ? T
   : never
 
@@ -32,14 +33,14 @@ export namespace Eval {
   export type String = string | Expr<string>
   export type Boolean = boolean | Expr<boolean>
   export type Date = $Date | Expr<$Date>
-  export type Any = Common | Expr
+  export type Any = Plain | Expr
 
   export interface Static {
     (key: string, value: any): Eval.Expr
 
     // univeral
-    if<T extends Common>(cond: Any, vThen: T | Expr<T>, vElse: T | Expr<T>): Expr<T>
-    ifNull<T extends Common>(...args: (T | Expr<T>)[]): Expr<T>
+    if<T extends Plain>(cond: Any, vThen: T | Expr<T>, vElse: T | Expr<T>): Expr<T>
+    ifNull<T extends Plain>(...args: (T | Expr<T>)[]): Expr<T>
 
     // arithmetic
     add(...args: Number[]): Expr<number>
@@ -163,7 +164,7 @@ function executeAggr(expr: any, data: any) {
 }
 
 export function executeEval(data: any, expr: any) {
-  if (typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean' || expr instanceof Date || expr === null || expr === undefined) {
+  if (isPlain(expr) || isNullable(expr)) {
     return expr
   }
   return executeEvalExpr(expr, data)

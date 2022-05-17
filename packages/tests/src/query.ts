@@ -5,6 +5,7 @@ interface Foo {
   id?: number
   text?: string
   value?: number
+  bool?: boolean
   list?: number[]
   timestamp?: Date
   date?: Date
@@ -21,6 +22,7 @@ function QueryOperators(database: Database<Tables>) {
     id: 'unsigned',
     text: 'string',
     value: 'integer',
+    bool: 'boolean',
     list: 'list',
     timestamp: 'timestamp',
     date: 'date',

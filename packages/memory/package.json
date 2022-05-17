@@ -25,10 +25,10 @@
     "memory"
   ],
   "peerDependencies": {
-    "minato": "^1.0.10"
+    "minato": "^1.1.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^1.0.1"
+    "@minatojs/tests": "^1.1.0"
   },
   "dependencies": {
     "cosmokit": "^1.1.2"

@@ -30,6 +30,7 @@ function getTypeDefinition({ type, length, precision, scale }: Field) {
     case 'date':
     case 'time': return type
     case 'timestamp': return 'datetime(3)'
+    case 'boolean': return 'bit'
     case 'integer': return getIntegerType(length)
     case 'unsigned': return `${getIntegerType(length)} unsigned`
     case 'decimal': return `decimal(${precision}, ${scale}) unsigned`

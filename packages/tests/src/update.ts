@@ -6,6 +6,7 @@ interface Bar {
   id?: number
   text?: string
   num?: number
+  bool?: boolean
   list?: string[]
   timestamp?: Date
   date?: Date
@@ -28,6 +29,7 @@ function OrmOperations(database: Database<Tables>) {
     id: 'unsigned',
     text: 'string',
     num: 'integer',
+    bool: 'boolean',
     list: 'list',
     timestamp: 'timestamp',
     date: 'date',
@@ -51,7 +53,7 @@ namespace OrmOperations {
   const magicBorn = new Date('1970/08/17')
 
   const barTable: Bar[] = [
-    { id: 1 },
+    { id: 1, bool: true },
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
     { id: 4, list: ['1', '1', '4'] },

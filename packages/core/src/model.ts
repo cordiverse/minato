@@ -14,12 +14,14 @@ export interface Field<T = any> {
 export namespace Field {
   export const number: Type[] = ['integer', 'unsigned', 'float', 'double', 'decimal']
   export const string: Type[] = ['char', 'string', 'text']
+  export const boolean: Type[] = ['boolean']
   export const date: Type[] = ['timestamp', 'date', 'time']
   export const object: Type[] = ['list', 'json']
 
   export type Type<T = any> =
     | T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
     : T extends string ? 'char' | 'string' | 'text'
+    : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends unknown[] ? 'list' | 'json'
     : T extends object ? 'json'

@@ -11,6 +11,7 @@ const logger = new Logger('sqlite')
 
 function getTypeDefinition({ type }: Field) {
   switch (type) {
+    case 'boolean':
     case 'integer':
     case 'unsigned':
     case 'date':
@@ -68,6 +69,11 @@ class SQLiteDriver extends Driver {
     }()
 
     this.caster = new Caster(this.database.tables)
+    this.caster.register<boolean, number>({
+      types: ['boolean'],
+      dump: value => +value,
+      load: (value) => !!value,
+    })
     this.caster.register<object, string>({
       types: ['json'],
       dump: value => JSON.stringify(value),

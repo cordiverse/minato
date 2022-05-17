@@ -3,7 +3,7 @@ import { Driver } from './driver'
 import { Eval, executeEval } from './eval'
 import { Model } from './model'
 import { Query } from './query'
-import { Common, Keys } from './utils'
+import { Plain, Keys } from './utils'
 
 export type Direction = 'asc' | 'desc'
 
@@ -110,7 +110,7 @@ export namespace Selection {
     : never
 
   export type Row<S> = {
-    [K in keyof S]: Eval.Expr<S[K]> & (S[K] extends Common ? {} : Row<S[K]>)
+    [K in keyof S]: Eval.Expr<S[K]> & (S[K] extends Plain ? {} : Row<S[K]>)
   }
 
   export type Yield<S, T> = T | ((row: Row<S>) => T)
