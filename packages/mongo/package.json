@@ -32,7 +32,7 @@
     "minato": "^1.1.0"
   },
   "dependencies": {
-    "mongodb": "^4.5.0",
+    "mongodb": "^4.6.0",
     "cosmokit": "^1.1.2"
   }
 }
