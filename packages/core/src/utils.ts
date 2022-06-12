@@ -14,6 +14,8 @@ export type Plain = string | number | boolean | Date
 type FlatWrap<S, T, P extends string> = { [K in P]?: S }
   // rule out atomic / recursive types
   | (S extends Atomic | T ? never
+  // rule out array types
+  : S extends any[] ? never
   // rule out dict / infinite types
   : string extends keyof S ? never
   : FlatMap<S, T, `${P}.`>)
