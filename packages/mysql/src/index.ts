@@ -111,7 +111,7 @@ class MySQLDriver extends Driver {
   private _queryTasks: QueryTask[] = []
 
   constructor(database: Database, config?: MySQLDriver.Config) {
-    super(database, 'mysql')
+    super(database)
 
     this.config = {
       host: 'localhost',

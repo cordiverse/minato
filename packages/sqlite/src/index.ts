@@ -49,7 +49,7 @@ class SQLiteDriver extends Driver {
   caster: Caster
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
-    super(database, 'sqlite')
+    super(database)
 
     this.sql = new class extends Builder {
       format = format

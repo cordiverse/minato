@@ -9,7 +9,7 @@ class MemoryDriver extends Driver {
   #store: Dict<any[]> = {}
 
   constructor(public database: Database, public config: MemoryDriver.Config) {
-    super(database, 'memory')
+    super(database)
   }
 
   async prepare(name: string) {}

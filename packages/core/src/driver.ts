@@ -2,7 +2,7 @@ import { Dict, makeArray, MaybeArray } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
-import { Flatten, Indexable, Keys, randomId } from './utils'
+import { Flatten, Indexable, Keys } from './utils'
 import { Direction, Executable, Modifier, Selection, Selector } from './selection'
 import ns from 'ns-require'
 
@@ -37,37 +37,33 @@ const scope = ns({
   official: 'minatojs',
 })
 
-type DriverConstructor<T = any> = new (database: Database, config?: T) => Driver
-
 export class Database<S = any> {
   public tables: { [K in Keys<S>]?: Model<S[K]> } = Object.create(null)
   public drivers: Dict<Driver> = Object.create(null)
   private tasks: Dict<Promise<void>> = Object.create(null)
   private stashed = new Set<string>()
 
-  constructor(public mapper: Dict<string> = {}) {}
-
-  connect<T>(constructor: DriverConstructor<T>, config?: T, name?: string): Promise<void>
+  connect<T>(constructor: Driver.Constructor<T>, config?: T, name?: string): Promise<void>
   connect(constructor: string, config?: any, name?: string): Promise<void>
-  async connect(constructor: string | DriverConstructor, config: any, name = randomId()) {
+  async connect(constructor: string | Driver.Constructor, config: any, name = 'default') {
     if (typeof constructor === 'string') {
-      constructor = scope.require(constructor) as DriverConstructor
+      constructor = scope.require(constructor) as Driver.Constructor
     }
     const driver = new constructor(this, config)
     await driver.start()
-    this.setDriver(name, driver)
+    this.drivers[name] = driver
+    this.refresh()
   }
 
-  setDriver(name: string, driver: Driver) {
-    this.drivers[name] = driver
+  refresh() {
     for (const name in this.tables) {
       this.tasks[name] = this.prepare(name)
     }
   }
 
   private getDriver(name: string) {
-    if (this.mapper[name]) return this.drivers[this.mapper[name]]
-    return Object.values(this.drivers)[0]
+    const model: Model = this.tables[name]
+    return this.drivers[model.driver || 'default']
   }
 
   private async prepare(name: string) {
@@ -174,6 +170,10 @@ export class Database<S = any> {
     }))
     return stats
   }
+}
+
+export namespace Driver {
+  export type Constructor<T = any> = new (database: Database, config?: T) => Driver
 }
 
 export abstract class Driver {

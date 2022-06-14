@@ -79,6 +79,7 @@ export namespace Field {
 
 export namespace Model {
   export interface Config<O = {}> {
+    driver?: string | number
     autoInc?: boolean
     primary?: MaybeArray<Keys<O>>
     unique?: MaybeArray<Keys<O>>[]

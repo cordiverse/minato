@@ -25,7 +25,7 @@ class LevelDriver extends Driver {
   #last: Promise<any> = Promise.resolve()
 
   constructor(database: Database, public config: LevelDriver.Config) {
-    super(database, 'level')
+    super(database)
     this.#path = resolveLocation(config.location)
   }
 

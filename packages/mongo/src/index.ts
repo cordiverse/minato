@@ -43,7 +43,7 @@ class MongoDriver extends Driver {
   private _createTasks: Dict<Promise<void>> = {}
 
   constructor(database: Database, private config: MongoDriver.Config) {
-    super(database, 'mongo')
+    super(database)
   }
 
   private connectionStringFromConfig() {
