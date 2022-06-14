@@ -32,3 +32,9 @@ export function isPlain(value: any) {
     || typeof value === 'boolean'
     || value instanceof Date
 }
+
+const letters = 'abcdefghijklmnopqrstuvwxyz'
+
+export function randomId() {
+  return Array(8).fill(0).map(() => letters[Math.floor(Math.random() * letters.length)]).join('')
+}

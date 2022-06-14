@@ -155,11 +155,9 @@ class MySQLDriver extends Driver {
 
   async start() {
     this.pool = createPool(this.config)
-    super.start()
   }
 
   async stop() {
-    super.stop()
     this.pool.end()
   }
 

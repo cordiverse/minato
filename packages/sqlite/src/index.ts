@@ -150,7 +150,6 @@ class SQLiteDriver extends Driver {
   async start() {
     this.db = sqlite(this.config.path === ':memory:' ? this.config.path : resolve(this.config.path))
     this.db.function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
-    super.start()
   }
 
   #joinKeys(keys?: string[]) {
@@ -158,7 +157,6 @@ class SQLiteDriver extends Driver {
   }
 
   async stop() {
-    super.stop()
     this.db.close()
   }
 

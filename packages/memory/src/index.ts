@@ -16,7 +16,6 @@ class MemoryDriver extends Driver {
 
   async start() {
     // await this.#loader?.start(this.#store)
-    super.start()
   }
 
   async $save(name: string) {
@@ -24,7 +23,7 @@ class MemoryDriver extends Driver {
   }
 
   async stop() {
-    super.stop()
+    // await this.#loader?.stop(this.#store)
   }
 
   $table(table: string) {

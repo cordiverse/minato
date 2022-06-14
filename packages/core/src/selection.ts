@@ -3,7 +3,7 @@ import { Driver } from './driver'
 import { Eval, executeEval } from './eval'
 import { Model } from './model'
 import { Query } from './query'
-import { Plain, Keys } from './utils'
+import { Plain, Keys, randomId } from './utils'
 
 export type Direction = 'asc' | 'desc'
 
@@ -99,8 +99,6 @@ export class Executable<S = any, T = any> {
   }
 }
 
-const letters = 'abcdefghijklmnopqrstuvwxyz'
-
 export namespace Selection {
   export type Callback<S, T = any> = (row: Row<S>) => Eval.Expr<T>
   export type Field<S = any> = Keys<S> | Callback<S>
@@ -126,7 +124,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   constructor(driver: Driver, table: string, query: Query) {
     super(driver)
     this.type = 'get'
-    this.ref = Array(8).fill(0).map(() => letters[Math.floor(Math.random() * letters.length)]).join('')
+    this.ref = randomId()
     this.table = table
     this.query = this.resolveQuery(query)
     this.args = [{ sort: [], limit: Infinity, offset: 0 }]

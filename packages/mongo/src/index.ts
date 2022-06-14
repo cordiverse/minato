@@ -72,11 +72,9 @@ class MongoDriver extends Driver {
     const url = this.config.uri || this.connectionStringFromConfig()
     this.client = await MongoClient.connect(url)
     this.db = this.client.db(this.config.database)
-    super.start()
   }
 
   stop() {
-    super.stop()
     return this.client.close()
   }
 

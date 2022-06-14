@@ -37,11 +37,9 @@ class LevelDriver extends Driver {
     // LevelDB will automatically open
     this.#level = level(this.#path)
     this.#tables = Object.create(null)
-    super.start()
   }
 
   async stop() {
-    super.stop()
     await this.#level.close()
   }
 

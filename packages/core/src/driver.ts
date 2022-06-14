@@ -2,7 +2,7 @@ import { Dict, makeArray, MaybeArray } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
-import { Flatten, Indexable, Keys } from './utils'
+import { Flatten, Indexable, Keys, randomId } from './utils'
 import { Direction, Executable, Modifier, Selection, Selector } from './selection'
 import ns from 'ns-require'
 
@@ -40,31 +40,28 @@ const scope = ns({
 type DriverConstructor<T = any> = new (database: Database, config?: T) => Driver
 
 export class Database<S = any> {
-  public tables: { [K in Keys<S>]?: Model<S[K]> } = {}
-  public drivers: Dict<Driver> = {}
-  private tasks: Dict<Promise<void>> = {}
+  public tables: { [K in Keys<S>]?: Model<S[K]> } = Object.create(null)
+  public drivers: Dict<Driver> = Object.create(null)
+  private tasks: Dict<Promise<void>> = Object.create(null)
   private stashed = new Set<string>()
 
   constructor(public mapper: Dict<string> = {}) {}
 
-  connect<T>(constructor: DriverConstructor<T>, config?: T): Promise<void>
-  connect(constructor: string, config?: any): Promise<void>
-  connect(constructor: string | DriverConstructor, config: any) {
+  connect<T>(constructor: DriverConstructor<T>, config?: T, name?: string): Promise<void>
+  connect(constructor: string, config?: any, name?: string): Promise<void>
+  async connect(constructor: string | DriverConstructor, config: any, name = randomId()) {
     if (typeof constructor === 'string') {
       constructor = scope.require(constructor) as DriverConstructor
     }
     const driver = new constructor(this, config)
-    return driver.start()
+    await driver.start()
+    this.setDriver(name, driver)
   }
 
   setDriver(name: string, driver: Driver) {
-    if (!driver) {
-      delete this.drivers[name]
-    } else {
-      this.drivers[name] = driver
-      for (const name in this.tables) {
-        this.tasks[name] = this.prepare(name)
-      }
+    this.drivers[name] = driver
+    for (const name in this.tables) {
+      this.tasks[name] = this.prepare(name)
     }
   }
 
@@ -159,7 +156,9 @@ export class Database<S = any> {
   }
 
   async stopAll() {
-    await Promise.all(Object.values(this.drivers).map(driver => driver.stop()))
+    const drivers = Object.values(this.drivers)
+    this.drivers = Object.create(null)
+    await Promise.all(drivers.map(driver => driver.stop()))
   }
 
   async dropAll() {
@@ -178,6 +177,8 @@ export class Database<S = any> {
 }
 
 export abstract class Driver {
+  abstract start(): Promise<void>
+  abstract stop(): Promise<void>
   abstract drop(): Promise<void>
   abstract stats(): Promise<Driver.Stats>
   abstract prepare(name: string): Promise<void>
@@ -188,15 +189,7 @@ export abstract class Driver {
   abstract create(sel: Executable, data: any): Promise<any>
   abstract upsert(sel: Executable, data: any[], keys: string[]): Promise<void>
 
-  constructor(public database: Database, public name: string) {}
-
-  async start() {
-    this.database.setDriver(this.name, this)
-  }
-
-  async stop() {
-    this.database.setDriver(this.name, null)
-  }
+  constructor(public database: Database) {}
 
   model(name: string) {
     const model = this.database.tables[name]
