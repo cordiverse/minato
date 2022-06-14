@@ -74,12 +74,12 @@ export class Database<S = any> {
     this.stashed.add(name)
     await this.tasks[name]
     return new Promise<void>((resolve) => {
-      process.nextTick(async () => {
+      setTimeout(async () => {
         if (this.stashed.delete(name)) {
           await this.getDriver(name)?.prepare(name)
         }
         resolve()
-      })
+      }, 0)
     })
   }
 
