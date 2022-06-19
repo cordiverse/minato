@@ -39,7 +39,7 @@ const scope = ns({
 
 export class Database<S = any> {
   public tables: { [K in Keys<S>]?: Model<S[K]> } = Object.create(null)
-  public drivers: Dict<Driver> = Object.create(null)
+  public drivers: Record<keyof any, Driver> = Object.create(null)
   private tasks: Dict<Promise<void>> = Object.create(null)
   private stashed = new Set<string>()
 
@@ -52,10 +52,6 @@ export class Database<S = any> {
     const driver = new constructor(this, config)
     await driver.start()
     this.drivers[name] = driver
-    this.refresh()
-  }
-
-  refresh() {
     for (const name in this.tables) {
       this.tasks[name] = this.prepare(name)
     }
@@ -63,24 +59,29 @@ export class Database<S = any> {
 
   private getDriver(name: string) {
     const model: Model = this.tables[name]
-    return this.drivers[model.driver || 'default']
+    if (model.driver) return this.drivers[model.driver]
+    return Object.values(this.drivers)[0]
   }
 
   private async prepare(name: string) {
     this.stashed.add(name)
     await this.tasks[name]
-    return new Promise<void>((resolve) => {
-      setTimeout(async () => {
+    return new Promise<void>(async (resolve) => {
+      Promise.resolve().then(async () => {
         if (this.stashed.delete(name)) {
           await this.getDriver(name)?.prepare(name)
         }
         resolve()
-      }, 0)
+      })
     })
   }
 
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Model.Config<S[K]> = {}) {
-    const model = this.tables[name] ||= new Model<any>(name)
+    let model = this.tables[name]
+    if (!model) {
+      model = this.tables[name] = new Model(name)
+      model.driver = config.driver
+    }
     model.extend(fields, config)
     this.tasks[name] = this.prepare(name)
   }

@@ -29,7 +29,7 @@
     "@minatojs/tests": "^1.1.0"
   },
   "peerDependencies": {
-    "minato": "^1.2.0"
+    "minato": "^1.2.1"
   },
   "dependencies": {
     "mongodb": "^4.6.0",

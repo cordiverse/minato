@@ -29,7 +29,7 @@
     "builder"
   ],
   "peerDependencies": {
-    "minato": "^1.2.0"
+    "minato": "^1.2.1"
   },
   "dependencies": {
     "cosmokit": "^1.1.2"
