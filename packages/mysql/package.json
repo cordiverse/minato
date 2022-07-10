@@ -25,7 +25,7 @@
     "mysql"
   ],
   "peerDependencies": {
-    "minato": "^1.2.1"
+    "minato": "^1.2.2"
   },
   "devDependencies": {
     "@minatojs/tests": "^1.1.0",
@@ -34,7 +34,7 @@
   "dependencies": {
     "@minatojs/sql-utils": "^1.0.2",
     "@vlasky/mysql": "^2.18.5",
-    "cosmokit": "^1.1.2",
+    "cosmokit": "^1.2.1",
     "reggol": "^1.0.3"
   }
 }

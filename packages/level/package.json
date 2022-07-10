@@ -27,7 +27,7 @@
     "leveldb"
   ],
   "peerDependencies": {
-    "minato": "^1.2.1"
+    "minato": "^1.2.2"
   },
   "devDependencies": {
     "@minatojs/tests": "^1.1.0",
@@ -36,7 +36,7 @@
     "@types/subleveldown": "^4.1.1"
   },
   "dependencies": {
-    "cosmokit": "^1.1.2",
+    "cosmokit": "^1.2.1",
     "level": "^7.0.1",
     "reggol": "^1.0.3",
     "subleveldown": "^6.0.1"

@@ -23,7 +23,7 @@
     "database"
   ],
   "dependencies": {
-    "cosmokit": "^1.1.2",
+    "cosmokit": "^1.2.1",
     "ns-require": "^1.1.4"
   }
 }

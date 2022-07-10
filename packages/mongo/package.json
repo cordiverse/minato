@@ -29,10 +29,10 @@
     "@minatojs/tests": "^1.1.0"
   },
   "peerDependencies": {
-    "minato": "^1.2.1"
+    "minato": "^1.2.2"
   },
   "dependencies": {
     "mongodb": "^4.6.0",
-    "cosmokit": "^1.1.2"
+    "cosmokit": "^1.2.1"
   }
 }
