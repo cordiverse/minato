@@ -110,7 +110,6 @@ class SQLiteDriver extends Driver {
   /** synchronize table schema */
   async prepare(table: string) {
     const info = this.#exec('all', `PRAGMA table_info(${this.sql.escapeId(table)})`) as SQLiteFieldInfo[]
-    // FIXME: register platform columns before database initializion
     // WARN: side effecting Tables.config
     const config = this.model(table)
     const keys = Object.keys(config.fields)

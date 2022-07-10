@@ -43,6 +43,12 @@ export class Database<S = any> {
   private tasks: Dict<Promise<void>> = Object.create(null)
   private stashed = new Set<string>()
 
+  refresh() {
+    for (const name in this.tables) {
+      this.tasks[name] = this.prepare(name)
+    }
+  }
+
   connect<T>(constructor: Driver.Constructor<T>, config?: T, name?: string): Promise<void>
   connect(constructor: string, config?: any, name?: string): Promise<void>
   async connect(constructor: string | Driver.Constructor, config: any, name = 'default') {
@@ -52,9 +58,7 @@ export class Database<S = any> {
     const driver = new constructor(this, config)
     await driver.start()
     this.drivers[name] = driver
-    for (const name in this.tables) {
-      this.tasks[name] = this.prepare(name)
-    }
+    this.refresh()
   }
 
   private getDriver(name: string) {
