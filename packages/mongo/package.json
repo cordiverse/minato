@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "MongoDB Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -29,7 +29,7 @@
     "@minatojs/tests": "^1.1.0"
   },
   "peerDependencies": {
-    "minato": "^1.2.2"
+    "minato": "^1.2.3"
   },
   "dependencies": {
     "mongodb": "^4.6.0",

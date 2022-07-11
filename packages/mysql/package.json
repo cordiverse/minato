@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mysql",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "MySQL Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -25,7 +25,7 @@
     "mysql"
   ],
   "peerDependencies": {
-    "minato": "^1.2.2"
+    "minato": "^1.2.3"
   },
   "devDependencies": {
     "@minatojs/tests": "^1.1.0",

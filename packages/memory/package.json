@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-memory",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "In-memory Driver for Cosmotype",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -25,7 +25,7 @@
     "memory"
   ],
   "peerDependencies": {
-    "minato": "^1.2.2"
+    "minato": "^1.2.3"
   },
   "devDependencies": {
     "@minatojs/tests": "^1.1.0"
