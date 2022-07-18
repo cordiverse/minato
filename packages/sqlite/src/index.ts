@@ -64,7 +64,7 @@ class SQLiteDriver extends Driver {
       }
 
       protected createElementQuery(key: string, value: any) {
-        return `(',' || ${key} || ',') LIKE '%,${this.escape(value)},%'`
+        return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
       }
     }()
 
