@@ -115,17 +115,10 @@ class SQLiteDriver extends Driver {
     const keys = Object.keys(config.fields)
     if (info.length) {
       logger.info('auto updating table %c', table)
-      const allKeys = [...keys, ...info.map(row => row.name)]
-      for (const key of allKeys) {
-        if (keys.includes(key) && info.some(({ name }) => name === key)) continue
-        if (keys.includes(key)) {
-          // Add column
-          const def = this._getColDefs(table, key)
-          this.#exec('run', `ALTER TABLE ${this.sql.escapeId(table)} ADD COLUMN ${def}`)
-        } else {
-          // Drop column
-          this.#exec('run', `ALTER TABLE ${this.sql.escapeId(table)} DROP COLUMN \`${key}\``)
-        }
+      for (const key of keys) {
+        if (info.some(({ name }) => name === key)) continue
+        const def = this._getColDefs(table, key)
+        this.#exec('run', `ALTER TABLE ${this.sql.escapeId(table)} ADD COLUMN ${def}`)
       }
     } else {
       logger.info('auto creating table %c', table)

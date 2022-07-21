@@ -32,7 +32,7 @@
     "@types/mysql": "^2.15.21"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^1.0.2",
+    "@minatojs/sql-utils": "^1.0.3",
     "@vlasky/mysql": "^2.18.5",
     "cosmokit": "^1.2.1",
     "reggol": "^1.0.3"

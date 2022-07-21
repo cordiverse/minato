@@ -261,6 +261,7 @@ export class Caster {
     const { fields } = this.models[table]
     const result = {}
     for (const key in obj) {
+      if (!(key in fields)) continue
       const { type, initial } = fields[key]
       const converter = this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
