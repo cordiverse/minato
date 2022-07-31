@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@minatojs/sql-utils": "^1.0.3",
-    "better-sqlite3": "^7.5.3",
+    "better-sqlite3": "^7.6.2",
     "sqlstring-sqlite": "^0.1.1",
     "cosmokit": "^1.2.1",
     "reggol": "^1.0.3"
