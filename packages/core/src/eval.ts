@@ -35,6 +35,12 @@ export namespace Eval {
   export type Date = $Date | Expr<$Date>
   export type Any = Plain | Expr
 
+  export interface Comparator {
+    (x: Number, y: Number): Expr<boolean>
+    (x: String, y: String): Expr<boolean>
+    (x: Date, y: Date): Expr<boolean>
+  }
+
   export interface Static {
     (key: string, value: any): Eval.Expr
 
@@ -51,10 +57,10 @@ export namespace Eval {
     // comparison
     eq(x: Any, y: Any): Expr<boolean>
     ne(x: Any, y: Any): Expr<boolean>
-    gt(x: Number, y: Number): Expr<boolean>
-    gte(x: Number, y: Number): Expr<boolean>
-    lt(x: Number, y: Number): Expr<boolean>
-    lte(x: Number, y: Number): Expr<boolean>
+    gt: Comparator
+    gte: Comparator
+    lt: Comparator
+    lte: Comparator
 
     // string
     concat(...args: String[]): Expr<string>
