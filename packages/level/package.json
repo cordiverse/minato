@@ -31,14 +31,11 @@
   },
   "devDependencies": {
     "@minatojs/tests": "^1.1.0",
-    "@types/abstract-leveldown": "^7.2.0",
-    "@types/level": "^6.0.1",
-    "@types/subleveldown": "^4.1.1"
+    "@types/abstract-leveldown": "^7.2.0"
   },
   "dependencies": {
     "cosmokit": "^1.2.1",
-    "level": "^7.0.1",
-    "reggol": "^1.0.3",
-    "subleveldown": "^6.0.1"
+    "level": "^8.0.0",
+    "reggol": "^1.0.3"
   }
 }

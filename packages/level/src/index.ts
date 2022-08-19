@@ -1,9 +1,7 @@
 import { isNullable, makeArray, noop } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, Query, RuntimeError } from 'minato'
-import { LevelUp } from 'levelup'
 import Logger from 'reggol'
-import level from 'level'
-import sub from 'subleveldown'
+import { Level } from 'level'
 import { getStats, resolveLocation } from '../runtime'
 
 declare module 'abstract-leveldown' {
@@ -20,8 +18,8 @@ namespace LevelDriver {
 
 class LevelDriver extends Driver {
   #path: string
-  #level: LevelUp
-  #tables: Record<string, LevelUp>
+  #level: Level
+  #tables: Record<string, any>
   #last: Promise<any> = Promise.resolve()
 
   constructor(database: Database, public config: LevelDriver.Config) {
@@ -35,7 +33,7 @@ class LevelDriver extends Driver {
 
   async start() {
     // LevelDB will automatically open
-    this.#level = level(this.#path)
+    this.#level = new Level(this.#path)
     this.#tables = Object.create(null)
   }
 
@@ -71,9 +69,9 @@ class LevelDriver extends Driver {
     }
   }
 
-  collection(table: string): LevelUp {
-    return this.#tables[table] ??= sub(this.#level, table, {
-      valueEncoding: this.createValueEncoding(table),
+  collection(table: string) {
+    return this.#tables[table] ??= this.#level.sublevel(table, {
+      valueEncoding: this.createValueEncoding(table)
     })
   }
 
