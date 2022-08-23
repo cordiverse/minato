@@ -4,7 +4,6 @@ import { Field, Model } from './model'
 import { Query } from './query'
 import { Flatten, Indexable, Keys } from './utils'
 import { Direction, Executable, Modifier, Selection, Selector } from './selection'
-import ns from 'ns-require'
 
 export type Result<S, K, T = (...args: any) => any> = {
   [P in keyof S as S[P] extends T ? P : P extends K ? P : never]: S[P]
@@ -31,12 +30,6 @@ export namespace Driver {
   }
 }
 
-const scope = ns({
-  namespace: 'minato',
-  prefix: 'driver',
-  official: 'minatojs',
-})
-
 export class Database<S = any> {
   public tables: { [K in Keys<S>]?: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
@@ -47,18 +40,6 @@ export class Database<S = any> {
     for (const name in this.tables) {
       this.tasks[name] = this.prepare(name)
     }
-  }
-
-  connect<T>(constructor: Driver.Constructor<T>, config?: T, name?: string): Promise<void>
-  connect(constructor: string, config?: any, name?: string): Promise<void>
-  async connect(constructor: string | Driver.Constructor, config: any, name = 'default') {
-    if (typeof constructor === 'string') {
-      constructor = scope.require(constructor) as Driver.Constructor
-    }
-    const driver = new constructor(this, config)
-    await driver.start()
-    this.drivers[name] = driver
-    this.refresh()
   }
 
   private getDriver(name: string) {

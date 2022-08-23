@@ -3,7 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "minato": ["packages/core/src"],
+      "minato": ["packages/core/minato"],
       "@minatojs/*": ["packages/*/src"],
       "@minatojs/driver-*": ["packages/*/src"],
     },
