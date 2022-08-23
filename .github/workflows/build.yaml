@@ -4,16 +4,13 @@ on:
   - push
   - pull_request
 
-env:
-  CI: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
       - name: Set up Node
         uses: actions/setup-node@v2
         with:

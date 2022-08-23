@@ -38,7 +38,7 @@
   "dependencies": {
     "cosmokit": "^1.2.1",
     "level": "^7.0.1",
-    "reggol": "^1.0.3",
+    "reggol": "^1.1.0",
     "subleveldown": "^6.0.1"
   }
 }

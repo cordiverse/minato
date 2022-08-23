@@ -36,6 +36,6 @@
     "better-sqlite3": "^7.6.2",
     "sqlstring-sqlite": "^0.1.1",
     "cosmokit": "^1.2.1",
-    "reggol": "^1.0.3"
+    "reggol": "^1.1.0"
   }
 }

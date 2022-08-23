@@ -4,9 +4,6 @@ on:
   - push
   - pull_request
 
-env:
-  CI: true
-
 jobs:
   mysql:
     name: ${{ matrix.mysql-image }} (${{ matrix.node-version }})
@@ -19,7 +16,7 @@ jobs:
           - mysql:5.7
           - mysql:8.0
           - mariadb:10.5
-        node-version: [12, 14, 16, 18]
+        node-version: [14, 16, 18]
 
     services:
       mysql:
@@ -35,7 +32,7 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
       - name: Set up Node
         uses: actions/setup-node@v2
         with:
@@ -58,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [12, 14, 16, 18]
+        node-version: [14, 16, 18]
 
     services:
       mongo:
@@ -70,7 +67,7 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
       - name: Set up Node
         uses: actions/setup-node@v2
         with:
@@ -95,11 +92,11 @@ jobs:
       fail-fast: false
       matrix:
         driver-name: [sqlite, level, memory]
-        node-version: [12, 14, 16, 18]
+        node-version: [14, 16, 18]
 
     steps:
       - name: Check out
-        uses: actions/checkout@v1
+        uses: actions/checkout@v3
       - name: Set up Node
         uses: actions/setup-node@v2
         with:
