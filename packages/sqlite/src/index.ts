@@ -1,5 +1,5 @@
 import { difference, makeArray, union } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from 'minato'
+import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from '@minatojs/core'
 import { Builder, Caster } from '@minatojs/sql-utils'
 import sqlite, { Statement } from 'better-sqlite3'
 import { resolve } from 'path'

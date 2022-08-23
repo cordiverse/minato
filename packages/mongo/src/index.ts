@@ -1,6 +1,6 @@
 import { Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, Modifier, Query, RuntimeError } from 'minato'
+import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, Modifier, Query, RuntimeError } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { transformEval, transformQuery } from './utils'
 
@@ -114,7 +114,7 @@ class MongoDriver extends Driver {
     const coll = this.db.collection(table)
     await Promise.all(Object.keys(fields).map((key) => {
       if (isNullable(fields[key].initial)) return
-      return coll.updateMany({ [key]: { $exists: false } }, { $set: { [key]: fields[key].initial } })
+      return coll.updateMany({ [key]: { $exists: false } }, { $set: { [key]: fields[key].initial as never } })
     }))
   }
 

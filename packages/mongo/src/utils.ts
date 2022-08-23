@@ -1,5 +1,5 @@
 import { isNullable, valueMap } from 'cosmokit'
-import { Query } from 'minato'
+import { Query } from '@minatojs/core'
 import { Filter, FilterOperators } from 'mongodb'
 
 function createFieldFilter(query: Query.FieldQuery, key: string) {

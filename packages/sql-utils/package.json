@@ -1,7 +1,7 @@
 {
   "name": "@minatojs/sql-utils",
-  "version": "1.0.3",
-  "description": "SQL Utilities for Cosmotype",
+  "version": "1.1.0",
+  "description": "SQL Utilities for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -29,7 +29,7 @@
     "builder"
   ],
   "peerDependencies": {
-    "minato": "^1.2.4"
+    "@minatojs/core": "^1.3.0"
   },
   "dependencies": {
     "cosmokit": "^1.2.1"

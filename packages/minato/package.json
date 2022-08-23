@@ -1,6 +1,6 @@
 {
   "name": "minato",
-  "version": "1.2.4",
+  "version": "1.3.0",
   "description": "Type Driven Database Framework",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -29,7 +29,7 @@
     "level"
   ],
   "dependencies": {
-    "@minatojs/core": "^1.2.4",
+    "@minatojs/core": "^1.3.0",
     "ns-require": "^1.1.4"
   }
 }

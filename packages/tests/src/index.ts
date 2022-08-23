@@ -1,4 +1,4 @@
-import { Database } from 'minato'
+import { Database } from '@minatojs/core'
 import QueryOperators from './query'
 import UpdateOperators from './update'
 import ObjectOperations from './object'

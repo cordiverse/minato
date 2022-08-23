@@ -4,4 +4,4 @@
 [![npm](https://img.shields.io/npm/v/@minatojs/driver-memory?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-memory)
 [![GitHub](https://img.shields.io/github/license/shigma/minato?style=flat-square)](https://github.com/shigma/minato/blob/master/LICENSE)
 
-In-memory Driver for Cosmotype.
+In-memory Driver for Minato.

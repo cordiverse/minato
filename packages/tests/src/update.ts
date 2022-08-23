@@ -1,4 +1,4 @@
-import { $, Database } from 'minato'
+import { $, Database } from '@minatojs/core'
 import { omit } from 'cosmokit'
 import { expect } from 'chai'
 
