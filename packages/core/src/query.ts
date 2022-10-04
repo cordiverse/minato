@@ -1,6 +1,6 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval'
-import { Comparable, Indexable, isPlain, Plain } from './utils'
+import { Comparable, Indexable, isComparable } from './utils'
 import { Selection } from './selection'
 
 export type Query<T = any> = Query.Expr<T> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
@@ -20,8 +20,8 @@ export namespace Query {
     $nin?: Extract<T, Indexable, T[]>
 
     // arithmatic
-    $eq?: Extract<T, Plain>
-    $ne?: Extract<T, Plain>
+    $eq?: Extract<T, Comparable>
+    $ne?: Extract<T, Comparable>
     $gt?: Extract<T, Comparable>
     $gte?: Extract<T, Comparable>
     $lt?: Extract<T, Comparable>
@@ -108,7 +108,7 @@ function executeFieldQuery(query: Query.FieldQuery, data: any) {
     return query.includes(data)
   } else if (query instanceof RegExp) {
     return query.test(data)
-  } else if (isPlain(query)) {
+  } else if (isComparable(query)) {
     return data.valueOf() === query.valueOf()
   } else if (isNullable(query)) {
     return isNullable(data)

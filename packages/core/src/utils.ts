@@ -8,8 +8,7 @@ export type Keys<O, T = any> = Values<{
 
 export type Atomic = number | string | boolean | bigint | symbol | Date
 export type Indexable = string | number
-export type Comparable = string | number | Date
-export type Plain = string | number | boolean | Date
+export type Comparable = string | number | boolean | Date
 
 type FlatWrap<S, T, P extends string> = { [K in P]?: S }
   // rule out atomic / recursive types
@@ -26,7 +25,7 @@ type FlatMap<S, T = never, P extends string = ''> = Values<{
 
 export type Flatten<S> = Intersect<FlatMap<S>>
 
-export function isPlain(value: any) {
+export function isComparable(value: any): value is Comparable {
   return typeof value === 'string'
     || typeof value === 'number'
     || typeof value === 'boolean'
