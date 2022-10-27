@@ -3,7 +3,7 @@ import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
 import { Flatten, Indexable, Keys } from './utils'
-import { Direction, Executable, Modifier, Selection, Selector } from './selection'
+import { Direction, Executable, Modifier, Selection } from './selection'
 
 export type Result<S, K, T = (...args: any) => any> = {
   [P in keyof S as S[P] extends T ? P : P extends K ? P : never]: S[P]
@@ -71,11 +71,11 @@ export class Database<S = any> {
     this.tasks[name] = this.prepare(name)
   }
 
-  select<T extends Selector<S>>(table: T, query?: Query<Selector.Resolve<S, T>>): Selection<Selector.Resolve<S, T>> {
+  select<T extends Selection.Selector<S>>(table: T, query?: Query<Selection.Resolve<S, T>>): Selection<Selection.Resolve<S, T>> {
     return new Selection(this.getDriver(table), table, query)
   }
 
-  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<Selector.Resolve<S, T>>, cursor?: Driver.Cursor<K>): Promise<Result<S[T], K>[]> {
+  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<Selection.Resolve<S, T>>, cursor?: Driver.Cursor<K>): Promise<Result<S[T], K>[]> {
     await this.tasks[table]
     if (Array.isArray(cursor)) {
       cursor = { fields: cursor }
@@ -105,7 +105,7 @@ export class Database<S = any> {
       .execute()
   }
 
-  async set<T extends Keys<S>>(table: T, query: Query<Selector.Resolve<S, T>>, update: Selection.Yield<S[T], Update<S[T]>>) {
+  async set<T extends Keys<S>>(table: T, query: Query<Selection.Resolve<S, T>>, update: Selection.Yield<S[T], Update<S[T]>>) {
     await this.tasks[table]
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
@@ -116,7 +116,7 @@ export class Database<S = any> {
     await sel.action('set', sel.model.format(update)).execute()
   }
 
-  async remove<T extends Keys<S>>(table: T, query: Query<Selector.Resolve<S, T>>) {
+  async remove<T extends Keys<S>>(table: T, query: Query<Selection.Resolve<S, T>>) {
     await this.tasks[table]
     const sel = this.select(table, query)
     await sel.action('remove').execute()

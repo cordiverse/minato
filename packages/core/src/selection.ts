@@ -13,15 +13,6 @@ export interface Modifier {
   sort: [Eval.Expr, Direction][]
 }
 
-export type Selector<S> = Keys<S>// | Selection
-
-export namespace Selector {
-  export type Resolve<S, T> =
-    | T extends Keys<S> ? S[T]
-    // : T extends Selection<infer U> ? U
-    : never
-}
-
 export namespace Executable {
   export type Action = 'get' | 'set' | 'remove' | 'create' | 'upsert' | 'eval'
 
@@ -102,7 +93,7 @@ export class Executable<S = any, T = any> {
 export namespace Selection {
   export type Callback<S, T = any> = (row: Row<S>) => Eval.Expr<T>
   export type Field<S = any> = Keys<S> | Callback<S>
-  export type Resolve<S, F extends Field<S>> =
+  export type Take<S, F extends Field<S>> =
     | F extends Keys<S> ? S[F]
     : F extends Callback<S> ? Eval<ReturnType<F>>
     : never
@@ -114,8 +105,15 @@ export namespace Selection {
   export type Yield<S, T> = T | ((row: Row<S>) => T)
 
   export type Project<S, T extends Dict<Field<S>>> = {
-    [K in keyof T]: Resolve<S, T[K]>
+    [K in keyof T]: Take<S, T[K]>
   }
+
+  export type Selector<S> = Keys<S>// | Selection
+
+  export type Resolve<S, T> =
+    | T extends Keys<S> ? S[T]
+    // : T extends Selection<infer U> ? U
+    : never
 }
 
 export class Selection<S = any> extends Executable<S, S[]> {
