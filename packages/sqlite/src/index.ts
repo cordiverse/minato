@@ -173,9 +173,10 @@ class SQLiteDriver extends Driver {
   #all(sql: string, params: any = []) {
     try {
       const stmt = this.db.prepare(sql)
+      stmt.bind(params)
       const result = []
       while (stmt.step()) {
-        result.push(stmt.get(params))
+        result.push(stmt.getAsObject())
       }
       return result
     } catch (e) {
