@@ -2,7 +2,7 @@ import { join } from 'path'
 import { Database } from 'minato'
 import test from '@minatojs/tests'
 
-describe('Memory Database', () => {
+describe('@minatojs/driver-sqlite', () => {
   const database = new Database()
 
   before(async () => {

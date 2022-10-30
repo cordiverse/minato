@@ -1,7 +1,7 @@
 import { Database } from 'minato'
 import test from '@minatojs/tests'
 
-describe('Memory Database', () => {
+describe('@minatojs/driver-mongo', () => {
   const database = new Database()
 
   before(async () => {
