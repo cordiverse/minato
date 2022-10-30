@@ -1,7 +1,7 @@
 import { difference, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from '@minatojs/core'
 import { Builder, Caster } from '@minatojs/sql-utils'
-import sqlite, { Statement } from 'better-sqlite3'
+import init from 'sql.js'
 import { resolve } from 'path'
 import { escapeId, format, escape as sqlEscape } from 'sqlstring-sqlite'
 import { promises as fsp } from 'fs'
@@ -43,7 +43,7 @@ namespace SQLiteDriver {
 }
 
 class SQLiteDriver extends Driver {
-  public db: sqlite.Database
+  db: init.Database
   sqlite = this
   sql: Builder
   caster: Caster
@@ -109,16 +109,20 @@ class SQLiteDriver extends Driver {
 
   /** synchronize table schema */
   async prepare(table: string) {
-    const info = this.#exec('all', `PRAGMA table_info(${this.sql.escapeId(table)})`) as SQLiteFieldInfo[]
+    const info = this.#all(`PRAGMA table_info(${this.sql.escapeId(table)})`) as SQLiteFieldInfo[]
     // WARN: side effecting Tables.config
     const config = this.model(table)
     const keys = Object.keys(config.fields)
     if (info.length) {
-      logger.info('auto updating table %c', table)
+      let hasUpdate = false
       for (const key of keys) {
         if (info.some(({ name }) => name === key)) continue
         const def = this._getColDefs(table, key)
         this.#exec('run', `ALTER TABLE ${this.sql.escapeId(table)} ADD COLUMN ${def}`)
+        hasUpdate = true
+      }
+      if (hasUpdate) {
+        logger.info('auto updating table %c', table)
       }
     } else {
       logger.info('auto creating table %c', table)
@@ -140,8 +144,12 @@ class SQLiteDriver extends Driver {
   }
 
   async start() {
-    this.db = sqlite(this.config.path === ':memory:' ? this.config.path : resolve(this.config.path))
-    this.db.function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    const [sqlite, buffer] = await Promise.all([
+      init(),
+      this.config.path === ':memory:' ? undefined : fsp.readFile(this.config.path),
+    ])
+    this.db = new sqlite.Database(buffer)
+    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
   }
 
   #joinKeys(keys?: string[]) {
@@ -152,10 +160,23 @@ class SQLiteDriver extends Driver {
     this.db.close()
   }
 
-  #exec<K extends 'get' | 'run' | 'all'>(action: K, sql: string, params: any = []) {
+  #exec<K extends 'get' | 'run'>(action: K, sql: string, params: any = []) {
     try {
-      const result = this.db.prepare(sql)[action](params) as ReturnType<Statement[K]>
-      logger.debug('SQL > %c', sql)
+      const result = this.db.prepare(sql)[action](params)
+      return result as any
+    } catch (e) {
+      logger.warn('SQL > %c', sql)
+      throw e
+    }
+  }
+
+  #all(sql: string, params: any = []) {
+    try {
+      const stmt = this.db.prepare(sql)
+      const result = []
+      while (stmt.step()) {
+        result.push(stmt.get(params))
+      }
       return result
     } catch (e) {
       logger.warn('SQL > %c', sql)
@@ -192,7 +213,7 @@ class SQLiteDriver extends Driver {
     if (sort.length) sql += ' ORDER BY ' + sort.map(([key, order]) => `\`${key['$'][1]}\` ${order}`).join(', ')
     if (limit < Infinity) sql += ' LIMIT ' + limit
     if (offset > 0) sql += ' OFFSET ' + offset
-    const rows = this.#exec('all', sql)
+    const rows = this.#all(sql)
     return rows.map(row => this.caster.load(table, row))
   }
 
