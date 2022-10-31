@@ -42,8 +42,8 @@ jobs:
       - name: Unit Test
         run: yarn test:json mysql
       - name: Report Coverage
-        if: ${{ matrix.node-version == 14 && matrix.mysql-image == 'mysql:5.7' }}
-        uses: codecov/codecov-action@v2
+        if: ${{ matrix.node-version == 16 && matrix.mysql-image == 'mysql:5.7' }}
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
@@ -77,8 +77,8 @@ jobs:
       - name: Unit Test
         run: yarn test:json mongo
       - name: Report Coverage
-        if: ${{ matrix.node-version == 14 }}
-        uses: codecov/codecov-action@v2
+        if: ${{ matrix.node-version == 16 }}
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
@@ -106,8 +106,8 @@ jobs:
       - name: Unit Test
         run: yarn test:json ${{ matrix.driver-name }}
       - name: Report Coverage
-        if: ${{ matrix.node-version == 14 }}
-        uses: codecov/codecov-action@v2
+        if: ${{ matrix.node-version == 16 }}
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
