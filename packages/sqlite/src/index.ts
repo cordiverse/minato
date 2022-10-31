@@ -118,7 +118,7 @@ class SQLiteDriver extends Driver {
       for (const key of keys) {
         if (info.some(({ name }) => name === key)) continue
         const def = this._getColDefs(table, key)
-        this.#exec('run', `ALTER TABLE ${this.sql.escapeId(table)} ADD COLUMN ${def}`)
+        this.#run(`ALTER TABLE ${this.sql.escapeId(table)} ADD COLUMN ${def}`)
         hasUpdate = true
       }
       if (hasUpdate) {
@@ -139,7 +139,7 @@ class SQLiteDriver extends Driver {
           return `FOREIGN KEY (\`${key}\`) REFERENCES ${this.sql.escapeId(table)} (\`${key2}\`)`
         }))
       }
-      this.#exec('run', `CREATE TABLE ${this.sql.escapeId(table)} (${[...defs, ...constraints].join(',')})`)
+      this.#run(`CREATE TABLE ${this.sql.escapeId(table)} (${[...defs, ...constraints].join(',')})`)
     }
   }
 
@@ -160,18 +160,17 @@ class SQLiteDriver extends Driver {
     this.db.close()
   }
 
-  #exec<K extends 'get' | 'run'>(action: K, sql: string, params: any = []) {
+  #exec(sql: string, params: any, callback: () => any) {
     try {
-      const result = this.db.prepare(sql)[action](params)
-      return result as any
+      return callback()
     } catch (e) {
-      logger.warn('SQL > %c', sql)
+      logger.warn('SQL > %c', sql, params)
       throw e
     }
   }
 
   #all(sql: string, params: any = []) {
-    try {
+    return this.#exec(sql, params, () => {
       const stmt = this.db.prepare(sql)
       stmt.bind(params)
       const result = []
@@ -179,16 +178,21 @@ class SQLiteDriver extends Driver {
         result.push(stmt.getAsObject())
       }
       return result
-    } catch (e) {
-      logger.warn('SQL > %c', sql)
-      throw e
-    }
+    })
+  }
+
+  #get(sql: string, params: any = []) {
+    return this.#exec(sql, params, () => this.db.prepare(sql).getAsObject(params))
+  }
+
+  #run(sql: string, params: any = []) {
+    return this.#exec(sql, params, () => this.db.prepare(sql).run(params))
   }
 
   async drop() {
     const tables = Object.keys(this.database.tables)
     for (const table of tables) {
-      this.#exec('run', `DROP TABLE ${this.sql.escapeId(table)}`)
+      this.#run(`DROP TABLE ${this.sql.escapeId(table)}`)
     }
   }
 
@@ -202,7 +206,7 @@ class SQLiteDriver extends Driver {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
     if (filter === '0') return
-    this.#exec('run', `DELETE FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
+    this.#run(`DELETE FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
   }
 
   async get(sel: Executable, modifier: Modifier) {
@@ -222,7 +226,7 @@ class SQLiteDriver extends Driver {
     const { table, query } = sel
     const filter = this.sql.parseQuery(query)
     const output = this.sql.parseEval(expr)
-    const { value } = this.#exec('get', `SELECT ${output} AS value FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
+    const { value } = this.#get(`SELECT ${output} AS value FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
     return value
   }
 
@@ -232,7 +236,7 @@ class SQLiteDriver extends Driver {
     const assignment = updateFields.map((key) => `\`${key}\` = ${this.sql.escape(row[key])}`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
-    this.#exec('run', `UPDATE ${this.sql.escapeId(table)} SET ${assignment} WHERE ${filter}`)
+    this.#run(`UPDATE ${this.sql.escapeId(table)} SET ${assignment} WHERE ${filter}`)
   }
 
   async set(sel: Executable, update: {}) {
@@ -252,16 +256,16 @@ class SQLiteDriver extends Driver {
     data = this.caster.dump(table, data)
     const keys = Object.keys(data)
     const sql = `INSERT INTO ${this.sql.escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${keys.map(key => this.sql.escape(data[key])).join(', ')})`
-    return this.#exec('run', sql)
+    return this.#run(sql)
   }
 
   async create(sel: Executable, data: {}) {
     const { model, table } = sel
     data = model.create(data)
-    const result = this.#create(table, data)
+    this.#create(table, data)
     const { autoInc, primary } = model
     if (!autoInc) return data as any
-    return { ...data, [primary as string]: result.lastInsertRowid }
+    return { ...data, ...this.#get(`select last_insert_rowid() as ${escapeId(primary)}`) }
   }
 
   async upsert(sel: Executable, data: any[], keys: string[]) {
