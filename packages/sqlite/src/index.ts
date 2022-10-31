@@ -44,9 +44,10 @@ namespace SQLiteDriver {
 
 class SQLiteDriver extends Driver {
   db: init.Database
-  sqlite = this
   sql: Builder
   caster: Caster
+
+  #sqlite: init.SqlJsStatic
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
@@ -143,13 +144,18 @@ class SQLiteDriver extends Driver {
     }
   }
 
+  init(buffer: ArrayLike<number>) {
+    this.db = new this.#sqlite.Database(buffer)
+    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+  }
+
   async start() {
     const [sqlite, buffer] = await Promise.all([
       init(),
-      this.config.path === ':memory:' ? undefined : fsp.readFile(this.config.path),
+      this.config.path && fsp.readFile(this.config.path).catch<Buffer>(() => null),
     ])
-    this.db = new sqlite.Database(buffer)
-    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    this.#sqlite = sqlite
+    this.init(buffer)
   }
 
   #joinKeys(keys?: string[]) {
@@ -184,11 +190,17 @@ class SQLiteDriver extends Driver {
   }
 
   #get(sql: string, params: any = []) {
-    return this.#exec(sql, params, (stmt) => stmt.getAsObject(params))
+    return this.#exec(sql, params, stmt => stmt.getAsObject(params))
   }
 
   #run(sql: string, params: any = []) {
-    return this.#exec(sql, params, (stmt) => stmt.run(params))
+    const result = this.#exec(sql, params, stmt => stmt.run(params))
+    if (this.config.path) {
+      const data = this.db.export()
+      fsp.writeFile(this.config.path, data)
+      this.init(data)
+    }
+    return result
   }
 
   async drop() {
@@ -199,8 +211,7 @@ class SQLiteDriver extends Driver {
   }
 
   async stats() {
-    if (this.config.path === ':memory:') return {}
-    const { size } = await fsp.stat(this.config.path)
+    const size = this.db.export().byteLength
     return { size }
   }
 
