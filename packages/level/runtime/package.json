@@ -1,7 +1,0 @@
-{
-  "name": "@minatojs/driver-level.runtime",
-  "private": true,
-  "main": "node.js",
-  "module": "browser.js",
-  "typings": "index.d.ts"
-}

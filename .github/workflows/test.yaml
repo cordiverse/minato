@@ -91,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        driver-name: [sqlite, level, memory]
+        driver-name: [sqlite, memory]
         node-version: [14, 16, 18]
 
     steps:
