@@ -160,9 +160,12 @@ class SQLiteDriver extends Driver {
     this.db.close()
   }
 
-  #exec(sql: string, params: any, callback: () => any) {
+  #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
     try {
-      return callback()
+      const stmt = this.db.prepare(sql)
+      const result = callback(stmt)
+      stmt.free()
+      return result
     } catch (e) {
       logger.warn('SQL > %c', sql, params)
       throw e
@@ -170,8 +173,7 @@ class SQLiteDriver extends Driver {
   }
 
   #all(sql: string, params: any = []) {
-    return this.#exec(sql, params, () => {
-      const stmt = this.db.prepare(sql)
+    return this.#exec(sql, params, (stmt) => {
       stmt.bind(params)
       const result = []
       while (stmt.step()) {
@@ -182,11 +184,11 @@ class SQLiteDriver extends Driver {
   }
 
   #get(sql: string, params: any = []) {
-    return this.#exec(sql, params, () => this.db.prepare(sql).getAsObject(params))
+    return this.#exec(sql, params, (stmt) => stmt.getAsObject(params))
   }
 
   #run(sql: string, params: any = []) {
-    return this.#exec(sql, params, () => this.db.prepare(sql).run(params))
+    return this.#exec(sql, params, (stmt) => stmt.run(params))
   }
 
   async drop() {
