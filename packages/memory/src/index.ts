@@ -69,7 +69,7 @@ class MemoryDriver extends Driver {
 
   async create(sel: Executable, data: any) {
     const { table, model } = sel
-    const { primary, fields, autoInc } = model
+    const { primary, autoInc } = model
     const store = this.$table(table)
     if (!Array.isArray(primary) && autoInc && !(primary in data)) {
       let meta = this.#store._fields.find(row => row.table === table && row.field === primary)
@@ -79,12 +79,6 @@ class MemoryDriver extends Driver {
       }
       meta.autoInc += 1
       data[primary] = meta.autoInc
-
-      // workaround for autoInc string fields
-      // TODO remove in future versions
-      if (Field.string.includes(fields[primary].type)) {
-        data[primary] += ''
-      }
     } else {
       const duplicated = await this.database.get(table, pick(data, makeArray(primary)))
       if (duplicated.length) {

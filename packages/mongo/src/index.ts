@@ -22,7 +22,7 @@ namespace MongoDriver {
      * store single primary key in `_id` field to enhance index performance
      * @default false
      */
-    virtualKey?: boolean
+    optimizeIndex?: boolean
   }
 }
 
@@ -89,7 +89,7 @@ class MongoDriver extends Driver {
 
     ;[primary, ...unique].forEach((keys, index) => {
       // use internal `_id` for single primary fields
-      if (this.config.virtualKey && !index && typeof keys === 'string') return
+      if (this.config.optimizeIndex && !index && typeof keys === 'string') return
 
       // if the index is already created, skip it
       keys = makeArray(keys)
@@ -118,6 +118,28 @@ class MongoDriver extends Driver {
     }))
   }
 
+  private async _migratePrimary(table: string) {
+    const { primary, autoInc } = this.model(table)
+    if (Array.isArray(primary) || !autoInc) return
+    const fields = this.db.collection('_fields')
+    const meta: Dict = { table, field: primary }
+    const found = await fields.findOne(meta)
+    if (found) return
+
+    const coll = this.db.collection(table)
+    const bulk = coll.initializeOrderedBulkOp()
+    await coll.find().forEach((data) => {
+      bulk
+        .find({ [primary]: data[primary] })
+        .update({ $set: { [primary]: +data[primary] } })
+    })
+    if (bulk.batches.length) await bulk.execute()
+
+    const [latest] = await coll.find().sort(primary, -1).limit(1).toArray()
+    meta.autoInc = latest ? +latest[primary] : 0
+    await fields.insertOne(meta)
+  }
+
   private _internalTableTask: Promise<Collection<Document>>
 
   async _createInternalTable() {
@@ -133,6 +155,7 @@ class MongoDriver extends Driver {
     await Promise.all([
       this._createIndexes(table),
       this._createFields(table),
+      this._migratePrimary(table),
     ])
   }
 
@@ -168,14 +191,14 @@ class MongoDriver extends Driver {
 
   private getVirtualKey(table: string) {
     const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.virtualKey) {
+    if (typeof primary === 'string' && this.config.optimizeIndex) {
       return primary
     }
   }
 
   private patchVirtual(table: string, row: any) {
     const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.virtualKey) {
+    if (typeof primary === 'string' && this.config.optimizeIndex) {
       row[primary] = row['_id']
       delete row['_id']
     }
@@ -184,7 +207,7 @@ class MongoDriver extends Driver {
 
   private unpatchVirtual(table: string, row: any) {
     const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.virtualKey) {
+    if (typeof primary === 'string' && this.config.optimizeIndex) {
       row['_id'] = row[primary]
       delete row[primary]
     }
@@ -288,7 +311,7 @@ class MongoDriver extends Driver {
     return this._createTasks[table] = lastTask.then(async () => {
       const model = this.model(table)
       const coll = this.db.collection(table)
-      const { primary, fields, autoInc } = model
+      const { primary, autoInc } = model
 
       if (typeof primary === 'string' && !(primary in data)) {
         if (autoInc) {
@@ -298,13 +321,6 @@ class MongoDriver extends Driver {
             { upsert: true, returnDocument: 'after' },
           )
           data[primary] = value.autoInc
-
-          // workaround for autoInc string fields
-          // TODO remove in future versions
-          if (Field.string.includes(fields[primary].type)) {
-            data[primary] += ''
-            data[primary] = data[primary].padStart(8, '0')
-          }
         }
       }
 
