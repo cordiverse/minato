@@ -1,8 +1,7 @@
 import { difference, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from '@minatojs/core'
 import { Builder, Caster } from '@minatojs/sql-utils'
-import sqlite, { Statement } from 'better-sqlite3'
-import { resolve } from 'path'
+import init from '@minatojs/sql.js'
 import { escapeId, format, escape as sqlEscape } from 'sqlstring-sqlite'
 import { promises as fsp } from 'fs'
 import Logger from 'reggol'
@@ -43,8 +42,7 @@ namespace SQLiteDriver {
 }
 
 class SQLiteDriver extends Driver {
-  public db: sqlite.Database
-  sqlite = this
+  db: init.Database
   sql: Builder
   caster: Caster
 
@@ -109,16 +107,20 @@ class SQLiteDriver extends Driver {
 
   /** synchronize table schema */
   async prepare(table: string) {
-    const info = this.#exec('all', `PRAGMA table_info(${this.sql.escapeId(table)})`) as SQLiteFieldInfo[]
+    const info = this.#all(`PRAGMA table_info(${this.sql.escapeId(table)})`) as SQLiteFieldInfo[]
     // WARN: side effecting Tables.config
     const config = this.model(table)
     const keys = Object.keys(config.fields)
     if (info.length) {
-      logger.info('auto updating table %c', table)
+      let hasUpdate = false
       for (const key of keys) {
         if (info.some(({ name }) => name === key)) continue
         const def = this._getColDefs(table, key)
-        this.#exec('run', `ALTER TABLE ${this.sql.escapeId(table)} ADD COLUMN ${def}`)
+        this.#run(`ALTER TABLE ${this.sql.escapeId(table)} ADD COLUMN ${def}`)
+        hasUpdate = true
+      }
+      if (hasUpdate) {
+        logger.info('auto updating table %c', table)
       }
     } else {
       logger.info('auto creating table %c', table)
@@ -135,13 +137,14 @@ class SQLiteDriver extends Driver {
           return `FOREIGN KEY (\`${key}\`) REFERENCES ${this.sql.escapeId(table)} (\`${key2}\`)`
         }))
       }
-      this.#exec('run', `CREATE TABLE ${this.sql.escapeId(table)} (${[...defs, ...constraints].join(',')})`)
+      this.#run(`CREATE TABLE ${this.sql.escapeId(table)} (${[...defs, ...constraints].join(',')})`)
     }
   }
 
   async start() {
-    this.db = sqlite(this.config.path === ':memory:' ? this.config.path : resolve(this.config.path))
-    this.db.function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    const sqlite = await init()
+    this.db = new sqlite.Database(this.config.path)
+    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
   }
 
   #joinKeys(keys?: string[]) {
@@ -152,27 +155,46 @@ class SQLiteDriver extends Driver {
     this.db.close()
   }
 
-  #exec<K extends 'get' | 'run' | 'all'>(action: K, sql: string, params: any = []) {
+  #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
     try {
-      const result = this.db.prepare(sql)[action](params) as ReturnType<Statement[K]>
-      logger.debug('SQL > %c', sql)
+      const stmt = this.db.prepare(sql)
+      const result = callback(stmt)
+      stmt.free()
       return result
     } catch (e) {
-      logger.warn('SQL > %c', sql)
+      logger.warn('SQL > %c', sql, params)
       throw e
     }
+  }
+
+  #all(sql: string, params: any = []) {
+    return this.#exec(sql, params, (stmt) => {
+      stmt.bind(params)
+      const result = []
+      while (stmt.step()) {
+        result.push(stmt.getAsObject())
+      }
+      return result
+    })
+  }
+
+  #get(sql: string, params: any = []) {
+    return this.#exec(sql, params, stmt => stmt.getAsObject(params))
+  }
+
+  #run(sql: string, params: any = []) {
+    return this.#exec(sql, params, stmt => stmt.run(params))
   }
 
   async drop() {
     const tables = Object.keys(this.database.tables)
     for (const table of tables) {
-      this.#exec('run', `DROP TABLE ${this.sql.escapeId(table)}`)
+      this.#run(`DROP TABLE ${this.sql.escapeId(table)}`)
     }
   }
 
   async stats() {
-    if (this.config.path === ':memory:') return {}
-    const { size } = await fsp.stat(this.config.path)
+    const size = this.db.export().byteLength
     return { size }
   }
 
@@ -180,7 +202,7 @@ class SQLiteDriver extends Driver {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
     if (filter === '0') return
-    this.#exec('run', `DELETE FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
+    this.#run(`DELETE FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
   }
 
   async get(sel: Executable, modifier: Modifier) {
@@ -192,7 +214,7 @@ class SQLiteDriver extends Driver {
     if (sort.length) sql += ' ORDER BY ' + sort.map(([key, order]) => `\`${key['$'][1]}\` ${order}`).join(', ')
     if (limit < Infinity) sql += ' LIMIT ' + limit
     if (offset > 0) sql += ' OFFSET ' + offset
-    const rows = this.#exec('all', sql)
+    const rows = this.#all(sql)
     return rows.map(row => this.caster.load(table, row))
   }
 
@@ -200,7 +222,7 @@ class SQLiteDriver extends Driver {
     const { table, query } = sel
     const filter = this.sql.parseQuery(query)
     const output = this.sql.parseEval(expr)
-    const { value } = this.#exec('get', `SELECT ${output} AS value FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
+    const { value } = this.#get(`SELECT ${output} AS value FROM ${this.sql.escapeId(table)} WHERE ${filter}`)
     return value
   }
 
@@ -210,7 +232,7 @@ class SQLiteDriver extends Driver {
     const assignment = updateFields.map((key) => `\`${key}\` = ${this.sql.escape(row[key])}`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
-    this.#exec('run', `UPDATE ${this.sql.escapeId(table)} SET ${assignment} WHERE ${filter}`)
+    this.#run(`UPDATE ${this.sql.escapeId(table)} SET ${assignment} WHERE ${filter}`)
   }
 
   async set(sel: Executable, update: {}) {
@@ -230,16 +252,16 @@ class SQLiteDriver extends Driver {
     data = this.caster.dump(table, data)
     const keys = Object.keys(data)
     const sql = `INSERT INTO ${this.sql.escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${keys.map(key => this.sql.escape(data[key])).join(', ')})`
-    return this.#exec('run', sql)
+    return this.#run(sql)
   }
 
   async create(sel: Executable, data: {}) {
     const { model, table } = sel
     data = model.create(data)
-    const result = this.#create(table, data)
+    this.#create(table, data)
     const { autoInc, primary } = model
     if (!autoInc) return data as any
-    return { ...data, [primary as string]: result.lastInsertRowid }
+    return { ...data, ...this.#get(`select last_insert_rowid() as ${escapeId(primary)}`) }
   }
 
   async upsert(sel: Executable, data: any[], keys: string[]) {
