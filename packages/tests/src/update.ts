@@ -90,6 +90,8 @@ namespace OrmOperations {
         await expect(database.get('temp2', { id: obj.id })).to.eventually.have.shape([obj])
       }
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+      await expect(database.remove('temp2', { id: 7 })).to.eventually.fulfilled
+      await expect(database.create('temp2', {})).to.eventually.have.shape({ id: 8 })
     })
 
     it('specify primary key', async () => {

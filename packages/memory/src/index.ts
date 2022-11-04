@@ -6,7 +6,9 @@ namespace MemoryDriver {
 }
 
 class MemoryDriver extends Driver {
-  #store: Dict<any[]> = {}
+  #store: Dict<any[]> = {
+    _fields: [],
+  }
 
   constructor(public database: Database, public config: MemoryDriver.Config) {
     super(database)
@@ -70,8 +72,16 @@ class MemoryDriver extends Driver {
     const { primary, fields, autoInc } = model
     const store = this.$table(table)
     if (!Array.isArray(primary) && autoInc && !(primary in data)) {
-      const max = store.length ? Math.max(...store.map(row => +row[primary])) : 0
-      data[primary] = max + 1
+      let meta = this.#store._fields.find(row => row.table === table && row.field === primary)
+      if (!meta) {
+        meta = { table, field: primary, autoInc: 0 }
+        this.#store._fields.push(meta)
+      }
+      meta.autoInc += 1
+      data[primary] = meta.autoInc
+
+      // workaround for autoInc string fields
+      // TODO remove in future versions
       if (Field.string.includes(fields[primary].type)) {
         data[primary] += ''
       }

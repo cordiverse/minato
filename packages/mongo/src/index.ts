@@ -1,4 +1,4 @@
-import { Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
+import { Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, Modifier, Query, RuntimeError } from '@minatojs/core'
 import { URLSearchParams } from 'url'
@@ -118,9 +118,18 @@ class MongoDriver extends Driver {
     }))
   }
 
+  private _internalTableTask: Promise<Collection<Document>>
+
+  async _createInternalTable() {
+    return this._internalTableTask ||= this.db.createCollection('_fields').catch(noop)
+  }
+
   /** synchronize table schema */
   async prepare(table: string) {
-    await this.db.createCollection(table).catch(noop)
+    await Promise.all([
+      this._createInternalTable(),
+      this.db.createCollection(table).catch(noop)
+    ])
     await Promise.all([
       this._createIndexes(table),
       this._createFields(table),
@@ -128,7 +137,10 @@ class MongoDriver extends Driver {
   }
 
   async drop() {
-    await Promise.all(Object.keys(this.database.tables).map(name => this.db.dropCollection(name)))
+    await Promise.all([
+      '_fields',
+      ...Object.keys(this.database.tables),
+    ].map(name => this.db.dropCollection(name)))
   }
 
   private async _collStats() {
@@ -279,10 +291,13 @@ class MongoDriver extends Driver {
       const { primary, fields, autoInc } = model
 
       if (typeof primary === 'string' && !(primary in data)) {
-        const key = this.config.virtualKey ? '_id' : primary
         if (autoInc) {
-          const [latest] = await coll.find().sort(key, -1).limit(1).toArray()
-          data[primary] = latest ? +latest[key] + 1 : 1
+          const { value } = await this.db.collection('_fields').findOneAndUpdate(
+            { table, field: primary },
+            { $inc: { autoInc: 1 } },
+            { upsert: true, returnDocument: 'after' },
+          )
+          data[primary] = value.autoInc
 
           // workaround for autoInc string fields
           // TODO remove in future versions
