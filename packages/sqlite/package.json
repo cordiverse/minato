@@ -28,7 +28,7 @@
     "@minatojs/core": "^1.3.2"
   },
   "devDependencies": {
-    "@minatojs/tests": "^1.2.0"
+    "@minatojs/tests": "^1.3.0"
   },
   "dependencies": {
     "@minatojs/sql-utils": "^1.1.0",
