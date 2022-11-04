@@ -1,8 +1,7 @@
 import { difference, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from '@minatojs/core'
 import { Builder, Caster } from '@minatojs/sql-utils'
-import init from 'sql.js'
-import { resolve } from 'path'
+import init from '@minatojs/sql.js'
 import { escapeId, format, escape as sqlEscape } from 'sqlstring-sqlite'
 import { promises as fsp } from 'fs'
 import Logger from 'reggol'
@@ -46,8 +45,6 @@ class SQLiteDriver extends Driver {
   db: init.Database
   sql: Builder
   caster: Caster
-
-  #sqlite: init.SqlJsStatic
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
@@ -144,18 +141,10 @@ class SQLiteDriver extends Driver {
     }
   }
 
-  init(buffer: ArrayLike<number>) {
-    this.db = new this.#sqlite.Database(buffer)
-    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
-  }
-
   async start() {
-    const [sqlite, buffer] = await Promise.all([
-      init(),
-      this.config.path && fsp.readFile(this.config.path).catch<Buffer>(() => null),
-    ])
-    this.#sqlite = sqlite
-    this.init(buffer)
+    const sqlite = await init()
+    this.db = new sqlite.Database(this.config.path)
+    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
   }
 
   #joinKeys(keys?: string[]) {
@@ -194,13 +183,7 @@ class SQLiteDriver extends Driver {
   }
 
   #run(sql: string, params: any = []) {
-    const result = this.#exec(sql, params, stmt => stmt.run(params))
-    if (this.config.path) {
-      const data = this.db.export()
-      fsp.writeFile(this.config.path, data)
-      this.init(data)
-    }
-    return result
+    return this.#exec(sql, params, stmt => stmt.run(params))
   }
 
   async drop() {
