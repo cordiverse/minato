@@ -3,7 +3,6 @@ import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } fr
 import { Builder, Caster } from '@minatojs/sql-utils'
 import init from '@minatojs/sql.js'
 import { escapeId, format, escape as sqlEscape } from 'sqlstring-sqlite'
-import { promises as fsp } from 'fs'
 import Logger from 'reggol'
 
 const logger = new Logger('sqlite')
