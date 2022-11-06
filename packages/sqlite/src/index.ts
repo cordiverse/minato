@@ -1,8 +1,9 @@
 import { difference, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeUpdate, Field, Modifier } from '@minatojs/core'
 import { Builder, Caster } from '@minatojs/sql-utils'
-import init from '@minatojs/sql.js'
 import { escapeId, format, escape as sqlEscape } from 'sqlstring-sqlite'
+import { promises as fs } from 'fs'
+import init from '@minatojs/sql.js'
 import Logger from 'reggol'
 
 const logger = new Logger('sqlite')
@@ -44,6 +45,8 @@ class SQLiteDriver extends Driver {
   db: init.Database
   sql: Builder
   caster: Caster
+  writeTask: NodeJS.Timeout
+  sqlite: init.SqlJsStatic
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
@@ -140,10 +143,18 @@ class SQLiteDriver extends Driver {
     }
   }
 
-  async start() {
-    const sqlite = await init()
-    this.db = new sqlite.Database(this.config.path)
+  init(buffer: ArrayLike<number>) {
+    this.db = new this.sqlite.Database(buffer)
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+  }
+
+  async start() {
+    const [sqlite, buffer] = await Promise.all([
+      init(),
+      this.config.path === ':memory:' ? null : fs.readFile(this.config.path).catch<Buffer>(() => null),
+    ])
+    this.sqlite = sqlite
+    this.init(buffer)
   }
 
   #joinKeys(keys?: string[]) {
@@ -181,8 +192,18 @@ class SQLiteDriver extends Driver {
     return this.#exec(sql, params, stmt => stmt.getAsObject(params))
   }
 
-  #run(sql: string, params: any = []) {
-    return this.#exec(sql, params, stmt => stmt.run(params))
+  #run(sql: string, params: any = [], callback?: () => any) {
+    this.#exec(sql, params, stmt => stmt.run(params))
+    const result = callback?.()
+    if (this.config.path) {
+      const data = this.db.export()
+      const timer = this.writeTask = setTimeout(() => {
+        if (this.writeTask !== timer) return
+        fs.writeFile(this.config.path, data)
+      }, 0)
+      this.init(data)
+    }
+    return result
   }
 
   async drop() {
@@ -251,16 +272,16 @@ class SQLiteDriver extends Driver {
     data = this.caster.dump(table, data)
     const keys = Object.keys(data)
     const sql = `INSERT INTO ${this.sql.escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${keys.map(key => this.sql.escape(data[key])).join(', ')})`
-    return this.#run(sql)
+    return this.#run(sql, [], () => this.#get(`select last_insert_rowid() as id`))
   }
 
   async create(sel: Executable, data: {}) {
     const { model, table } = sel
     data = model.create(data)
-    this.#create(table, data)
+    const { id } = this.#create(table, data)
     const { autoInc, primary } = model
-    if (!autoInc) return data as any
-    return { ...data, ...this.#get(`select last_insert_rowid() as ${escapeId(primary)}`) }
+    if (!autoInc || Array.isArray(primary)) return data as any
+    return { ...data, [primary]: id }
   }
 
   async upsert(sel: Executable, data: any[], keys: string[]) {
