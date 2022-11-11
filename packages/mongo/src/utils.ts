@@ -128,7 +128,7 @@ const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
 
 const letters = 'abcdefghijklmnopqrstuvwxyz'
 
-function getActualKey(key: string, virtualKey: string) {
+export function getActualKey(key: string, virtualKey: string) {
   return key === virtualKey ? '_id' : key
 }
 

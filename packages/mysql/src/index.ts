@@ -344,7 +344,11 @@ class MySQLDriver extends Driver {
     const { limit, offset, sort } = modifier
     const keys = this._joinKeys(this._inferFields(table, fields ? Object.keys(fields) : null))
     let sql = `SELECT ${keys} FROM ${table} _${table} WHERE ${filter}`
-    if (sort.length) sql += ' ORDER BY ' + sort.map(([key, order]) => `${backtick(key['$'][1])} ${order}`).join(', ')
+    if (sort.length) {
+      sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
+        return `${this.sql.parseEval(expr, table)} ${dir}`
+      }).join(', ')
+    }
     if (limit < Infinity) sql += ' LIMIT ' + limit
     if (offset > 0) sql += ' OFFSET ' + offset
     return this.queue(sql).then((data) => {

@@ -138,7 +138,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return this
   }
 
-  orderBy(field: Selection.Field<S>, direction?: Direction) {
+  orderBy(field: Selection.Field<S>, direction: Direction = 'asc') {
     this.args[0].sort.push([this.resolveField(field), direction])
     return this
   }

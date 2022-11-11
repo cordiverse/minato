@@ -1,8 +1,8 @@
 import { Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Field, Modifier, Query, RuntimeError } from '@minatojs/core'
+import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Modifier, Query, RuntimeError } from '@minatojs/core'
 import { URLSearchParams } from 'url'
-import { transformEval, transformQuery } from './utils'
+import { getActualKey, transformEval, transformQuery } from './utils'
 
 namespace MongoDriver {
   export interface Config {
@@ -223,13 +223,34 @@ class MongoDriver extends Driver {
     const { offset, limit, sort } = modifier
     const filter = this.transformQuery(query, table)
     if (!filter) return []
-    let cursor = this.db.collection(table).find(filter)
-    if (limit < Infinity) {
-      cursor = cursor.limit(offset + limit)
+    const pipeline: any[] = [{ $match: filter }]
+    const $set = {}
+    const $sort = {}
+    const $unset = []
+    for (const [expr, dir] of sort) {
+      const value = transformEval(expr, this.getVirtualKey(table))
+      if (typeof value === 'string') {
+        $sort[value.slice(1)] = dir === 'desc' ? -1 : 1
+      } else {
+        const key = '__sort_' + Math.random().toString(36).slice(2, 8)
+        $set[key] = value
+        $sort[key] = dir === 'desc' ? -1 : 1
+        $unset.push(key)
+      }
     }
-    cursor = cursor.skip(offset)
-    cursor = cursor.sort(Object.fromEntries(sort.map(([k, v]) => [k['$'][1], v === 'desc' ? -1 : 1])))
-    const data = await cursor.toArray()
+    if ($unset.length) pipeline.push({ $set })
+    if (Object.keys($sort).length) pipeline.push({ $sort })
+    if ($unset.length) pipeline.push({ $unset })
+    if (limit < Infinity) {
+      pipeline.push({ $limit: offset + limit })
+    }
+    if (offset) {
+      pipeline.push({ $skip: offset })
+    }
+    const data = await this.db
+      .collection(table)
+      .aggregate(pipeline, { allowDiskUse: true })
+      .toArray()
     return data.map((row) => {
       row = this.patchVirtual(table, row)
       return sel.resolveData(row, fields)
@@ -261,7 +282,10 @@ class MongoDriver extends Driver {
 
     let data: any
     try {
-      const results = await this.db.collection('user').aggregate(stages).toArray()
+      const results = await this.db
+        .collection('user')
+        .aggregate(stages, { allowDiskUse: true })
+        .toArray()
       data = Object.assign({}, ...results)
     } catch (error) {
       tasks.forEach(task => task.reject(error))

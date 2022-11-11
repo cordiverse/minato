@@ -231,7 +231,11 @@ class SQLiteDriver extends Driver {
     if (filter === '0') return []
     const { limit, offset, sort } = modifier
     let sql = `SELECT ${this.#joinKeys(fields ? Object.keys(fields) : null)} FROM ${this.sql.escapeId(table)} WHERE ${filter}`
-    if (sort.length) sql += ' ORDER BY ' + sort.map(([key, order]) => `\`${key['$'][1]}\` ${order}`).join(', ')
+    if (sort.length) {
+      sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
+        return `${this.sql.parseEval(expr, table)} ${dir}`
+      }).join(', ')
+    }
     if (limit < Infinity) sql += ' LIMIT ' + limit
     if (offset > 0) sql += ' OFFSET ' + offset
     const rows = this.#all(sql)
