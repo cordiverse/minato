@@ -12,7 +12,7 @@
     "bump": "yakumo version",
     "dep": "yakumo upgrade",
     "pub": "yakumo publish",
-    "test": "yakumo mocha -r esbuild-register",
+    "test": "yakumo mocha -r esbuild-register -t 5000",
     "test:text": "shx rm -rf coverage && c8 -r text yarn test",
     "test:json": "shx rm -rf coverage && c8 -r json yarn test",
     "test:html": "shx rm -rf coverage && c8 -r html yarn test"
@@ -28,7 +28,7 @@
     "typescript": "4.8.2",
     "yakumo": "^0.3.6",
     "yakumo-esbuild": "^0.3.18",
-    "yakumo-mocha": "^0.3.0",
+    "yakumo-mocha": "^0.3.1",
     "yakumo-publish": "^0.3.1",
     "yakumo-publish-sync": "^0.3.1",
     "yakumo-tsc": "^0.3.5",
