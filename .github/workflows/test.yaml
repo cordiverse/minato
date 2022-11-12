@@ -63,7 +63,7 @@ jobs:
         ports:
           - 27017:27017
         # https://stackoverflow.com/questions/66317184/github-actions-cannot-connect-to-mongodb-service
-        options: --health-cmd "mongo" --health-interval 10s --health-timeout 5s --health-retries 5
+        options: --health-cmd "echo 'db.runCommand("ping").ok' | mongosh --quiet" --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
       - name: Check out
