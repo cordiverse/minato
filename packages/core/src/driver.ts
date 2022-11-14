@@ -95,7 +95,8 @@ export class Database<S = any> {
     return selection.execute()
   }
 
-  async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T>, query?: Query): Promise<T> {
+  /** @deprecated use selection api instead */
+  async eval<K extends Keys<S>>(table: K, expr: any, query?: Query): Promise<any> {
     await this.tasks[table]
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }

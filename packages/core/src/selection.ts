@@ -12,7 +12,7 @@ export interface Modifier {
   offset: number
   sort: [Eval.Expr, Direction][]
   group: string[]
-  having?: Eval.Expr<boolean>
+  having: Eval.Expr<boolean>
 }
 
 export namespace Executable {
@@ -56,7 +56,7 @@ export class Executable<S = any, T = any> {
     return this.#model ||= this.driver.model(this.table)
   }
 
-  protected resolveQuery(query: Query<S>): Query.Expr<S>
+  protected resolveQuery(query?: Query<S>): Query.Expr<S>
   protected resolveQuery(query: Query<S> = {}): any {
     if (typeof query === 'function') return { $expr: query(this.row) }
     if (Array.isArray(query) || query instanceof RegExp || ['string', 'number'].includes(typeof query)) {
@@ -134,17 +134,26 @@ export namespace Selection {
 export class Selection<S = any> extends Executable<S, S[]> {
   args: [Modifier]
 
-  constructor(driver: Driver, table: string, query: Query) {
+  constructor(driver: Driver, table: string, query?: Query) {
     super(driver)
     this.type = 'get'
     this.ref = randomId()
     this.table = table
     this.query = this.resolveQuery(query)
-    this.args = [{ sort: [], limit: Infinity, offset: 0, group: [] }]
+    this.args = [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and() }]
   }
 
-  limit(limit: number) {
-    this.args[0].limit = limit
+  where(query: Query) {
+    this.query.$and ||= []
+    this.query.$and.push(this.resolveQuery(query))
+    return this
+  }
+
+  limit(limit: number): this
+  limit(offset: number, limit: number): this
+  limit(...args: [number] | [number, number]) {
+    if (args.length > 1) this.offset(args.shift())
+    this.args[0].limit = args[0]
     return this
   }
 
@@ -175,8 +184,13 @@ export class Selection<S = any> extends Executable<S, S[]> {
     this.args[0].group = Object.keys(this.fields)
     const extra = typeof args[0] === 'function' ? undefined : args.shift()
     Object.assign(this.fields, this.resolveFields(extra || {}))
-    if (args[0]) this.args[0].having = this.resolveField(args[0])
+    if (args[0]) this.having(args[0])
     return this as any
+  }
+
+  having(cond: Selection.Callback<S, boolean>) {
+    this.args[0].having['$and'].push(this.resolveField(cond))
+    return this
   }
 
   project<T extends Keys<S>>(fields: T[]): Selection<Pick<S, T>>
