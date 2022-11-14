@@ -72,91 +72,99 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   return result
 }
 
-export function transformQuery(query: Query.Expr, virtualKey: string) {
-  const filter: Filter<any> = {}
-  const additional: Filter<any>[] = []
-  for (const key in query) {
-    const value = query[key]
-    if (key === '$and' || key === '$or') {
-      // MongoError: $and/$or/$nor must be a nonempty array
-      // { $and: [] } matches everything
-      // { $or: [] } matches nothing
-      if (value.length) {
-        filter[key] = value.map(query => transformQuery(query, virtualKey))
-      } else if (key === '$or') {
-        return
-      }
-    } else if (key === '$not') {
-      // MongoError: unknown top level operator: $not
-      // https://stackoverflow.com/questions/25270396/mongodb-how-to-invert-query-with-not
-      // this may solve this problem but lead to performance degradation
-      const query = transformQuery(value, virtualKey)
-      if (query) filter.$nor = [query]
-    } else if (key === '$expr') {
-      additional.push({ $expr: transformEval(value, virtualKey) })
-    } else {
-      const actualKey = getActualKey(key, virtualKey)
-      const query = transformFieldQuery(value, actualKey, additional)
-      if (query === false) return
-      if (query !== true) filter[actualKey] = query
-    }
-  }
-  if (additional.length) {
-    (filter.$and ||= []).push(...additional)
-  }
-  return filter
-}
-
-function transformEvalExpr(expr: any, virtualKey: string, onAggr?: (pipeline: any[]) => void) {
-  return valueMap(expr as any, (value) => {
-    if (Array.isArray(value)) {
-      return value.map(val => transformEval(val, virtualKey, onAggr))
-    } else {
-      return transformEval(value, virtualKey, onAggr)
-    }
-  })
-}
-
-function transformAggr(expr: any, virtualKey: string) {
-  if (typeof expr === 'string') {
-    return '$' + expr
-  }
-  return transformEvalExpr(expr, virtualKey)
-}
-
 const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
 
-const letters = 'abcdefghijklmnopqrstuvwxyz'
+export class Transformer {
+  private counter = 0
 
-export function getActualKey(key: string, virtualKey: string) {
-  return key === virtualKey ? '_id' : key
-}
+  constructor(public virtualKey?: string) {}
 
-export function transformEval(expr: any, virtualKey: string, onAggr?: (pipeline: any[]) => void) {
-  if (typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
-    return expr
-  } else if (expr.$) {
-    if (typeof expr.$ === 'string') {
-      return '$' + getActualKey(expr.$, virtualKey)
-    } else {
-      return '$' + getActualKey(expr.$[1], virtualKey)
-    }
+  public createKey() {
+    return '_temp_' + ++this.counter
   }
 
-  for (const key of aggrKeys) {
-    if (!expr[key]) continue
-    const value = transformAggr(expr[key], virtualKey)
-    const $ = Array(8).fill(0).map(() => letters[Math.floor(Math.random() * letters.length)]).join('')
-    if (key === '$count') {
-      onAggr([
-        { $group: { _id: value } },
-        { $group: { _id: null, [$]: { $count: {} } } },
-      ])
-    } else {
-      onAggr([{ $group: { _id: null, [$]: { [key]: value } } }])
-    }
-    return { $ }
+  protected getActualKey(key: string) {
+    return key === this.virtualKey ? '_id' : key
   }
 
-  return transformEvalExpr(expr, virtualKey, onAggr)
+  private transformEvalExpr(expr: any, onAggr?: (pipeline: any[]) => void) {
+    return valueMap(expr as any, (value) => {
+      if (Array.isArray(value)) {
+        return value.map(val => this.eval(val, onAggr))
+      } else {
+        return this.eval(value, onAggr)
+      }
+    })
+  }
+
+  private transformAggr(expr: any) {
+    if (typeof expr === 'string') {
+      return '$' + expr
+    }
+    return this.transformEvalExpr(expr)
+  }
+
+  public eval(expr: any, onAggr?: (pipeline: any[]) => void) {
+    if (typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
+      return expr
+    } else if (expr.$) {
+      if (typeof expr.$ === 'string') {
+        return '$' + this.getActualKey(expr.$)
+      } else {
+        return '$' + this.getActualKey(expr.$[1])
+      }
+    }
+
+    for (const key of aggrKeys) {
+      if (!expr[key]) continue
+      const value = this.transformAggr(expr[key])
+      const $ = this.createKey()
+      if (key === '$count') {
+        onAggr([
+          { $group: { _id: value } },
+          { $group: { _id: null, [$]: { $count: {} } } },
+        ])
+      } else {
+        onAggr([{ $group: { _id: null, [$]: { [key]: value } } }])
+      }
+      return { $ }
+    }
+
+    return this.transformEvalExpr(expr, onAggr)
+  }
+
+  public query(query: Query.Expr) {
+    const filter: Filter<any> = {}
+    const additional: Filter<any>[] = []
+    for (const key in query) {
+      const value = query[key]
+      if (key === '$and' || key === '$or') {
+        // MongoError: $and/$or/$nor must be a nonempty array
+        // { $and: [] } matches everything
+        // { $or: [] } matches nothing
+        if (value.length) {
+          filter[key] = value.map(query => this.query(query))
+        } else if (key === '$or') {
+          return
+        }
+      } else if (key === '$not') {
+        // MongoError: unknown top level operator: $not
+        // https://stackoverflow.com/questions/25270396/mongodb-how-to-invert-query-with-not
+        // this may solve this problem but lead to performance degradation
+        const query = this.query(value)
+        if (query) filter.$nor = [query]
+      } else if (key === '$expr') {
+        additional.push({ $expr: this.eval(value) })
+      } else {
+        const actualKey = this.getActualKey(key)
+        const query = transformFieldQuery(value, actualKey, additional)
+        if (query === false) return
+        if (query !== true) filter[actualKey] = query
+      }
+    }
+    if (additional.length) {
+      (filter.$and ||= []).push(...additional)
+    }
+    return filter
+  }
 }

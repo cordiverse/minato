@@ -2,7 +2,7 @@ import { Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongo
 import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Modifier, Query, RuntimeError } from '@minatojs/core'
 import { URLSearchParams } from 'url'
-import { getActualKey, transformEval, transformQuery } from './utils'
+import { Transformer } from './utils'
 
 namespace MongoDriver {
   export interface Config {
@@ -215,24 +215,28 @@ class MongoDriver extends Driver {
   }
 
   private transformQuery(query: Query.Expr, table: string) {
-    return transformQuery(query, this.getVirtualKey(table))
+    return new Transformer(this.getVirtualKey(table)).query(query)
   }
 
   async get(sel: Executable, modifier: Modifier) {
     const { table, fields, query } = sel
     const { offset, limit, sort } = modifier
-    const filter = this.transformQuery(query, table)
+    const transformer = new Transformer(this.getVirtualKey(table))
+    const filter = transformer.query(query)
     if (!filter) return []
-    const pipeline: any[] = [{ $match: filter }]
+    const pipeline: any[] = []
+    if (Object.keys(filter).length) {
+      pipeline.push({ $match: filter })
+    }
     const $set = {}
     const $sort = {}
     const $unset = []
     for (const [expr, dir] of sort) {
-      const value = transformEval(expr, this.getVirtualKey(table))
+      const value = transformer.eval(expr)
       if (typeof value === 'string') {
         $sort[value.slice(1)] = dir === 'desc' ? -1 : 1
       } else {
-        const key = '__sort_' + Math.random().toString(36).slice(2, 8)
+        const key = transformer.createKey()
         $set[key] = value
         $sort[key] = dir === 'desc' ? -1 : 1
         $unset.push(key)
@@ -271,11 +275,15 @@ class MongoDriver extends Driver {
     this._evalTasks = []
 
     const stages: any[] = [{ $match: { _id: null } }]
+    const transformer = new Transformer()
     for (const task of tasks) {
       const { expr, table, query } = task
-      task.expr = transformEval(expr, this.getVirtualKey(table), (pipeline) => {
-        const filter = this.transformQuery(query, table) || { _id: null }
-        pipeline.unshift({ $match: filter })
+      transformer.virtualKey = this.getVirtualKey(table)
+      task.expr = transformer.eval(expr, (pipeline) => {
+        const filter = transformer.query(query) || { _id: null }
+        if (Object.keys(filter).length) {
+          pipeline.unshift({ $match: filter })
+        }
         stages.push({ $unionWith: { coll: table, pipeline } })
       })
     }
