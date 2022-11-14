@@ -95,14 +95,9 @@ export class Database<S = any> {
     return selection.execute()
   }
 
-  eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T>, query?: Query): Promise<T>
-  /** @deprecated use selection callback instead */
-  eval(table: Keys<S>, expr: any, query?: Query): Promise<any>
-  async eval(table: Keys<S>, expr: any, query?: Query) {
+  async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T>, query?: Query): Promise<T> {
     await this.tasks[table]
-    return this.select(table, query)
-      .evaluate(typeof expr === 'function' ? expr : () => expr)
-      .execute()
+    return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
   async set<T extends Keys<S>>(table: T, query: Query<Selection.Resolve<S, T>>, update: Selection.Yield<S[T], Update<S[T]>>) {
@@ -113,19 +108,19 @@ export class Database<S = any> {
     if (primary.some(key => key in update)) {
       throw new TypeError(`cannot modify primary key`)
     }
-    await sel.action('set', sel.model.format(update)).execute()
+    await sel._action('set', sel.model.format(update)).execute()
   }
 
   async remove<T extends Keys<S>>(table: T, query: Query<Selection.Resolve<S, T>>) {
     await this.tasks[table]
     const sel = this.select(table, query)
-    await sel.action('remove').execute()
+    await sel._action('remove').execute()
   }
 
   async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
     await this.tasks[table]
     const sel = this.select(table)
-    return sel.action('create', sel.model.create(data)).execute()
+    return sel._action('create', sel.model.create(data)).execute()
   }
 
   async upsert<T extends Keys<S>>(table: T, upsert: Selection.Yield<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
@@ -134,7 +129,7 @@ export class Database<S = any> {
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))
     keys = makeArray(keys || sel.model.primary) as any
-    await sel.action('upsert', upsert, keys).execute()
+    await sel._action('upsert', upsert, keys).execute()
   }
 
   async stopAll() {
@@ -181,10 +176,5 @@ export abstract class Driver {
     const model = this.database.tables[name]
     if (model) return model
     throw new TypeError(`unknown table name "${name}"`)
-  }
-
-  execute(executable: Executable) {
-    const { type, args } = executable
-    return this[type as any](executable, ...args)
   }
 }

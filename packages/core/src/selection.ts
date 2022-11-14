@@ -11,6 +11,8 @@ export interface Modifier {
   limit: number
   offset: number
   sort: [Eval.Expr, Direction][]
+  group: string[]
+  having?: Eval.Expr<boolean>
 }
 
 export namespace Executable {
@@ -18,11 +20,10 @@ export namespace Executable {
 
   export interface Payload {
     type: Action
-    table: string
+    table?: string
     ref: string
     query: Query.Expr
     fields?: Dict<Eval.Expr>
-    expr?: Eval.Expr
     args?: any[]
   }
 }
@@ -85,8 +86,22 @@ export class Executable<S = any, T = any> {
     }
   }
 
+  protected resolveFields(fields: string | string[] | Dict) {
+    if (typeof fields === 'string') fields = [fields]
+    if (Array.isArray(fields)) {
+      const modelFields = Object.keys(this.model.fields)
+      const keys = fields.flatMap((key) => {
+        if (this.model.fields[key]) return key
+        return modelFields.filter(path => path.startsWith(key + '.'))
+      })
+      return Object.fromEntries(keys.map(key => [key, this.row[key]]))
+    } else {
+      return valueMap(fields, field => this.resolveField(field))
+    }
+  }
+
   execute(): Promise<T> {
-    return this.driver.execute(this)
+    return this.driver[this.type as any](this, ...this.args)
   }
 }
 
@@ -125,7 +140,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     this.ref = randomId()
     this.table = table
     this.query = this.resolveQuery(query)
-    this.args = [{ sort: [], limit: Infinity, offset: 0 }]
+    this.args = [{ sort: [], limit: Infinity, offset: 0, group: [] }]
   }
 
   limit(limit: number) {
@@ -143,28 +158,48 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return this
   }
 
-  project<T extends Keys<S>>(fields: T[]): Selection<Pick<S, T>>
-  project<T extends Dict<Selection.Field<S>>>(fields: T): Selection<Selection.Project<S, T>>
-  project(fields: Keys<S>[] | Dict<Selection.Field<S>>) {
-    if (Array.isArray(fields)) {
-      const modelFields = Object.keys(this.model.fields)
-      const keys = fields.flatMap((key) => {
-        if (this.model.fields[key]) return key
-        return modelFields.filter(path => path.startsWith(key + '.'))
-      })
-      this.fields = Object.fromEntries(keys.map(key => [key, this.row[key]]))
-    } else {
-      this.fields = valueMap(fields, field => this.resolveField(field))
-    }
+  groupBy<T extends Keys<S>>(fields: T | T[], cond?: Selection.Callback<S, boolean>): Selection<Pick<S, T>>
+  groupBy<T extends Keys<S>, U extends Dict<Selection.Field<S>>>(
+    fields: T | T[],
+    extra?: U,
+    cond?: Selection.Callback<S, boolean>,
+  ): Selection<Pick<S, T> & Selection.Project<S, U>>
+  groupBy<T extends Dict<Selection.Field<S>>>(fields: T, cond?: Selection.Callback<S, boolean>): Selection<Selection.Project<S, T>>
+  groupBy<T extends Dict<Selection.Field<S>>, U extends Dict<Selection.Field<S>>>(
+    fields: T,
+    extra?: U,
+    cond?: Selection.Callback<S, boolean>,
+  ): Selection<Selection.Project<S, T & U>>
+  groupBy(fields: any, ...args: any[]) {
+    this.fields = this.resolveFields(fields)
+    this.args[0].group = Object.keys(this.fields)
+    const extra = typeof args[0] === 'function' ? undefined : args.shift()
+    Object.assign(this.fields, this.resolveFields(extra || {}))
+    if (args[0]) this.args[0].having = this.resolveField(args[0])
     return this as any
   }
 
-  action(type: Executable.Action, ...args: any[]) {
+  project<T extends Keys<S>>(fields: T[]): Selection<Pick<S, T>>
+  project<T extends Dict<Selection.Field<S>>>(fields: T): Selection<Selection.Project<S, T>>
+  project(fields: Keys<S>[] | Dict<Selection.Field<S>>) {
+    this.fields = this.resolveFields(fields)
+    return this as any
+  }
+
+  _action(type: Executable.Action, ...args: any[]) {
     return new Executable(this.driver, { ...this, type, args })
   }
 
+  /** @deprecated use `selection.execute()` instead */
   evaluate<T>(callback: Selection.Callback<S, T>): Executable<S, T> {
-    return this.action('eval', this.resolveField(callback))
+    return this._action('eval', this.resolveField(callback))
+  }
+
+  execute(): Promise<S[]>
+  execute<T>(callback: Selection.Callback<S, T>): Promise<T>
+  execute(callback?: any) {
+    if (!callback) return super.execute()
+    return this._action('eval', this.resolveField(callback)).execute()
   }
 }
 
