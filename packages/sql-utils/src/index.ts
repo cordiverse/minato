@@ -1,5 +1,8 @@
 import { Dict, isNullable } from 'cosmokit'
 import { Eval, Field, Model, Query } from '@minatojs/core'
+import { escape, escapeId } from './utils'
+
+export * from './utils'
 
 export type QueryOperators = {
   [K in keyof Query.FieldExpr]?: (key: string, value: Query.FieldExpr[K]) => string
@@ -11,16 +14,12 @@ export type EvalOperators = {
   [K in keyof Eval.Static as `$${K}`]?: (expr: ExtractUnary<Parameters<Eval.Static[K]>>) => string
 } & { $: (expr: any) => string }
 
-export abstract class Builder {
+export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
 
-  abstract escapeId(value: any): string
-  abstract escape(value: any, table?: string, field?: string): string
-  abstract format(sql: string, args?: object | any[]): string
-
-  constructor() {
+  constructor(public tables: Dict<Model>) {
     this.queryOperators = {
       // logical
       $or: (key, value) => this.logicalOr(value.map(value => this.parseFieldQuery(key, value))),
@@ -44,13 +43,13 @@ export abstract class Builder {
 
       // regexp
       $regex: (key, value) => this.createRegExpQuery(key, value),
-      $regexFor: (key, value) => `${this.escape(value)} REGEXP ${key}`,
+      $regexFor: (key, value) => `${escape(value)} REGEXP ${key}`,
 
       // bitwise
-      $bitsAllSet: (key, value) => `${key} & ${this.escape(value)} = ${this.escape(value)}`,
-      $bitsAllClear: (key, value) => `${key} & ${this.escape(value)} = 0`,
-      $bitsAnySet: (key, value) => `${key} & ${this.escape(value)} != 0`,
-      $bitsAnyClear: (key, value) => `${key} & ${this.escape(value)} != ${this.escape(value)}`,
+      $bitsAllSet: (key, value) => `${key} & ${escape(value)} = ${escape(value)}`,
+      $bitsAllClear: (key, value) => `${key} & ${escape(value)} = 0`,
+      $bitsAnySet: (key, value) => `${key} & ${escape(value)} != 0`,
+      $bitsAnyClear: (key, value) => `${key} & ${escape(value)} != ${escape(value)}`,
 
       // list
       $el: (key, value) => {
@@ -64,7 +63,7 @@ export abstract class Builder {
       },
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
+        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${escape(',')}, ${escape('')})) = ${escape(value)} - 1`
       },
     }
 
@@ -111,20 +110,20 @@ export abstract class Builder {
 
   protected createMemberQuery(key: string, value: any[], notStr = '') {
     if (!value.length) return notStr ? '1' : '0'
-    return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+    return `${key}${notStr} in (${value.map(val => escape(val)).join(', ')})`
   }
 
   protected createRegExpQuery(key: string, value: RegExp) {
-    return `${key} regexp ${this.escape(value.source)}`
+    return `${key} regexp ${escape(value.source)}`
   }
 
   protected createElementQuery(key: string, value: any) {
-    return `find_in_set(${this.escape(value)}, ${key})`
+    return `find_in_set(${escape(value)}, ${key})`
   }
 
   protected comparator(operator: string) {
     return function (key: string, value: any) {
-      return `${key} ${operator} ${this.escape(value)}`
+      return `${key} ${operator} ${escape(value)}`
     }.bind(this)
   }
 
@@ -187,20 +186,20 @@ export abstract class Builder {
       } else if (key === '$expr') {
         conditions.push(this.parseEval(query.$expr))
       } else {
-        conditions.push(this.parseFieldQuery(this.escapeId(key), query[key]))
+        conditions.push(this.parseFieldQuery(escapeId(key), query[key]))
       }
     }
 
     return this.logicalAnd(conditions)
   }
 
-  private parseEvalExpr(expr: any, table?: string, field?: string) {
+  private parseEvalExpr(expr: any) {
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
       }
     }
-    return this.escape(expr, table, field)
+    return escape(expr)
   }
 
   private parseAggr(expr: any) {
@@ -214,18 +213,20 @@ export abstract class Builder {
     if (typeof args === 'string') {
       return this.getRecursive(['_', args])
     } else {
-      const [, key] = args
-      if (!key.includes('.')) return this.escapeId(key)
-      const [field, ...rest] = key.split('.')
-      return `json_unquote(json_extract(${this.escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
+      const [table, key] = args
+      const fields = this.tables[table]?.fields || {}
+      if (key in fields || !key.includes('.')) return escapeId(key)
+      const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
+      const rest = key.slice(field.length + 1).split('.')
+      return `json_unquote(json_extract(${escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
     }
   }
 
-  parseEval(expr: any, table?: string, field?: string): string {
+  parseEval(expr: any): string {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
-      return this.escape(expr, table, field)
+      return escape(expr)
     }
-    return this.parseEvalExpr(expr, table, field)
+    return this.parseEvalExpr(expr)
   }
 }
 
