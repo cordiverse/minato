@@ -1,8 +1,8 @@
-import { createPool, escapeId, format, escape as mysqlEscape } from '@vlasky/mysql'
+import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig } from 'mysql'
-import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeUpdate, Field, isEvalExpr, Model, Modifier, RuntimeError } from '@minatojs/core'
-import { Builder } from '@minatojs/sql-utils'
+import { Dict, difference, makeArray, pick } from 'cosmokit'
+import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Modifier, RuntimeError, Selection } from '@minatojs/core'
+import { Builder, escape, escapeId, stringify } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
 declare module 'mysql' {
@@ -42,43 +42,8 @@ function getTypeDefinition({ type, length, precision, scale }: Field) {
   }
 }
 
-function backtick(str: string) {
-  return '`' + str + '`'
-}
-
 function createIndex(keys: string | string[]) {
-  return makeArray(keys).map(backtick).join(', ')
-}
-
-class MySQLBuilder extends Builder {
-  constructor(private models: Dict<Model>) {
-    super()
-  }
-
-  format(sql: string, values: any[], stringifyObjects?: boolean, timeZone?: string) {
-    return format(sql, values, stringifyObjects, timeZone)
-  }
-
-  escapeId(value: string, forbidQualified?: boolean) {
-    return escapeId(value, forbidQualified)
-  }
-
-  escape(value: any, table?: string, field?: string) {
-    return mysqlEscape(this.stringify(value, table, field))
-  }
-
-  stringify(value: any, table?: string, field?: string) {
-    const meta = this.models[table]?.fields[field]
-    if (meta?.type === 'json') {
-      return JSON.stringify(value)
-    } else if (meta?.type === 'list') {
-      return value.join(',')
-    } else if (Field.date.includes(meta?.type)) {
-      return Time.template('yyyy-MM-dd hh:mm:ss', value)
-    }
-
-    return value
-  }
+  return makeArray(keys).map(escapeId).join(', ')
 }
 
 interface ColumnInfo {
@@ -106,7 +71,7 @@ class MySQLDriver extends Driver {
   public pool: Pool
   public config: MySQLDriver.Config
 
-  sql: MySQLBuilder
+  sql: Builder
 
   private _queryTasks: QueryTask[] = []
 
@@ -150,7 +115,7 @@ class MySQLDriver extends Driver {
       ...config,
     }
 
-    this.sql = new MySQLBuilder(database.tables)
+    this.sql = new Builder(database.tables)
   }
 
   async start() {
@@ -175,7 +140,7 @@ class MySQLDriver extends Driver {
       const legacy = columns.find(info => info.COLUMN_NAME === key)
       const { initial, nullable = true } = fields[key]
 
-      let def = backtick(key)
+      let def = escapeId(key)
       if (key === primary && autoInc) {
         def += ' int unsigned not null auto_increment'
       } else {
@@ -193,7 +158,7 @@ class MySQLDriver extends Driver {
         }
         // blob, text, geometry or json columns cannot have default values
         if (initial && !typedef.startsWith('text')) {
-          def += ' default ' + this.sql.escape(initial, name, key)
+          def += ' default ' + escape(initial, fields[key])
         }
       }
 
@@ -209,7 +174,7 @@ class MySQLDriver extends Driver {
       create.push(`primary key (${createIndex(primary)})`)
       for (const key in foreign) {
         const [table, key2] = foreign[key]
-        create.push(`foreign key (${backtick(key)}) references ${escapeId(table)} (${backtick(key2)})`)
+        create.push(`foreign key (${escapeId(key)}) references ${escapeId(table)} (${escapeId(key2)})`)
       }
     }
     for (const key of unique) {
@@ -253,17 +218,15 @@ class MySQLDriver extends Driver {
     }
   }
 
-  _inferFields(table: string, keys: readonly string[]) {
-    if (!keys) return
-    return keys
-  }
-
   _joinKeys = (keys: readonly string[]) => {
     return keys ? keys.map(key => key.includes('`') ? key : `\`${key}\``).join(',') : '*'
   }
 
   _formatValues = (table: string, data: object, keys: readonly string[]) => {
-    return keys.map((key) => this.sql.stringify(data[key], table as never, key))
+    return keys.map((key) => {
+      const field = this.database.tables[table]?.fields[key]
+      return stringify(data[key], field)
+    })
   }
 
   query<T = any>(sql: string, values?: any): Promise<T> {
@@ -324,7 +287,7 @@ class MySQLDriver extends Driver {
   async drop() {
     const data = await this._select('information_schema.tables', ['TABLE_NAME'], 'TABLE_SCHEMA = ?', [this.config.database])
     if (!data.length) return
-    await this.query(data.map(({ TABLE_NAME }) => `DROP TABLE ${this.sql.escapeId(TABLE_NAME)}`).join('; '))
+    await this.query(data.map(({ TABLE_NAME }) => `DROP TABLE ${escapeId(TABLE_NAME)}`).join('; '))
   }
 
   async stats() {
@@ -337,26 +300,17 @@ class MySQLDriver extends Driver {
     return stats
   }
 
-  async get(sel: Executable, modifier: Modifier) {
-    const { table, fields, query, model } = sel
-    const filter = this.sql.parseQuery(query)
-    if (filter === '0') return []
-    const { limit, offset, sort } = modifier
-    const keys = this._joinKeys(this._inferFields(table, fields ? Object.keys(fields) : null))
-    let sql = `SELECT ${keys} FROM ${table} _${table} WHERE ${filter}`
-    if (sort.length) {
-      sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
-        return `${this.sql.parseEval(expr, table)} ${dir}`
-      }).join(', ')
-    }
-    if (limit < Infinity) sql += ' LIMIT ' + limit
-    if (offset > 0) sql += ' OFFSET ' + offset
+  async get(sel: Selection.Immutable, modifier: Modifier) {
+    const { model, tables } = sel
+    const builder = new Builder(tables)
+    const sql = builder.get(sel, modifier)
+    if (!sql) return []
     return this.queue(sql).then((data) => {
       return data.map((row) => model.parse(row))
     })
   }
 
-  async eval(sel: Executable, expr: Eval.Expr) {
+  async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const { table, query } = sel
     const filter = this.sql.parseQuery(query)
     const output = this.sql.parseEval(expr)
@@ -364,13 +318,13 @@ class MySQLDriver extends Driver {
     return data.value
   }
 
-  private toUpdateExpr(table: string, item: any, field: string, upsert: boolean) {
-    const escaped = backtick(field)
+  private toUpdateExpr(item: any, field: string, upsert: boolean) {
+    const escaped = escapeId(field)
 
     // update directly
     if (field in item) {
       if (isEvalExpr(item[field]) || !upsert) {
-        return this.sql.parseEval(item[field], table, field)
+        return this.sql.parseEval(item[field])
       } else {
         return `VALUES(${escaped})`
       }
@@ -392,7 +346,7 @@ class MySQLDriver extends Driver {
     }
   }
 
-  async set(sel: Executable, data: {}) {
+  async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table } = sel
     const filter = this.sql.parseQuery(query)
     const { fields } = model
@@ -402,21 +356,21 @@ class MySQLDriver extends Driver {
     }))]
 
     const update = updateFields.map((field) => {
-      const escaped = backtick(field)
-      return `${escaped} = ${this.toUpdateExpr(table, data, field, false)}`
+      const escaped = escapeId(field)
+      return `${escaped} = ${this.toUpdateExpr(data, field, false)}`
     }).join(', ')
 
     await this.query(`UPDATE ${table} SET ${update} WHERE ${filter}`)
   }
 
-  async remove(sel: Executable) {
+  async remove(sel: Selection.Mutable) {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
     if (filter === '0') return
     await this.query('DELETE FROM ?? WHERE ' + filter, [table])
   }
 
-  async create(sel: Executable, data: {}) {
+  async create(sel: Selection.Mutable, data: {}) {
     const { table, model } = sel
     const formatted = model.format(data)
     const { autoInc, primary } = model
@@ -429,7 +383,7 @@ class MySQLDriver extends Driver {
     return { ...data, [primary as string]: header.insertId } as any
   }
 
-  async upsert(sel: Executable, data: any[], keys: string[]) {
+  async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return
     const { model, table, ref } = sel
 
@@ -457,10 +411,10 @@ class MySQLDriver extends Driver {
     }
 
     const update = updateFields.map((field) => {
-      const escaped = backtick(field)
+      const escaped = escapeId(field)
       const branches: Dict<any[]> = {}
       data.forEach((item) => {
-        (branches[this.toUpdateExpr(table, item, field, true)] ??= []).push(item)
+        (branches[this.toUpdateExpr(item, field, true)] ??= []).push(item)
       })
 
       const entries = Object.entries(branches)
@@ -477,7 +431,7 @@ class MySQLDriver extends Driver {
 
     const placeholder = `(${initFields.map(() => '?').join(', ')})`
     await this.query(
-      `INSERT INTO ${this.sql.escapeId(table)} (${this._joinKeys(initFields)}) VALUES ${data.map(() => placeholder).join(', ')}
+      `INSERT INTO ${escapeId(table)} (${this._joinKeys(initFields)}) VALUES ${data.map(() => placeholder).join(', ')}
       ON DUPLICATE KEY UPDATE ${update}`,
       [].concat(...insertion.map(item => this._formatValues(table, item, initFields))),
     )

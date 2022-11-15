@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, Model, Query } from '@minatojs/core'
+import { Eval, Field, Model, Modifier, Query, Selection } from '@minatojs/core'
 import { escape, escapeId } from './utils'
 
 export * from './utils'
@@ -227,6 +227,30 @@ export class Builder {
       return escape(expr)
     }
     return this.parseEvalExpr(expr)
+  }
+
+  get(sel: Selection.Immutable, modifier: Modifier) {
+    const { table, fields, query } = sel
+    const filter = this.parseQuery(query)
+    if (filter === '0') return
+    const { limit, offset, sort, group, having } = modifier
+    const keys = !fields ? '*' : Object.entries(fields).map(([key, value]) => {
+      return this.parseEval(value) + ' AS ' + (key.includes('`') ? key : `\`${key}\``)
+    }).join(', ')
+    let sql = `SELECT ${keys} FROM ${table} _${table}`
+    if (filter !== '1') sql += ` WHERE ${filter}`
+    if (group.length) {
+      sql += ` GROUP BY ${group.map(escapeId).join(', ')}`
+      if (having) sql += ` HAVING ${this.parseEval(having)}`
+    }
+    if (sort.length) {
+      sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
+        return `${this.parseEval(expr)} ${dir}`
+      }).join(', ')
+    }
+    if (limit < Infinity) sql += ' LIMIT ' + limit
+    if (offset > 0) sql += ' OFFSET ' + offset
+    return sql
   }
 }
 
