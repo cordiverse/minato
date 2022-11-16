@@ -1,5 +1,5 @@
-import { isNullable, valueMap } from 'cosmokit'
-import { Query } from '@minatojs/core'
+import { Dict, isNullable, valueMap } from 'cosmokit'
+import { Query, Selection } from '@minatojs/core'
 import { Filter, FilterOperators } from 'mongodb'
 
 function createFieldFilter(query: Query.FieldQuery, key: string) {
@@ -88,6 +88,14 @@ export class Transformer {
   }
 
   private transformEvalExpr(expr: any, onAggr?: (pipeline: any[]) => void) {
+    if (expr.$) {
+      if (typeof expr.$ === 'string') {
+        return '$' + this.getActualKey(expr.$)
+      } else {
+        return '$' + this.getActualKey(expr.$[1])
+      }
+    }
+
     return valueMap(expr as any, (value) => {
       if (Array.isArray(value)) {
         return value.map(val => this.eval(val, onAggr))
@@ -101,18 +109,13 @@ export class Transformer {
     if (typeof expr === 'string') {
       return '$' + expr
     }
+
     return this.transformEvalExpr(expr)
   }
 
   public eval(expr: any, onAggr?: (pipeline: any[]) => void) {
     if (typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
       return expr
-    } else if (expr.$) {
-      if (typeof expr.$ === 'string') {
-        return '$' + this.getActualKey(expr.$)
-      } else {
-        return '$' + this.getActualKey(expr.$[1])
-      }
     }
 
     for (const key of aggrKeys) {
@@ -166,5 +169,74 @@ export class Transformer {
       (filter.$and ||= []).push(...additional)
     }
     return filter
+  }
+
+  modifier(stages: any[], sel: Selection.Immutable) {
+    const { fields, args, model } = sel
+    const { offset, limit, sort, group, having } = args[0]
+
+    // groupBy, having
+    if (group.length) {
+      const $group = { _id: {} }
+      const $project = { _id: 0 }
+      for (const key in fields) {
+        if (group.includes(key)) {
+          $group._id[key] = this.eval(fields[key])
+        } else {
+          $group[key] = this.eval(fields[key])
+        }
+      }
+      if (having) {
+        const key = this.createKey()
+        $group[key] = this.eval(having)
+        $project[key] = 0
+      }
+      for (const key in fields) {
+        if (group.includes(key)) {
+          $project[key] = '$_id.' + key
+        } else {
+          $project[key] = 1
+        }
+      }
+      stages.push({ $group }, { $project })
+    }
+
+    // orderBy, limit, offset
+    const $set = {}
+    const $sort = {}
+    const $unset = []
+    for (const [expr, dir] of sort) {
+      const value = this.eval(expr)
+      if (typeof value === 'string') {
+        $sort[value.slice(1)] = dir === 'desc' ? -1 : 1
+      } else {
+        const key = this.createKey()
+        $set[key] = value
+        $sort[key] = dir === 'desc' ? -1 : 1
+        $unset.push(key)
+      }
+    }
+    if ($unset.length) stages.push({ $set })
+    if (Object.keys($sort).length) stages.push({ $sort })
+    if ($unset.length) stages.push({ $unset })
+    if (limit < Infinity) {
+      stages.push({ $limit: offset + limit })
+    }
+    if (offset) {
+      stages.push({ $skip: offset })
+    }
+
+    // project
+    if (fields) {
+      const $project = valueMap(fields, (expr) => this.eval(expr))
+      if (this.virtualKey) $project._id = 0
+      stages.push({ $project })
+    } else if (this.virtualKey) {
+      const $project: Dict = { _id: 0 }
+      for (const key in model.fields) {
+        $project[key] = key === this.virtualKey ? '$_id' : 1
+      }
+      stages.push({ $project })
+    }
   }
 }

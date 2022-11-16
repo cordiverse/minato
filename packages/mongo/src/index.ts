@@ -1,6 +1,6 @@
 import { Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeEval, executeUpdate, Modifier, Query, RuntimeError } from '@minatojs/core'
+import { Dict, isNullable, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
+import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 
@@ -26,10 +26,13 @@ namespace MongoDriver {
   }
 }
 
-interface EvalTask {
-  expr: any
+interface Result {
   table: string
-  query: Query.Expr
+  stages: any[]
+}
+
+interface EvalTask extends Result {
+  expr: any
   resolve: (value: any) => void
   reject: (error: Error) => void
 }
@@ -218,53 +221,49 @@ class MongoDriver extends Driver {
     return new Transformer(this.getVirtualKey(table)).query(query)
   }
 
-  async get(sel: Executable, modifier: Modifier) {
-    const { table, fields, query } = sel
-    const { offset, limit, sort } = modifier
-    const transformer = new Transformer(this.getVirtualKey(table))
+  private createPipeline(sel: Selection.Immutable) {
+    const { table, query } = sel
+    const stages: any[] = []
+    const result = { stages } as Result
+    const transformer = new Transformer()
+    if (typeof table === 'string') {
+      result.table = table
+      transformer.virtualKey = this.getVirtualKey(table)
+    } else {
+      const predecessor = this.createPipeline(table)
+      if (!predecessor) return
+      result.table = predecessor.table
+      stages.unshift(...predecessor.stages)
+    }
+
+    // where
     const filter = transformer.query(query)
-    if (!filter) return []
-    const pipeline: any[] = []
+    if (!filter) return
     if (Object.keys(filter).length) {
-      pipeline.push({ $match: filter })
+      stages.push({ $match: filter })
     }
-    const $set = {}
-    const $sort = {}
-    const $unset = []
-    for (const [expr, dir] of sort) {
-      const value = transformer.eval(expr)
-      if (typeof value === 'string') {
-        $sort[value.slice(1)] = dir === 'desc' ? -1 : 1
-      } else {
-        const key = transformer.createKey()
-        $set[key] = value
-        $sort[key] = dir === 'desc' ? -1 : 1
-        $unset.push(key)
-      }
+
+    if (sel.type === 'get') {
+      transformer.modifier(stages, sel)
     }
-    if ($unset.length) pipeline.push({ $set })
-    if (Object.keys($sort).length) pipeline.push({ $sort })
-    if ($unset.length) pipeline.push({ $unset })
-    if (limit < Infinity) {
-      pipeline.push({ $limit: offset + limit })
-    }
-    if (offset) {
-      pipeline.push({ $skip: offset })
-    }
-    const data = await this.db
-      .collection(table)
-      .aggregate(pipeline, { allowDiskUse: true })
-      .toArray()
-    return data.map((row) => {
-      row = this.patchVirtual(table, row)
-      return sel.resolveData(row, fields)
-    })
+
+    return result
   }
 
-  async eval(sel: Executable, expr: Eval.Expr) {
-    const { table, query } = sel
+  async get(sel: Selection.Immutable) {
+    const result = this.createPipeline(sel)
+    if (!result) return []
+    return this.db
+      .collection(result.table)
+      .aggregate(result.stages, { allowDiskUse: true })
+      .toArray()
+  }
+
+  async eval(sel: Selection.Immutable, expr: Eval.Expr) {
+    const result = this.createPipeline(sel)
+    if (!result) return
     return new Promise<any>((resolve, reject) => {
-      this._evalTasks.push({ expr, table, query, resolve, reject })
+      this._evalTasks.push({ expr, ...result, resolve, reject })
       process.nextTick(() => this._flushEvalTasks())
     })
   }
@@ -274,25 +273,25 @@ class MongoDriver extends Driver {
     if (!tasks.length) return
     this._evalTasks = []
 
-    const stages: any[] = [{ $match: { _id: null } }]
+    const pipeline: any[] = [{ $match: { _id: null } }]
     const transformer = new Transformer()
     for (const task of tasks) {
-      const { expr, table, query } = task
-      transformer.virtualKey = this.getVirtualKey(table)
-      task.expr = transformer.eval(expr, (pipeline) => {
-        const filter = transformer.query(query) || { _id: null }
-        if (Object.keys(filter).length) {
-          pipeline.unshift({ $match: filter })
-        }
-        stages.push({ $unionWith: { coll: table, pipeline } })
+      const { expr, table, stages } = task
+      task.expr = transformer.eval(expr, (appendix) => {
+        pipeline.push({
+          $unionWith: {
+            coll: table,
+            pipeline: [...stages, ...appendix],
+          },
+        })
       })
     }
 
     let data: any
     try {
       const results = await this.db
-        .collection('user')
-        .aggregate(stages, { allowDiskUse: true })
+        .collection('_fields')
+        .aggregate(pipeline, { allowDiskUse: true })
         .toArray()
       data = Object.assign({}, ...results)
     } catch (error) {
@@ -309,7 +308,7 @@ class MongoDriver extends Driver {
     }
   }
 
-  async set(sel: Executable, update: {}) {
+  async set(sel: Selection.Mutable, update: {}) {
     const { query, table, ref } = sel
     const filter = this.transformQuery(query, table)
     if (!filter) return
@@ -330,14 +329,14 @@ class MongoDriver extends Driver {
     await bulk.execute()
   }
 
-  async remove(sel: Executable) {
+  async remove(sel: Selection.Mutable) {
     const { query, table } = sel
     const filter = this.transformQuery(query, table)
     if (!filter) return
     await this.db.collection(table).deleteMany(filter)
   }
 
-  async create(sel: Executable, data: any) {
+  async create(sel: Selection.Mutable, data: any) {
     const { table } = sel
     const lastTask = Promise.resolve(this._createTasks[table]).catch(noop)
     return this._createTasks[table] = lastTask.then(async () => {
@@ -370,7 +369,7 @@ class MongoDriver extends Driver {
     })
   }
 
-  async upsert(sel: Executable, data: any[], keys: string[]) {
+  async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return
     const { table, ref, model } = sel
     const coll = this.db.collection(table)
