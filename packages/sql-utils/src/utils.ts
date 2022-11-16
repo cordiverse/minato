@@ -1,8 +1,7 @@
 // modified from sqlstring
 // https://github.com/mysqljs/sqlstring/blob/master/lib/SqlString.js
 
-import { Field } from '@minatojs/core'
-import { isNullable, Time } from 'cosmokit'
+import { isNullable } from 'cosmokit'
 
 const ESCAPE_CHARS_MAP = {
   '\0' : '\\0',
@@ -11,7 +10,6 @@ const ESCAPE_CHARS_MAP = {
   '\n' : '\\n',
   '\r' : '\\r',
   '\x1a' : '\\Z',
-  '"' : '\\"',
   '\'' : '\\\'',
   '\\' : '\\\\',
 }
@@ -22,19 +20,7 @@ export function escapeId(value: string) {
   return '`' + value + '`'
 }
 
-export function stringify(value: any, field?: Field) {
-  if (isNullable(value)) return value
-  if (typeof value !== 'object') return value
-  if (Object.prototype.toString.call(value) === '[object Date]') {
-    return Time.template('yyyy-MM-dd hh:mm:ss', value)
-  } else if (Array.isArray(value) && field?.type === 'list') {
-    return value.join(',')
-  } else {
-    return JSON.stringify(value)
-  }
-}
-
-export function escape(value: any, field?: Field) {
+export function escape(value: any) {
   if (isNullable(value)) return 'NULL'
 
   switch (typeof value) {
@@ -42,7 +28,7 @@ export function escape(value: any, field?: Field) {
     case 'number':
       return value + ''
     case 'object':
-      return escape(stringify(value, field))
+      return escapeString(JSON.stringify(value))
     default:
       return escapeString(value)
   }

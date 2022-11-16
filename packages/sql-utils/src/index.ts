@@ -14,7 +14,14 @@ export type EvalOperators = {
   [K in keyof Eval.Static as `$${K}`]?: (expr: ExtractUnary<Parameters<Eval.Static[K]>>) => string
 } & { $: (expr: any) => string }
 
+export interface Transformer<S = any, T = any> {
+  types: Field.Type<S>[]
+  dump: (value: S) => T
+  load: (value: T, initial?: S) => S
+}
+
 export class Builder {
+  protected types: Dict<Transformer> = {}
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
@@ -43,13 +50,13 @@ export class Builder {
 
       // regexp
       $regex: (key, value) => this.createRegExpQuery(key, value),
-      $regexFor: (key, value) => `${escape(value)} REGEXP ${key}`,
+      $regexFor: (key, value) => `${this.escape(value)} REGEXP ${key}`,
 
       // bitwise
-      $bitsAllSet: (key, value) => `${key} & ${escape(value)} = ${escape(value)}`,
-      $bitsAllClear: (key, value) => `${key} & ${escape(value)} = 0`,
-      $bitsAnySet: (key, value) => `${key} & ${escape(value)} != 0`,
-      $bitsAnyClear: (key, value) => `${key} & ${escape(value)} != ${escape(value)}`,
+      $bitsAllSet: (key, value) => `${key} & ${this.escape(value)} = ${this.escape(value)}`,
+      $bitsAllClear: (key, value) => `${key} & ${this.escape(value)} = 0`,
+      $bitsAnySet: (key, value) => `${key} & ${this.escape(value)} != 0`,
+      $bitsAnyClear: (key, value) => `${key} & ${this.escape(value)} != ${this.escape(value)}`,
 
       // list
       $el: (key, value) => {
@@ -63,7 +70,7 @@ export class Builder {
       },
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${escape(',')}, ${escape('')})) = ${escape(value)} - 1`
+        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
       },
     }
 
@@ -110,27 +117,27 @@ export class Builder {
 
   protected createMemberQuery(key: string, value: any[], notStr = '') {
     if (!value.length) return notStr ? '1' : '0'
-    return `${key}${notStr} in (${value.map(val => escape(val)).join(', ')})`
+    return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
   }
 
   protected createRegExpQuery(key: string, value: RegExp) {
-    return `${key} regexp ${escape(value.source)}`
+    return `${key} regexp ${this.escape(value.source)}`
   }
 
   protected createElementQuery(key: string, value: any) {
-    return `find_in_set(${escape(value)}, ${key})`
+    return `find_in_set(${this.escape(value)}, ${key})`
   }
 
   protected comparator(operator: string) {
-    return function (key: string, value: any) {
-      return `${key} ${operator} ${escape(value)}`
-    }.bind(this)
+    return (key: string, value: any) => {
+      return `${key} ${operator} ${this.escape(value)}`
+    }
   }
 
   protected binary(operator: string) {
-    return function ([left, right]) {
+    return ([left, right]) => {
       return `(${this.parseEval(left)} ${operator} ${this.parseEval(right)})`
-    }.bind(this)
+    }
   }
 
   protected logicalAnd(conditions: string[]) {
@@ -199,7 +206,7 @@ export class Builder {
         return this.evalOperators[key](expr[key])
       }
     }
-    return escape(expr)
+    return this.escape(expr)
   }
 
   private parseAggr(expr: any) {
@@ -224,7 +231,7 @@ export class Builder {
 
   parseEval(expr: any): string {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
-      return escape(expr)
+      return this.escape(expr)
     }
     return this.parseEvalExpr(expr)
   }
@@ -252,45 +259,37 @@ export class Builder {
     if (offset > 0) sql += ' OFFSET ' + offset
     return sql
   }
-}
 
-export interface TypeCaster<S = any, T = any> {
-  types: Field.Type<S>[]
-  dump: (value: S) => T
-  load: (value: T, initial?: S) => S
-}
-
-export class Caster {
-  protected types: Dict<TypeCaster>
-
-  constructor(private models: Dict<Model>) {
-    this.types = Object.create(null)
+  define<S, T>(converter: Transformer<S, T>) {
+    converter.types.forEach(type => this.types[type] = converter)
   }
 
-  register<S, T>(typeCaster: TypeCaster<S, T>) {
-    typeCaster.types.forEach(type => this.types[type] = typeCaster)
-  }
-
-  dump(table: string, obj: any): any {
-    obj = this.models[table].format(obj)
-    const { fields } = this.models[table]
+  dump(model: Model, obj: any): any {
+    obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      const converter = this.types[fields[key]?.type]
-      result[key] = converter ? converter.dump(obj[key]) : obj[key]
+      result[key] = this.stringify(obj[key], model.fields[key])
     }
     return result
   }
 
-  load(table: string, obj: any): any {
-    const { fields } = this.models[table]
+  load(model: Model, obj: any): any {
     const result = {}
     for (const key in obj) {
-      if (!(key in fields)) continue
-      const { type, initial } = fields[key]
+      if (!(key in model.fields)) continue
+      const { type, initial } = model.fields[key]
       const converter = this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
-    return this.models[table].parse(result)
+    return model.parse(result)
+  }
+
+  escape(value: any, field?: Field) {
+    return escape(this.stringify(value, field))
+  }
+
+  stringify(value: any, field?: Field) {
+    const converter = this.types[field?.type]
+    return converter ? converter.dump(value) : value
   }
 }
