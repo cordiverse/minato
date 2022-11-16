@@ -146,8 +146,12 @@ function getRecursive(args: string | string[], data: any) {
 
   const [ref, path] = args
   let value = data[ref]
-  for (const key of path.split('.')) {
-    if (!value) return
+  if (path in value) return value[path]
+  const prefix = Object.keys(value).find(s => path.startsWith(s + '.')) || path.split('.', 1)[0]
+  const rest = path.slice(prefix.length + 1).split('.').filter(Boolean)
+  rest.unshift(prefix)
+  for (const key of rest) {
+    if (!value) return value
     value = value[key]
   }
   return value

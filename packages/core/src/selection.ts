@@ -68,7 +68,9 @@ class Executable<S = any, T = any> {
       data[key] ??= null
     }
     if (!fields) return this.model.parse(data)
-    return this.model.parse(pick(data, Object.keys(fields)))
+    return this.model.parse(valueMap(fields, (expr) => {
+      return executeEval({ [this.ref]: data }, expr)
+    }))
   }
 
   protected resolveField(field: Selection.Field<S>): Eval.Expr {
@@ -131,6 +133,8 @@ export namespace Selection {
     table: string
   }
 }
+
+export interface Selection extends Executable.Payload {}
 
 export class Selection<S = any> extends Executable<S, S[]> {
   args: [Modifier]
@@ -201,7 +205,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return this
   }
 
-  project<T extends Keys<S>>(fields: T[]): Selection<Pick<S, T>>
+  project<T extends Keys<S>>(fields: T | T[]): Selection<Pick<S, T>>
   project<T extends Dict<Selection.Field<S>>>(fields: T): Selection<Selection.Project<S, T>>
   project(fields: Keys<S>[] | Dict<Selection.Field<S>>) {
     this.fields = this.resolveFields(fields)

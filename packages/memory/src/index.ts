@@ -1,5 +1,5 @@
 import { clone, Dict, makeArray, noop, pick } from 'cosmokit'
-import { Database, Driver, Eval, Executable, executeEval, executeQuery, executeSort, executeUpdate, Field, Modifier, RuntimeError } from '@minatojs/core'
+import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Modifier, RuntimeError, Selection } from '@minatojs/core'
 
 namespace MemoryDriver {
   export interface Config {}
@@ -28,8 +28,14 @@ class MemoryDriver extends Driver {
     // await this.#loader?.stop(this.#store)
   }
 
-  $table(table: string) {
-    return this.#store[table] ||= []
+  $table(sel: string | Selection) {
+    if (typeof sel === 'string') {
+      return this.#store[sel] ||= []
+    }
+
+    const { ref, query, fields, table, args } = sel
+    const data = this.$table(table).filter(row => executeQuery(row, query, ref))
+    return executeSort(data, args[0], ref).map(row => sel.resolveData(row, fields))
   }
 
   async drop() {
@@ -41,19 +47,19 @@ class MemoryDriver extends Driver {
     return {}
   }
 
-  async get(sel: Executable, modifier: Modifier) {
+  async get(sel: Selection.Immutable, modifier: Modifier) {
     const { ref, query, fields, table } = sel
     const data = this.$table(table).filter(row => executeQuery(row, query, ref))
     return executeSort(data, modifier, ref).map(row => sel.resolveData(row, fields))
   }
 
-  async eval(sel: Executable, expr: Eval.Expr) {
+  async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const { ref, query, table } = sel
     const data = this.$table(table).filter(row => executeQuery(row, query, ref))
     return executeEval(data.map(row => ({ [ref]: row, _: row })), expr)
   }
 
-  async set(sel: Executable, data: {}) {
+  async set(sel: Selection.Mutable, data: {}) {
     const { table, ref, query } = sel
     this.$table(table)
       .filter(row => executeQuery(row, query, ref))
@@ -61,13 +67,13 @@ class MemoryDriver extends Driver {
     this.$save(table)
   }
 
-  async remove(sel: Executable) {
+  async remove(sel: Selection.Mutable) {
     const { ref, query, table } = sel
     this.#store[table] = this.$table(table).filter(row => !executeQuery(row, query, ref))
     this.$save(table)
   }
 
-  async create(sel: Executable, data: any) {
+  async create(sel: Selection.Mutable, data: any) {
     const { table, model } = sel
     const { primary, autoInc } = model
     const store = this.$table(table)
@@ -91,7 +97,7 @@ class MemoryDriver extends Driver {
     return clone(copy)
   }
 
-  async upsert(sel: Executable, data: any, keys: string[]) {
+  async upsert(sel: Selection.Mutable, data: any, keys: string[]) {
     const { table, model, ref } = sel
     for (const update of data) {
       const row = this.$table(table).find(row => {
