@@ -1,8 +1,8 @@
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig } from 'mysql'
-import { Dict, difference, makeArray, pick } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Modifier, RuntimeError, Selection } from '@minatojs/core'
-import { Builder, escape, escapeId, stringify } from '@minatojs/sql-utils'
+import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
+import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, Modifier, RuntimeError, Selection } from '@minatojs/core'
+import { Builder, escapeId } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
 declare module 'mysql' {
@@ -63,6 +63,25 @@ interface QueryTask {
   reject: (error: Error) => void
 }
 
+class MySQLBuilder extends Builder {
+  constructor(tables: Dict<Model>) {
+    super(tables)
+
+    this.define<string[], string>({
+      types: ['list'],
+      dump: value => value.join(','),
+      load: (value) => value ? value.split(',') : [],
+    })
+  }
+
+  escape(value: any, field?: Field<any>) {
+    if (value instanceof Date) {
+      value = Time.template('yyyy-MM-dd hh:mm:ss', value)
+    }
+    return super.escape(value, field)
+  }
+}
+
 namespace MySQLDriver {
   export interface Config extends PoolConfig {}
 }
@@ -70,8 +89,7 @@ namespace MySQLDriver {
 class MySQLDriver extends Driver {
   public pool: Pool
   public config: MySQLDriver.Config
-
-  sql: Builder
+  public sql: MySQLBuilder
 
   private _queryTasks: QueryTask[] = []
 
@@ -115,7 +133,7 @@ class MySQLDriver extends Driver {
       ...config,
     }
 
-    this.sql = new Builder(database.tables)
+    this.sql = new MySQLBuilder(database.tables)
   }
 
   async start() {
@@ -158,7 +176,7 @@ class MySQLDriver extends Driver {
         }
         // blob, text, geometry or json columns cannot have default values
         if (initial && !typedef.startsWith('text')) {
-          def += ' default ' + escape(initial, fields[key])
+          def += ' default ' + this.sql.escape(initial, fields[key])
         }
       }
 
@@ -225,8 +243,8 @@ class MySQLDriver extends Driver {
   _formatValues = (table: string, data: object, keys: readonly string[]) => {
     return keys.map((key) => {
       const field = this.database.tables[table]?.fields[key]
-      return stringify(data[key], field)
-    })
+      return this.sql.escape(data[key], field)
+    }).join(', ')
   }
 
   query<T = any>(sql: string, values?: any): Promise<T> {
@@ -302,7 +320,7 @@ class MySQLDriver extends Driver {
 
   async get(sel: Selection.Immutable, modifier: Modifier) {
     const { model, tables } = sel
-    const builder = new Builder(tables)
+    const builder = new MySQLBuilder(tables)
     const sql = builder.get(sel, modifier)
     if (!sql) return []
     return this.queue(sql).then((data) => {
@@ -372,13 +390,13 @@ class MySQLDriver extends Driver {
 
   async create(sel: Selection.Mutable, data: {}) {
     const { table, model } = sel
-    const formatted = model.format(data)
     const { autoInc, primary } = model
+    const formatted = this.sql.dump(model, data)
     const keys = Object.keys(formatted)
-    const header = await this.query<OkPacket>(
-      `INSERT INTO ?? (${this._joinKeys(keys)}) VALUES (${keys.map(() => '?').join(', ')})`,
-      [table, ...this._formatValues(table, formatted, keys)],
-    )
+    const header = await this.query<OkPacket>(`
+      INSERT INTO ${escapeId(table)} (${keys.map(escapeId).join(', ')})
+      VALUES (${keys.map(key => this.sql.escape(formatted[key])).join(', ')})
+    `)
     if (!autoInc) return data as any
     return { ...data, [primary as string]: header.insertId } as any
   }
@@ -429,12 +447,11 @@ class MySQLDriver extends Driver {
       return `${escaped} = ${value}`
     }).join(', ')
 
-    const placeholder = `(${initFields.map(() => '?').join(', ')})`
-    await this.query(
-      `INSERT INTO ${escapeId(table)} (${this._joinKeys(initFields)}) VALUES ${data.map(() => placeholder).join(', ')}
-      ON DUPLICATE KEY UPDATE ${update}`,
-      [].concat(...insertion.map(item => this._formatValues(table, item, initFields))),
-    )
+    await this.query(`
+      INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})
+      VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
+      ON DUPLICATE KEY UPDATE ${update}
+    `)
   }
 }
 
