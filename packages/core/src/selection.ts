@@ -15,16 +15,16 @@ export interface Modifier {
   having: Eval.Expr<boolean>
 }
 
-export namespace Executable {
+namespace Executable {
   export type Action = 'get' | 'set' | 'remove' | 'create' | 'upsert' | 'eval'
 
   export interface Payload {
     type: Action
-    table?: string
+    table: string | Selection
     ref: string
     query: Query.Expr
     fields?: Dict<Eval.Expr>
-    args?: any[]
+    args: any[]
   }
 }
 
@@ -35,25 +35,18 @@ const createRow = (ref: string, prefix = '', expr = {}) => new Proxy(expr, {
   },
 })
 
-export interface Executable extends Executable.Payload {}
+interface Executable extends Executable.Payload {}
 
-export class Executable<S = any, T = any> {
-  #row: Selection.Row<S>
-  #model: Model
+class Executable<S = any, T = any> {
+  public readonly row: Selection.Row<S>
+  public readonly model: Model
+  public readonly driver: Driver
 
-  public driver: Driver
-
-  constructor(driver: Driver, payload?: Executable.Payload) {
-    defineProperty(this, 'driver', driver)
+  constructor(driver: Driver, payload: Executable.Payload) {
     Object.assign(this, payload)
-  }
-
-  get row() {
-    return this.#row ||= createRow(this.ref)
-  }
-
-  get model() {
-    return this.#model ||= this.driver.model(this.table)
+    defineProperty(this, 'driver', driver)
+    defineProperty(this, 'row', createRow(this.ref))
+    defineProperty(this, 'model', driver.model(this.table))
   }
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>
@@ -129,18 +122,33 @@ export namespace Selection {
     | T extends Keys<S> ? S[T]
     // : T extends Selection<infer U> ? U
     : never
+
+  export interface Immutable extends Executable, Executable.Payload {
+    tables: Dict<Model>
+  }
+
+  export interface Mutable extends Executable, Executable.Payload {
+    table: string
+  }
 }
 
 export class Selection<S = any> extends Executable<S, S[]> {
   args: [Modifier]
+  tables: Dict<Model> = {}
 
-  constructor(driver: Driver, table: string, query?: Query) {
-    super(driver)
-    this.type = 'get'
-    this.ref = randomId()
-    this.table = table
+  constructor(driver: Driver, table: string | Selection, query?: Query) {
+    super(driver, {
+      type: 'get',
+      ref: randomId(),
+      table,
+      query: null,
+      args: [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and() }],
+    })
+    this.tables[this.ref] = this.model
     this.query = this.resolveQuery(query)
-    this.args = [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and() }]
+    if (typeof table !== 'string') {
+      Object.assign(this.tables, table.tables)
+    }
   }
 
   where(query: Query) {
@@ -185,7 +193,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     const extra = typeof args[0] === 'function' ? undefined : args.shift()
     Object.assign(this.fields, this.resolveFields(extra || {}))
     if (args[0]) this.having(args[0])
-    return this as any
+    return new Selection(this.driver, this)
   }
 
   having(cond: Selection.Callback<S, boolean>) {
@@ -197,7 +205,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   project<T extends Dict<Selection.Field<S>>>(fields: T): Selection<Selection.Project<S, T>>
   project(fields: Keys<S>[] | Dict<Selection.Field<S>>) {
     this.fields = this.resolveFields(fields)
-    return this as any
+    return new Selection(this.driver, this)
   }
 
   _action(type: Executable.Action, ...args: any[]) {

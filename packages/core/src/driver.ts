@@ -1,9 +1,9 @@
-import { Dict, makeArray, MaybeArray } from 'cosmokit'
+import { Dict, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
 import { Flatten, Indexable, Keys } from './utils'
-import { Direction, Executable, Modifier, Selection } from './selection'
+import { Direction, Modifier, Selection } from './selection'
 
 export type Result<S, K, T = (...args: any) => any> = {
   [P in keyof S as S[P] extends T ? P : P extends K ? P : never]: S[P]
@@ -164,18 +164,27 @@ export abstract class Driver {
   abstract drop(): Promise<void>
   abstract stats(): Promise<Driver.Stats>
   abstract prepare(name: string): Promise<void>
-  abstract get(sel: Executable, modifier: Modifier): Promise<any>
-  abstract eval(sel: Executable, expr: Eval.Expr): Promise<any>
-  abstract set(sel: Executable, data: Update): Promise<void>
-  abstract remove(sel: Executable): Promise<void>
-  abstract create(sel: Executable, data: any): Promise<any>
-  abstract upsert(sel: Executable, data: any[], keys: string[]): Promise<void>
+  abstract get(sel: Selection.Immutable, modifier: Modifier): Promise<any>
+  abstract eval(sel: Selection.Immutable, expr: Eval.Expr): Promise<any>
+  abstract set(sel: Selection.Mutable, data: Update): Promise<void>
+  abstract remove(sel: Selection.Mutable): Promise<void>
+  abstract create(sel: Selection.Mutable, data: any): Promise<any>
+  abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<void>
 
   constructor(public database: Database) {}
 
-  model(name: string) {
-    const model = this.database.tables[name]
-    if (model) return model
-    throw new TypeError(`unknown table name "${name}"`)
+  model<S = any>(table: string | Selection<S>): Model<S> {
+    if (typeof table === 'string') {
+      const model = this.database.tables[table]
+      if (model) return model
+      throw new TypeError(`unknown table name "${table}"`)
+    }
+
+    if (!table.fields) table.model
+    const model = new Model('temp')
+    model.fields = valueMap(table.fields, () => ({
+      type: 'json',
+    }))
+    return model
   }
 }
