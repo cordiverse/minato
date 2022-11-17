@@ -180,9 +180,9 @@ export abstract class Driver {
       throw new TypeError(`unknown table name "${table}"`)
     }
 
-    if (!table.fields) table.model
+    if (!table.args[0].fields) return table.model
     const model = new Model('temp')
-    model.fields = valueMap(table.fields, () => ({
+    model.fields = valueMap(table.args[0].fields, () => ({
       type: 'json',
     }))
     return model

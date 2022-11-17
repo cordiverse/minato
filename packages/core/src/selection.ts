@@ -13,6 +13,7 @@ export interface Modifier {
   sort: [Eval.Expr, Direction][]
   group: string[]
   having: Eval.Expr<boolean>
+  fields?: Dict<Eval.Expr>
 }
 
 namespace Executable {
@@ -23,7 +24,6 @@ namespace Executable {
     table: string | Selection
     ref: string
     query: Query.Expr
-    fields?: Dict<Eval.Expr>
     args: any[]
   }
 }
@@ -192,10 +192,10 @@ export class Selection<S = any> extends Executable<S, S[]> {
     cond?: Selection.Callback<S, boolean>,
   ): Selection<Selection.Project<S, T & U>>
   groupBy(fields: any, ...args: any[]) {
-    this.fields = this.resolveFields(fields)
-    this.args[0].group = Object.keys(this.fields)
+    this.args[0].fields = this.resolveFields(fields)
+    this.args[0].group = Object.keys(this.args[0].fields)
     const extra = typeof args[0] === 'function' ? undefined : args.shift()
-    Object.assign(this.fields, this.resolveFields(extra || {}))
+    Object.assign(this.args[0].fields, this.resolveFields(extra || {}))
     if (args[0]) this.having(args[0])
     return new Selection(this.driver, this)
   }
@@ -208,7 +208,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   project<T extends Keys<S>>(fields: T | T[]): Selection<Pick<S, T>>
   project<T extends Dict<Selection.Field<S>>>(fields: T): Selection<Selection.Project<S, T>>
   project(fields: Keys<S>[] | Dict<Selection.Field<S>>) {
-    this.fields = this.resolveFields(fields)
+    this.args[0].fields = this.resolveFields(fields)
     return new Selection(this.driver, this)
   }
 
@@ -225,7 +225,9 @@ export class Selection<S = any> extends Executable<S, S[]> {
   execute<T>(callback: Selection.Callback<S, T>): Promise<T>
   execute(callback?: any) {
     if (!callback) return super.execute()
-    return this._action('eval', this.resolveField(callback)).execute()
+    return new Selection(this.driver, this)
+      ._action('eval', this.resolveField(callback))
+      .execute()
   }
 }
 

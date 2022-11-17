@@ -33,9 +33,9 @@ class MemoryDriver extends Driver {
       return this.#store[sel] ||= []
     }
 
-    const { ref, query, fields, table, args } = sel
+    const { ref, query, table, args } = sel
     const data = this.$table(table).filter(row => executeQuery(row, query, ref))
-    return executeSort(data, args[0], ref).map(row => sel.resolveData(row, fields))
+    return executeSort(data, args[0], ref).map(row => sel.resolveData(row, args[0].fields))
   }
 
   async drop() {
@@ -48,13 +48,14 @@ class MemoryDriver extends Driver {
   }
 
   async get(sel: Selection.Immutable, modifier: Modifier) {
-    const { ref, query, fields, table } = sel
+    const { ref, query, table, args } = sel
     const data = this.$table(table).filter(row => executeQuery(row, query, ref))
-    return executeSort(data, modifier, ref).map(row => sel.resolveData(row, fields))
+    return executeSort(data, modifier, ref).map(row => sel.resolveData(row, args[0].fields))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const { ref, query, table } = sel
+    const { query, table } = sel
+    const ref = typeof table === 'string' ? sel.ref : table.ref
     const data = this.$table(table).filter(row => executeQuery(row, query, ref))
     return executeEval(data.map(row => ({ [ref]: row, _: row })), expr)
   }

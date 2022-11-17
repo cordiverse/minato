@@ -1,4 +1,4 @@
-import { isNullable } from 'cosmokit'
+import { defineProperty, isNullable } from 'cosmokit'
 import { Comparable, Flatten, isComparable } from './utils'
 
 // for backwards compatibility, TODO remove in v2
@@ -79,7 +79,7 @@ export namespace Eval {
   }
 }
 
-export const Eval = ((key, value) => ({ [kExpr]: true, ['$' + key]: value })) as Eval.Static
+export const Eval = ((key, value) => defineProperty({ ['$' + key]: value }, kExpr, true)) as Eval.Static
 
 const operators = {} as Record<keyof Eval.Static, (args: any, data: any) => any>
 
@@ -146,13 +146,14 @@ function getRecursive(args: string | string[], data: any) {
 
   const [ref, path] = args
   let value = data[ref]
+  if (!value) return value
   if (path in value) return value[path]
   const prefix = Object.keys(value).find(s => path.startsWith(s + '.')) || path.split('.', 1)[0]
   const rest = path.slice(prefix.length + 1).split('.').filter(Boolean)
   rest.unshift(prefix)
   for (const key of rest) {
-    if (!value) return value
     value = value[key]
+    if (!value) return value
   }
   return value
 }

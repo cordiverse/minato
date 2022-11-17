@@ -172,8 +172,8 @@ export class Transformer {
   }
 
   modifier(stages: any[], sel: Selection.Immutable) {
-    const { fields, args, model } = sel
-    const { offset, limit, sort, group, having } = args[0]
+    const { args, model } = sel
+    const { fields, offset, limit, sort, group, having } = args[0]
 
     // groupBy, having
     if (group.length) {
