@@ -1,5 +1,5 @@
 import { Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, isNullable, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
+import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
@@ -28,7 +28,7 @@ namespace MongoDriver {
 
 interface Result {
   table: string
-  stages: any[]
+  pipeline: any[]
 }
 
 interface EvalTask extends Result {
@@ -223,8 +223,8 @@ class MongoDriver extends Driver {
 
   private createPipeline(sel: Selection.Immutable) {
     const { table, query } = sel
-    const stages: any[] = []
-    const result = { stages } as Result
+    const pipeline: any[] = []
+    const result = { pipeline } as Result
     const transformer = new Transformer()
     if (typeof table === 'string') {
       result.table = table
@@ -233,18 +233,18 @@ class MongoDriver extends Driver {
       const predecessor = this.createPipeline(table)
       if (!predecessor) return
       result.table = predecessor.table
-      stages.unshift(...predecessor.stages)
+      pipeline.unshift(...predecessor.pipeline)
     }
 
     // where
     const filter = transformer.query(query)
     if (!filter) return
     if (Object.keys(filter).length) {
-      stages.push({ $match: filter })
+      pipeline.push({ $match: filter })
     }
 
     if (sel.type === 'get') {
-      transformer.modifier(stages, sel)
+      transformer.modifier(pipeline, sel)
     }
 
     return result
@@ -255,7 +255,7 @@ class MongoDriver extends Driver {
     if (!result) return []
     return this.db
       .collection(result.table)
-      .aggregate(result.stages, { allowDiskUse: true })
+      .aggregate(result.pipeline, { allowDiskUse: true })
       .toArray()
   }
 
@@ -273,17 +273,18 @@ class MongoDriver extends Driver {
     if (!tasks.length) return
     this._evalTasks = []
 
-    const pipeline: any[] = [{ $match: { _id: null } }]
+    const stages: any[] = [{ $match: { _id: null } }]
     const transformer = new Transformer()
     for (const task of tasks) {
-      const { expr, table, stages } = task
-      task.expr = transformer.eval(expr, (appendix) => {
-        pipeline.push({
-          $unionWith: {
-            coll: table,
-            pipeline: [...stages, ...appendix],
-          },
-        })
+      const { expr, table, pipeline } = task
+      const $ = transformer.createKey()
+      const $group: Dict = { _id: null }
+      const $project: Dict = { _id: 0 }
+      pipeline.push({ $group }, { $project })
+      task.expr = { $ }
+      $project[$] = transformer.eval(expr, $group)
+      stages.push({
+        $unionWith: { coll: table, pipeline },
       })
     }
 
@@ -291,7 +292,7 @@ class MongoDriver extends Driver {
     try {
       const results = await this.db
         .collection('_fields')
-        .aggregate(pipeline, { allowDiskUse: true })
+        .aggregate(stages, { allowDiskUse: true })
         .toArray()
       data = Object.assign({}, ...results)
     } catch (error) {

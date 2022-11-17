@@ -87,7 +87,7 @@ export class Transformer {
     return key === this.virtualKey ? '_id' : key
   }
 
-  private transformEvalExpr(expr: any, onAggr?: (pipeline: any[]) => void) {
+  private transformEvalExpr(expr: any, group?: Dict) {
     if (expr.$) {
       if (typeof expr.$ === 'string') {
         return '$' + this.getActualKey(expr.$)
@@ -96,16 +96,24 @@ export class Transformer {
       }
     }
 
+    if (expr.$if) {
+      return { $cond: expr.$if.map(val => this.eval(val, group)) }
+    }
+
     return valueMap(expr as any, (value) => {
       if (Array.isArray(value)) {
-        return value.map(val => this.eval(val, onAggr))
+        return value.map(val => this.eval(val, group))
       } else {
-        return this.eval(value, onAggr)
+        return this.eval(value, group)
       }
     })
   }
 
   private transformAggr(expr: any) {
+    if (typeof expr === 'number' || typeof expr === 'boolean') {
+      return expr
+    }
+
     if (typeof expr === 'string') {
       return '$' + expr
     }
@@ -113,27 +121,25 @@ export class Transformer {
     return this.transformEvalExpr(expr)
   }
 
-  public eval(expr: any, onAggr?: (pipeline: any[]) => void) {
+  public eval(expr: any, group?: Dict) {
     if (typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
       return expr
     }
 
-    for (const key of aggrKeys) {
-      if (!expr[key]) continue
-      const value = this.transformAggr(expr[key])
-      const $ = this.createKey()
-      if (key === '$count') {
-        onAggr([
-          { $group: { _id: value } },
-          { $group: { _id: null, [$]: { $count: {} } } },
-        ])
+    for (const type of aggrKeys) {
+      if (!expr[type]) continue
+      const key = this.createKey()
+      const value = this.transformAggr(expr[type])
+      if (type !== '$count') {
+        group[key] = { [type]: value }
+        return '$' + key
       } else {
-        onAggr([{ $group: { _id: null, [$]: { [key]: value } } }])
+        group[key] = { $addToSet: value }
+        return { $size: '$' + key }
       }
-      return { $ }
     }
 
-    return this.transformEvalExpr(expr, onAggr)
+    return this.transformEvalExpr(expr, group)
   }
 
   public query(query: Query.Expr) {
@@ -175,32 +181,6 @@ export class Transformer {
     const { args, model } = sel
     const { fields, offset, limit, sort, group, having } = args[0]
 
-    // groupBy, having
-    if (group.length) {
-      const $group = { _id: {} }
-      const $project = { _id: 0 }
-      for (const key in fields) {
-        if (group.includes(key)) {
-          $group._id[key] = this.eval(fields[key])
-        } else {
-          $group[key] = this.eval(fields[key])
-        }
-      }
-      if (having) {
-        const key = this.createKey()
-        $group[key] = this.eval(having)
-        $project[key] = 0
-      }
-      for (const key in fields) {
-        if (group.includes(key)) {
-          $project[key] = '$_id.' + key
-        } else {
-          $project[key] = 1
-        }
-      }
-      stages.push({ $group }, { $project })
-    }
-
     // orderBy, limit, offset
     const $set = {}
     const $sort = {}
@@ -226,8 +206,26 @@ export class Transformer {
       stages.push({ $skip: offset })
     }
 
-    // project
-    if (fields) {
+    // groupBy, having, fields
+    if (group.length) {
+      const $group: Dict = { _id: {} }
+      const $project: Dict = { _id: 0 }
+      stages.push({ $group })
+
+      for (const key in fields) {
+        if (group.includes(key)) {
+          $group._id[key] = this.eval(fields[key])
+          $project[key] = '$_id.' + key
+        } else {
+          $project[key] = this.eval(fields[key], $group)
+        }
+      }
+      if (having['$and'].length) {
+        const $expr = this.eval(having, $group)
+        stages.push({ $match: { $expr } })
+      }
+      stages.push({ $project })
+    } else if (fields) {
       const $project = valueMap(fields, (expr) => this.eval(expr))
       if (this.virtualKey) $project._id = 0
       stages.push({ $project })

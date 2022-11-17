@@ -1,5 +1,5 @@
 import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Modifier, RuntimeError, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection } from '@minatojs/core'
 
 namespace MemoryDriver {
   export interface Config {}

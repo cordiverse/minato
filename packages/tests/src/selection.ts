@@ -174,6 +174,7 @@ namespace SelectionTests {
       await expect(database
         .select('foo')
         .groupBy(['id', 'value'])
+        .orderBy('id')
         .execute()
       ).to.eventually.deep.equal([
         { id: 1, value: 0 },
@@ -203,6 +204,7 @@ namespace SelectionTests {
           sum: row => $.sum(row.id),
           count: row => $.count(row.id),
         })
+        .orderBy('value')
         .execute()
       ).to.eventually.deep.equal([
         { value: 0, sum: 1, count: 1 },
@@ -232,6 +234,7 @@ namespace SelectionTests {
           submit: row => $.sum(row.submit),
           accept: row => $.sum($.if($.gt(row.accept, 0), 1, 0)),
         })
+        .orderBy('uid')
         .execute()
       ).to.eventually.deep.equal([
         { uid: 1, submit: 4, accept: 2 },
