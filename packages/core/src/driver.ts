@@ -183,7 +183,7 @@ export abstract class Driver {
     if (!table.args[0].fields) return table.model
     const model = new Model('temp')
     model.fields = valueMap(table.args[0].fields, () => ({
-      type: 'json',
+      type: 'any',
     }))
     return model
   }

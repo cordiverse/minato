@@ -62,17 +62,6 @@ class Executable<S = any, T = any> {
     return query
   }
 
-  resolveData(data: any, fields: Dict<Eval.Expr<any>>) {
-    data = this.model.format(data, false)
-    for (const key in this.model.fields) {
-      data[key] ??= null
-    }
-    if (!fields) return this.model.parse(data)
-    return this.model.parse(valueMap(fields, (expr) => {
-      return executeEval({ [this.ref]: data }, expr)
-    }))
-  }
-
   protected resolveField(field: Selection.Field<S>): Eval.Expr {
     if (typeof field === 'string') {
       return this.row[field]

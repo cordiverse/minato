@@ -25,7 +25,7 @@ export namespace Field {
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends unknown[] ? 'list' | 'json'
     : T extends object ? 'json'
-    : never
+    : 'any'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 

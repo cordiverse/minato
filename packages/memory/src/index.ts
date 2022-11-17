@@ -1,4 +1,4 @@
-import { clone, Dict, makeArray, noop, pick } from 'cosmokit'
+import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Modifier, RuntimeError, Selection } from '@minatojs/core'
 
 namespace MemoryDriver {
@@ -28,14 +28,50 @@ class MemoryDriver extends Driver {
     // await this.#loader?.stop(this.#store)
   }
 
-  $table(sel: string | Selection) {
+  $table(sel: string | Selection): any[] {
     if (typeof sel === 'string') {
       return this.#store[sel] ||= []
     }
 
-    const { ref, query, table, args } = sel
+    const { ref, query, table, args, model } = sel
+    const { fields, group, having } = sel.args[0]
     const data = this.$table(table).filter(row => executeQuery(row, query, ref))
-    return executeSort(data, args[0], ref).map(row => sel.resolveData(row, args[0].fields))
+    const branches: { index: Dict, table: any[] }[] = []
+    const groupFields = group.length ? pick(fields, group) : fields
+    for (let row of executeSort(data, args[0], ref)) {
+      row = model.format(row, false)
+      for (const key in model.fields) {
+        row[key] ??= null
+      }
+      let index = row
+      if (fields) {
+        index = valueMap(groupFields, (expr) => executeEval({ [ref]: row }, expr))
+      }
+      let branch = branches.find((branch) => {
+        if (!groupFields) return false
+        for (const key in groupFields) {
+          if (branch.index[key] !== index[key]) return false
+        }
+        return true
+      })
+      if (!branch) {
+        branch = { index, table: [] }
+        branches.push(branch)
+      }
+      branch.table.push(row)
+    }
+    return branches.map(({ index, table }) => {
+      if (group.length) {
+        if (having) {
+          const value = executeEval(table.map(row => ({ [ref]: row, _: row })), having)
+          if (!value) return
+        }
+        for (const key in omit(fields, group)) {
+          index[key] = executeEval(table.map(row => ({ [ref]: row, _: row })), fields[key])
+        }
+      }
+      return model.parse(index)
+    }).filter(Boolean)
   }
 
   async drop() {
@@ -47,10 +83,8 @@ class MemoryDriver extends Driver {
     return {}
   }
 
-  async get(sel: Selection.Immutable, modifier: Modifier) {
-    const { ref, query, table, args } = sel
-    const data = this.$table(table).filter(row => executeQuery(row, query, ref))
-    return executeSort(data, modifier, ref).map(row => sel.resolveData(row, args[0].fields))
+  async get(sel: Selection.Immutable) {
+    return this.$table(sel as Selection)
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
