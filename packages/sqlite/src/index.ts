@@ -1,5 +1,5 @@
 import { Dict, difference, makeArray, union } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, Model, Modifier, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
@@ -43,6 +43,8 @@ namespace SQLiteDriver {
 class SQLiteBuilder extends Builder {
   constructor(tables: Dict<Model>) {
     super(tables)
+
+    this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
 
     this.define<boolean, number>({
       types: ['boolean'],

@@ -77,8 +77,8 @@ export class Builder {
     this.evalOperators = {
       // universal
       $: (key) => this.getRecursive(key),
-      $if: (args) => `IF(${args.map(arg => this.parseEval(arg)).join(', ')})`,
-      $ifNull: (args) => `IFNULL(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+      $if: (args) => `if(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+      $ifNull: (args) => `ifnull(${args.map(arg => this.parseEval(arg)).join(', ')})`,
 
       // number
       $add: (args) => `(${args.map(arg => this.parseEval(arg)).join(' + ')})`,
@@ -241,7 +241,8 @@ export class Builder {
     let sql = ''
     if (group.length) {
       sql += ` GROUP BY ${group.map(escapeId).join(', ')}`
-      if (having) sql += ` HAVING ${this.parseEval(having)}`
+      const filter = this.parseEval(having)
+      if (filter !== '1') sql += ` HAVING ${filter}`
     }
     if (sort.length) {
       sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
