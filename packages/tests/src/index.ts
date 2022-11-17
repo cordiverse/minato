@@ -2,7 +2,7 @@ import { Database } from '@minatojs/core'
 import QueryOperators from './query'
 import UpdateOperators from './update'
 import ObjectOperations from './object'
-import SortModifiers from './sort'
+import Selection from './selection'
 import './setup'
 
 const Keywords = ['name']
@@ -49,7 +49,7 @@ namespace Tests {
   export const query = QueryOperators
   export const update = UpdateOperators
   export const object = ObjectOperations
-  export const sort = SortModifiers
+  export const selection = Selection
 }
 
 export default createUnit(Tests, true)

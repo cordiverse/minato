@@ -9,9 +9,7 @@ interface ObjectModel {
       b?: number
       c?: string
     }
-    bar?(): string
   }
-  foo?(): string
 }
 
 interface Tables {
@@ -23,12 +21,6 @@ function ObjectOperations(database: Database<Tables>) {
     'id': 'string',
     'meta.a': { type: 'string', initial: '666' },
     'meta.embed': { type: 'json', initial: { c: 'world' } },
-    'foo'() {
-      return this.meta.a
-    },
-    'meta.bar'() {
-      return this.embed.c
-    },
   })
 }
 
@@ -50,8 +42,6 @@ namespace ObjectOperations {
         { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
         { meta: { a: '666', embed: { c: 'world' } } },
       ])
-      expect(table[0].foo()).to.equal('233')
-      expect(table[1].meta.bar()).to.equal('world')
     })
   }
 

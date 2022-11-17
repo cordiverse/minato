@@ -223,38 +223,6 @@ namespace OrmOperations {
     })
   }
 
-  export const evaluate = function Evaluate(database: Database<Tables>) {
-    it('plain expression', async () => {
-      await setup(database, 'temp3', bazTable)
-      await expect(database.eval('temp3', 100)).eventually.equal(100)
-    })
-
-    it('basic support', async () => {
-      await setup(database, 'temp3', bazTable)
-      await expect(database.eval('temp3', { $sum: 'ida' })).eventually.equal(6)
-      await expect(database.eval('temp3', { $count: 'idb' })).eventually.equal(2)
-    })
-
-    it('inner expressions', async () => {
-      await setup(database, 'temp3', bazTable)
-      await expect(database.eval('temp3', {
-        $avg: {
-          $multiply: [2, { $: 'ida' }, { $: 'ida' }],
-        },
-      })).eventually.equal(5)
-    })
-
-    it('outer expressions', async () => {
-      await setup(database, 'temp3', bazTable)
-      await expect(database.eval('temp3', {
-        $subtract: [
-          { $sum: 'ida' },
-          { $count: 'idb' },
-        ],
-      })).eventually.equal(4)
-    })
-  }
-
   export const stats = function Stats(database: Database<Tables>) {
     it('basic support', async () => {
       await expect(database.stats()).to.eventually.ok
