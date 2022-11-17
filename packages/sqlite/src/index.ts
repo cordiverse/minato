@@ -225,20 +225,25 @@ class SQLiteDriver extends Driver {
     this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`)
   }
 
-  async get(sel: Selection.Immutable, modifier: Modifier) {
+  async get(sel: Selection.Immutable) {
     const { tables } = sel
     const builder = new SQLiteBuilder(tables)
-    const sql = builder.get(sel, modifier)
+    const sql = builder.get(sel)
     if (!sql) return []
     const rows = this.#all(sql)
     return rows.map(row => this.sql.load(sel.model, row))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const { table, query } = sel
-    const filter = this.sql.parseQuery(query)
     const output = this.sql.parseEval(expr)
-    const { value } = this.#get(`SELECT ${output} AS value FROM ${escapeId(table as string)} WHERE ${filter}`)
+    let sql = this.sql.get(sel.table as Selection)
+    const prefix = `SELECT ${output} AS value `
+    if (sql.startsWith('SELECT * ')) {
+      sql = prefix + sql.slice(9)
+    } else {
+      sql = `${prefix}FROM (${sql}) ${sql.ref}`
+    }
+    const { value } = this.#get(sql)
     return value
   }
 

@@ -318,10 +318,10 @@ class MySQLDriver extends Driver {
     return stats
   }
 
-  async get(sel: Selection.Immutable, modifier: Modifier) {
+  async get(sel: Selection.Immutable) {
     const { model, tables } = sel
     const builder = new MySQLBuilder(tables)
-    const sql = builder.get(sel, modifier)
+    const sql = builder.get(sel)
     if (!sql) return []
     return this.queue(sql).then((data) => {
       return data.map((row) => model.parse(row))
@@ -329,10 +329,15 @@ class MySQLDriver extends Driver {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const { table, query } = sel
-    const filter = this.sql.parseQuery(query)
     const output = this.sql.parseEval(expr)
-    const [data] = await this.queue(`SELECT ${output} AS value FROM ${table} WHERE ${filter}`)
+    let sql = this.sql.get(sel.table as Selection)
+    const prefix = `SELECT ${output} AS value `
+    if (sql.startsWith('SELECT * ')) {
+      sql = prefix + sql.slice(9)
+    } else {
+      sql = `${prefix}FROM (${sql}) ${sql.ref}`
+    }
+    const [data] = await this.queue(sql)
     return data.value
   }
 
@@ -393,10 +398,10 @@ class MySQLDriver extends Driver {
     const { autoInc, primary } = model
     const formatted = this.sql.dump(model, data)
     const keys = Object.keys(formatted)
-    const header = await this.query<OkPacket>(`
-      INSERT INTO ${escapeId(table)} (${keys.map(escapeId).join(', ')})
-      VALUES (${keys.map(key => this.sql.escape(formatted[key])).join(', ')})
-    `)
+    const header = await this.query<OkPacket>([
+      `INSERT INTO ${escapeId(table)} (${keys.map(escapeId).join(', ')})`,
+      `VALUES (${keys.map(key => this.sql.escape(formatted[key])).join(', ')})`,
+    ].join(' '))
     if (!autoInc) return data as any
     return { ...data, [primary as string]: header.insertId } as any
   }
@@ -447,11 +452,11 @@ class MySQLDriver extends Driver {
       return `${escaped} = ${value}`
     }).join(', ')
 
-    await this.query(`
-      INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})
-      VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
-      ON DUPLICATE KEY UPDATE ${update}
-    `)
+    await this.query([
+      `INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})`,
+      `VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})`,
+      `ON DUPLICATE KEY UPDATE ${update}`,
+    ].join(' '))
   }
 }
 

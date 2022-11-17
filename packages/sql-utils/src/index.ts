@@ -236,28 +236,47 @@ export class Builder {
     return this.parseEvalExpr(expr)
   }
 
-  get(sel: Selection.Immutable, modifier: Modifier) {
-    const { table, fields, query } = sel
-    const filter = this.parseQuery(query)
-    if (filter === '0') return
+  suffix(modifier: Modifier) {
     const { limit, offset, sort, group, having } = modifier
-    const keys = !fields ? '*' : Object.entries(fields).map(([key, value]) => {
-      return this.parseEval(value) + ' AS ' + (key.includes('`') ? key : `\`${key}\``)
-    }).join(', ')
-    let sql = `SELECT ${keys} FROM ${table} _${table}`
-    if (filter !== '1') sql += ` WHERE ${filter}`
+    let sql = ''
     if (group.length) {
       sql += ` GROUP BY ${group.map(escapeId).join(', ')}`
       if (having) sql += ` HAVING ${this.parseEval(having)}`
     }
     if (sort.length) {
       sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
-        return `${this.parseEval(expr)} ${dir}`
+        return `${this.parseEval(expr)} ${dir.toUpperCase()}`
       }).join(', ')
     }
     if (limit < Infinity) sql += ' LIMIT ' + limit
     if (offset > 0) sql += ' OFFSET ' + offset
     return sql
+  }
+
+  get(sel: Selection.Immutable) {
+    const { args, table, query, ref } = sel
+    const filter = this.parseQuery(query)
+    if (filter === '0') return
+    const { fields } = args[0]
+    const keys = !fields ? '*' : Object.entries(fields).map(([key, value]) => {
+      key = escapeId(key)
+      value = this.parseEval(value)
+      return key === value ? key : `${value} AS ${key}`
+    }).join(', ')
+    let prefix = `SELECT ${keys} FROM `
+    let suffix = this.suffix(args[0])
+    if (filter !== '1') {
+      suffix = ` WHERE ${filter}` + suffix
+    }
+    if (typeof table === 'string') {
+      prefix += escapeId(table)
+    } else {
+      const inner = this.get(table)
+      if (!inner) return
+      if (!fields && !suffix) return inner
+      prefix += `(${inner})`
+    }
+    return `${prefix} ${ref}${suffix}`
   }
 
   define<S, T>(converter: Transformer<S, T>) {

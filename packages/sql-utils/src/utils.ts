@@ -28,13 +28,13 @@ export function escape(value: any) {
     case 'number':
       return value + ''
     case 'object':
-      return escapeString(JSON.stringify(value))
+      return quote(JSON.stringify(value))
     default:
-      return escapeString(value)
+      return quote(value)
   }
 }
 
-export function escapeString(value: string) {
+export function quote(value: string) {
   let chunkIndex = ESCAPE_CHARS_REGEXP.lastIndex = 0
   let escapedVal = ''
   let match: RegExpExecArray
