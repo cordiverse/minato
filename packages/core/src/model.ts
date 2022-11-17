@@ -1,5 +1,6 @@
 import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { isEvalExpr } from './eval'
+import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
 export interface Field<T = any> {
@@ -9,6 +10,7 @@ export interface Field<T = any> {
   initial?: T
   precision?: number
   scale?: number
+  expr?: Selection.Callback
 }
 
 export namespace Field {
@@ -25,29 +27,24 @@ export namespace Field {
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends unknown[] ? 'list' | 'json'
     : T extends object ? 'json'
-    : 'any'
+    : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
   type MapField<O = any> = {
-    [K in keyof O]?: O[K] extends (...args: any) => any
-      ? O[K]
-      : Field<O[K]> | Shorthand<Type<O[K]>>
+    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]>
   }
 
   export type Extension<O = any> = MapField<Flatten<O>>
 
   export type Config<O = any> = {
-    [K in keyof O]?: O[K] extends (...args: any) => any ? never : Field<O[K]>
-  }
-
-  export type Internal<O = any> = {
-    [K in keyof O]?: O[K] extends (...args: any) => any ? O[K] : never
+    [K in keyof O]?: Field<O[K]>
   }
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
   export function parse(source: string | Field): Field {
+    if (typeof source === 'function') return { type: 'expr', expr: source }
     if (typeof source !== 'string') return { initial: null, ...source }
 
     // parse string definition
@@ -93,7 +90,6 @@ export interface Model<S> extends Model.Config<S> {}
 
 export class Model<S = any> {
   fields: Field.Config<S> = {}
-  internal: Field.Internal<S> = { '': {} } as never
 
   constructor(public name: string) {
     this.primary = 'id' as never
@@ -111,14 +107,7 @@ export class Model<S = any> {
     Object.assign(this.foreign, foreign)
 
     for (const key in fields) {
-      if (typeof fields[key] === 'function') {
-        const index = key.lastIndexOf('.')
-        const prefix = key.slice(0, index + 1)
-        const method = key.slice(index + 1)
-        ;(this.internal[prefix] ??= {})[method] = fields[key]
-      } else {
-        this.fields[key] = Field.parse(fields[key])
-      }
+      this.fields[key] = Field.parse(fields[key])
     }
 
     // check index
@@ -165,7 +154,7 @@ export class Model<S = any> {
   }
 
   parse(source: object) {
-    const result: any = Object.create(this.internal[''])
+    const result: any = {}
     for (const key in source) {
       let node = result
       const segments = key.split('.').reverse()
@@ -173,7 +162,7 @@ export class Model<S = any> {
       for (let index = segments.length - 1; index > 0; index--) {
         const segment = segments[index]
         prefix += segment + '.'
-        node = node[segment] ??= Object.create(this.internal[prefix] ?? {})
+        node = node[segment] ??= {}
       }
       if (key in source) {
         const value = this.resolveValue(key, source[key])

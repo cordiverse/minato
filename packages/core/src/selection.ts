@@ -1,4 +1,4 @@
-import { defineProperty, Dict, pick, valueMap } from 'cosmokit'
+import { defineProperty, Dict, valueMap } from 'cosmokit'
 import { Driver } from './driver'
 import { Eval, executeEval } from './eval'
 import { Model } from './model'
@@ -90,7 +90,7 @@ class Executable<S = any, T = any> {
 }
 
 export namespace Selection {
-  export type Callback<S, T = any> = (row: Row<S>) => Eval.Expr<T>
+  export type Callback<S = any, T = any> = (row: Row<S>) => Eval.Expr<T>
   export type Field<S = any> = Keys<S> | Callback<S>
   export type Take<S, F extends Field<S>> =
     | F extends Keys<S> ? S[F]

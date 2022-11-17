@@ -140,8 +140,8 @@ namespace SelectionTests {
 
   export function aggregate(database: Database<Tables>) {
     it('shorthand', async () => {
-      await expect(database.eval('foo', { $sum: 'id' })).to.eventually.equal(6)
-      await expect(database.eval('foo', { $count: 'value' })).to.eventually.equal(2)
+      await expect(database.eval('foo', row => $.sum(row.id))).to.eventually.equal(6)
+      await expect(database.eval('foo', row => $.count(row.value))).to.eventually.equal(2)
     })
 
     it('inner expressions', async () => {

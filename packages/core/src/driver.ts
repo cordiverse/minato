@@ -95,8 +95,7 @@ export class Database<S = any> {
     return selection.execute()
   }
 
-  /** @deprecated use selection api instead */
-  async eval<K extends Keys<S>>(table: K, expr: any, query?: Query): Promise<any> {
+  async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T>, query?: Query<Selection.Resolve<S, K>>): Promise<T> {
     await this.tasks[table]
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
@@ -183,7 +182,7 @@ export abstract class Driver {
     if (!table.args[0].fields) return table.model
     const model = new Model('temp')
     model.fields = valueMap(table.args[0].fields, () => ({
-      type: 'any',
+      type: 'expr',
     }))
     return model
   }
