@@ -207,7 +207,8 @@ export class Selection<S = any> extends Executable<S, S[]> {
 
   /** @deprecated use `selection.execute()` instead */
   evaluate<T>(callback: Selection.Callback<S, T>): Executable<S, T> {
-    return this._action('eval', this.resolveField(callback))
+    return new Selection(this.driver, this)
+      ._action('eval', this.resolveField(callback))
   }
 
   execute(): Promise<S[]>
