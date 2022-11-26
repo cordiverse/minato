@@ -227,7 +227,7 @@ export class Transformer {
       stages.push({ $project })
     } else if (fields) {
       const $project = valueMap(fields, (expr) => this.eval(expr))
-      if (this.virtualKey) $project._id = 0
+      $project._id = 0
       stages.push({ $project })
     } else if (this.virtualKey) {
       const $project: Dict = { _id: 0 }
