@@ -23,7 +23,7 @@ function getIntegerType(length = 11) {
   return 'bigint'
 }
 
-function getTypeDefinition({ type, length, precision, scale }: Field) {
+function getTypeDef({ type, length, precision, scale }: Field) {
   switch (type) {
     case 'float':
     case 'double':
@@ -43,6 +43,24 @@ function getTypeDefinition({ type, length, precision, scale }: Field) {
   }
 }
 
+function isDefUpdated(field: Field, column: ColumnInfo, def: string) {
+  const typename = def.split(/[ (]/)[0]
+  if (typename !== column.DATA_TYPE) return true
+  switch (field.type) {
+    case 'integer':
+    case 'unsigned':
+    case 'char':
+    case 'string':
+    case 'text':
+    case 'list':
+    case 'json':
+      return !!field.length && column.CHARACTER_MAXIMUM_LENGTH !== field.length
+    case 'decimal':
+      return column.NUMERIC_PRECISION !== field.precision || column.NUMERIC_SCALE !== field.scale
+    default: return false
+  }
+}
+
 function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
@@ -51,6 +69,10 @@ interface ColumnInfo {
   COLUMN_NAME: string
   IS_NULLABLE: 'YES' | 'NO'
   DATA_TYPE: string
+  CHARACTER_MAXIMUM_LENGTH: number
+  CHARACTER_OCTET_LENGTH: number
+  NUMERIC_PRECISION: number
+  NUMERIC_SCALE: number
 }
 
 interface IndexInfo {
@@ -145,7 +167,21 @@ class MySQLDriver extends Driver {
     this.pool.end()
   }
 
-  private _getColDefs(name: string, columns: ColumnInfo[], indexes: IndexInfo[]) {
+  /** synchronize table schema */
+  async prepare(name: string) {
+    const [columns, indexes] = await Promise.all([
+      this.queue<ColumnInfo[]>([
+        `SELECT *`,
+        `FROM information_schema.columns`,
+        `WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?`,
+      ].join(' '), [this.config.database, name]),
+      this.queue<IndexInfo[]>([
+        `SELECT *`,
+        `FROM information_schema.statistics`,
+        `WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?`,
+      ].join(' '), [this.config.database, name]),
+    ])
+
     const table = this.model(name)
     const { primary, foreign, autoInc } = table
     const fields = { ...table.fields }
@@ -155,20 +191,19 @@ class MySQLDriver extends Driver {
 
     // field definitions
     for (const key in fields) {
-      let shouldUpdate = false
-      const legacy = columns.find(info => info.COLUMN_NAME === key)
       const { initial, nullable = true } = fields[key]!
+      const legacy = [key, ...fields[key]!.legacy || []]
+      const column = columns.find(info => legacy.includes(info.COLUMN_NAME))
+      let shouldUpdate = column?.COLUMN_NAME !== key
 
       let def = escapeId(key)
       if (key === primary && autoInc) {
         def += ' int unsigned not null auto_increment'
       } else {
-        const typedef = getTypeDefinition(fields[key]!)
-        // const typename = typedef.split(/[ (]/)[0]
-        // if (legacy && legacy.DATA_TYPE !== typename) {
-        //   logger.warn(`${name}.${key} data type mismatch: ${legacy.DATA_TYPE} => ${typedef}`)
-        //   shouldUpdate = true
-        // }
+        const typedef = getTypeDef(fields[key]!)
+        if (column && !shouldUpdate) {
+          shouldUpdate = isDefUpdated(fields[key]!, column, typedef)
+        }
         def += ' ' + typedef
         if (makeArray(primary).includes(key)) {
           def += ' not null'
@@ -181,59 +216,53 @@ class MySQLDriver extends Driver {
         }
       }
 
-      if (!legacy) {
+      if (!column) {
         create.push(def)
       } else if (shouldUpdate) {
-        update.push(def)
+        update.push(`CHANGE ${escapeId(column.COLUMN_NAME)} ${def}`)
       }
     }
 
     // index definitions
     if (!columns.length) {
-      create.push(`primary key (${createIndex(primary)})`)
+      create.push(`PRIMARY KEY (${createIndex(primary)})`)
       for (const key in foreign) {
         const [table, key2] = foreign[key]!
-        create.push(`foreign key (${escapeId(key)}) references ${escapeId(table)} (${escapeId(key2)})`)
+        create.push(`FOREIGN KEY (${escapeId(key)}) REFERENCES ${escapeId(table)} (${escapeId(key2)})`)
       }
     }
+
     for (const key of unique) {
-      const name = makeArray(key).join('_')
-      const legacy = indexes.find(info => info.INDEX_NAME === name)
-      if (!legacy) create.push(`unique index (${createIndex(key)})`)
+      let shouldUpdate = false
+      const oldKeys = makeArray(key).map((key) => {
+        const legacy = [key, ...fields[key]!.legacy || []]
+        const column = columns.find(info => legacy.includes(info.COLUMN_NAME))
+        if (column?.COLUMN_NAME !== key) shouldUpdate = true
+        return column?.COLUMN_NAME
+      })
+      const name = oldKeys.join('_')
+      const index = indexes.find(info => info.INDEX_NAME === name)
+      if (!index) {
+        create.push(`UNIQUE INDEX (${createIndex(key)})`)
+      } else if (shouldUpdate) {
+        create.push(`UNIQUE INDEX (${createIndex(key)})`)
+        update.push(`DROP INDEX ${escapeId(name)}`)
+      }
     }
 
-    return [create, update]
-  }
-
-  /** synchronize table schema */
-  async prepare(name: string) {
-    const [columns, indexes] = await Promise.all([
-      this.queue<ColumnInfo[]>(`
-        SELECT COLUMN_NAME, IS_NULLABLE, DATA_TYPE
-        FROM information_schema.columns
-        WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?
-      `, [this.config.database, name]),
-      this.queue<IndexInfo[]>(`
-        SELECT COLUMN_NAME, INDEX_NAME
-        FROM information_schema.statistics
-        WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?
-      `, [this.config.database, name]),
-    ])
-
-    const [create, update] = this._getColDefs(name, columns, indexes)
     if (!columns.length) {
       logger.info('auto creating table %c', name)
-      return this.queue(`CREATE TABLE ?? (${create.join(',')}) COLLATE = ?`, [name, this.config.charset])
+      return this.queue(`CREATE TABLE ?? (${create.join(', ')}) COLLATE = ?`, [name, this.config.charset])
     }
 
     const operations = [
       ...create.map(def => 'ADD ' + def),
-      ...update.map(def => 'MODIFY ' + def),
+      ...update,
     ]
     if (operations.length) {
       // https://dev.mysql.com/doc/refman/5.7/en/alter-table.html
       logger.info('auto updating table %c', name)
-      await this.queue(`ALTER TABLE ?? ${operations.join(',')}`, [name])
+      await this.queue(`ALTER TABLE ?? ${operations.join(', ')}`, [name])
     }
   }
 
@@ -248,11 +277,9 @@ class MySQLDriver extends Driver {
     }).join(', ')
   }
 
-  query<T = any>(sql: string, values?: any): Promise<T> {
+  query<T = any>(sql: string): Promise<T> {
     const error = new Error()
     return new Promise((resolve, reject) => {
-      sql = format(sql, values)
-      logger.debug(sql)
       this.pool.query(sql, (err: Error, results) => {
         if (!err) return resolve(results)
         logger.warn(sql)
@@ -266,11 +293,12 @@ class MySQLDriver extends Driver {
   }
 
   queue<T = any>(sql: string, values?: any): Promise<T> {
+    sql = format(sql, values)
+    logger.debug('> %s', sql)
     if (!this.config.multipleStatements) {
-      return this.query(sql, values)
+      return this.query(sql)
     }
 
-    sql = format(sql, values)
     return new Promise<any>((resolve, reject) => {
       this._queryTasks.push({ sql, resolve, reject })
       process.nextTick(() => this._flushTasks())
@@ -295,11 +323,8 @@ class MySQLDriver extends Driver {
 
   _select<T extends {}>(table: string, fields: readonly (string & keyof T)[], conditional?: string, values?: readonly any[]): Promise<T[]>
   _select(table: string, fields: string[], conditional?: string, values: readonly any[] = []) {
-    logger.debug(`[select] ${table}: ${fields ? fields.join(', ') : '*'}`)
-    const sql = 'SELECT '
-      + this._joinKeys(fields)
-      + (table.includes('.') ? `FROM ${table}` : ' FROM `' + table + '`')
-      + (conditional ? ' WHERE ' + conditional : '')
+    let sql = `SELECT ${this._joinKeys(fields)} FROM ${table}`
+    if (conditional) sql += ` WHERE ${conditional}`
     return this.queue(sql, values)
   }
 
@@ -391,7 +416,7 @@ class MySQLDriver extends Driver {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
     if (filter === '0') return
-    await this.query('DELETE FROM ?? WHERE ' + filter, [table])
+    await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
   }
 
   async create(sel: Selection.Mutable, data: {}) {
