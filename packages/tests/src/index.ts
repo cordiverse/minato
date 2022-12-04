@@ -2,6 +2,7 @@ import { Database } from '@minatojs/core'
 import QueryOperators from './query'
 import UpdateOperators from './update'
 import ObjectOperations from './object'
+import Migration from './migration'
 import Selection from './selection'
 import './setup'
 
@@ -50,6 +51,7 @@ namespace Tests {
   export const update = UpdateOperators
   export const object = ObjectOperations
   export const selection = Selection
+  export const migration = Migration
 }
 
 export default createUnit(Tests, true)

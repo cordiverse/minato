@@ -11,6 +11,7 @@ export interface Field<T = any> {
   precision?: number
   scale?: number
   expr?: Selection.Callback
+  legacy?: string[]
 }
 
 export namespace Field {
