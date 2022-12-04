@@ -1,13 +1,13 @@
-import { Dict, difference, makeArray, union } from 'cosmokit'
+import { Dict, difference, isNullable, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
-import { Builder, escapeId } from '@minatojs/sql-utils'
+import { Builder, escape, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
 import Logger from 'reggol'
 
 const logger = new Logger('sqlite')
 
-function getTypeDefinition({ type }: Field) {
+function getTypeDef({ type }: Field) {
   switch (type) {
     case 'boolean':
     case 'integer':
@@ -27,6 +27,7 @@ function getTypeDefinition({ type }: Field) {
 }
 
 export interface SQLiteFieldInfo {
+  cid: number
   name: string
   type: string
   notnull: number
@@ -93,56 +94,84 @@ class SQLiteDriver extends Driver {
     this.sql = new SQLiteBuilder(database.tables)
   }
 
-  private _getColDefs(table: string, key: string) {
-    const model = this.model(table)
-    const { initial, nullable = true } = model.fields[key]!
-    let def = `\`${key}\``
-    if (key === model.primary && model.autoInc) {
-      def += ' INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT'
-    } else {
-      const typedef = getTypeDefinition(model.fields[key]!)
-      def += ' ' + typedef + (nullable ? ' ' : ' NOT ') + 'NULL'
-      if (initial !== undefined && initial !== null) {
-        def += ' DEFAULT ' + this.sql.escape(this.sql.dump(model, { [key]: initial })[key])
-      }
-    }
-    return def
-  }
-
   /** synchronize table schema */
   async prepare(table: string) {
     const info = this.#all(`PRAGMA table_info(${escapeId(table)})`) as SQLiteFieldInfo[]
-    // WARN: side effecting Tables.config
-    const config = this.model(table)
-    const keys = Object.keys(config.fields)
-    if (info.length) {
-      let hasUpdate = false
-      for (const key of keys) {
-        if (info.some(({ name }) => name === key)) continue
-        const def = this._getColDefs(table, key)
-        this.#run(`ALTER TABLE ${escapeId(table)} ADD COLUMN ${def}`)
-        hasUpdate = true
+    const model = this.model(table)
+    const columnDefs: string[] = []
+    const indexDefs: string[] = []
+    const alter: string[] = []
+    const mapping: Dict<string> = {}
+    let shouldMigrate = false
+
+    // field definitions
+    for (const key in model.fields) {
+      const legacy = [key, ...model.fields[key]!.legacy || []]
+      const column = info.find(({ name }) => legacy.includes(name))
+      const { initial, nullable = true } = model.fields[key]!
+      const typedef = getTypeDef(model.fields[key]!)
+      let def = `${escapeId(key)} ${typedef}`
+      if (key === model.primary && model.autoInc) {
+        def += ' NOT NULL PRIMARY KEY AUTOINCREMENT'
+      } else {
+        def += (nullable ? ' ' : ' NOT ') + 'NULL'
+        if (!isNullable(initial)) {
+          def += ' DEFAULT ' + this.sql.escape(this.sql.dump(model, { [key]: initial })[key])
+        }
       }
-      if (hasUpdate) {
-        logger.info('auto updating table %c', table)
+      columnDefs.push(def)
+      if (!column) {
+        alter.push('ADD ' + def)
+      } else {
+        mapping[column.name] = key
+        shouldMigrate ||= column.name !== key || column.type !== typedef
       }
-    } else {
+    }
+
+    // index definitions
+    if (model.primary && !model.autoInc) {
+      indexDefs.push(`PRIMARY KEY (${this.#joinKeys(makeArray(model.primary))})`)
+    }
+    if (model.unique) {
+      indexDefs.push(...model.unique.map(keys => `UNIQUE (${this.#joinKeys(makeArray(keys))})`))
+    }
+    if (model.foreign) {
+      indexDefs.push(...Object.entries(model.foreign).map(([key, value]) => {
+        const [table, key2] = value!
+        return `FOREIGN KEY (\`${key}\`) REFERENCES ${escapeId(table)} (\`${key2}\`)`
+      }))
+    }
+
+    if (!info.length) {
       logger.info('auto creating table %c', table)
-      const defs = keys.map(key => this._getColDefs(table, key))
-      const constraints: string[] = []
-      if (config.primary && !config.autoInc) {
-        constraints.push(`PRIMARY KEY (${this.#joinKeys(makeArray(config.primary))})`)
+      this.#run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
+    } else if (shouldMigrate) {
+      // preserve old columns
+      for (const column of info) {
+        if (mapping[column.name]) continue
+        let def = `${escapeId(column.name)} ${column.type}`
+        def += (column.notnull ? ' NOT ' : ' ') + 'NULL'
+        if (column.pk) def += ' PRIMARY KEY'
+        if (column.dflt_value !== null) def += ' DEFAULT ' + escape(column.dflt_value)
+        columnDefs.push(def)
+        mapping[column.name] = column.name
       }
-      if (config.unique) {
-        constraints.push(...config.unique.map(keys => `UNIQUE (${this.#joinKeys(makeArray(keys))})`))
+
+      const temp = table + '_temp'
+      const fields = Object.keys(mapping).map(escapeId).join(', ')
+      logger.info('auto migrating table %c', table)
+      this.#run(`CREATE TABLE ${escapeId(temp)} (${columnDefs.join(', ')})`)
+      try {
+        this.#run(`INSERT INTO ${escapeId(temp)} SELECT ${fields} FROM ${escapeId(table)}`)
+        this.#run(`DROP TABLE ${escapeId(table)}`)
+        this.#run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
+        this.#run(`INSERT INTO ${escapeId(table)} SELECT * FROM ${escapeId(temp)}`)
+      } finally {
+        this.#run(`DROP TABLE ${escapeId(temp)}`)
       }
-      if (config.foreign) {
-        constraints.push(...Object.entries(config.foreign).map(([key, value]) => {
-          const [table, key2] = value!
-          return `FOREIGN KEY (\`${key}\`) REFERENCES ${escapeId(table)} (\`${key2}\`)`
-        }))
-      }
-      this.#run(`CREATE TABLE ${escapeId(table)} (${[...defs, ...constraints].join(',')})`)
+    } else if (alter.length) {
+      logger.info('auto updating table %c', table)
+      this.#run(`ALTER TABLE ${escapeId(table)} ${alter.join(', ')}`)
     }
   }
 
@@ -161,7 +190,7 @@ class SQLiteDriver extends Driver {
   }
 
   #joinKeys(keys?: string[]) {
-    return keys?.length ? keys.map(key => `\`${key}\``).join(',') : '*'
+    return keys?.length ? keys.map(key => `\`${key}\``).join(', ') : '*'
   }
 
   async stop() {
@@ -173,9 +202,10 @@ class SQLiteDriver extends Driver {
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
       stmt.free()
+      logger.debug('> %s', sql)
       return result
     } catch (e) {
-      logger.warn('SQL > %c', sql, params)
+      logger.warn('> %s', sql)
       throw e
     }
   }
@@ -278,7 +308,7 @@ class SQLiteDriver extends Driver {
     data = this.sql.dump(model, data)
     const keys = Object.keys(data)
     const sql = `INSERT INTO ${escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${keys.map(key => this.sql.escape(data[key])).join(', ')})`
-    return this.#run(sql, [], () => this.#get(`select last_insert_rowid() as id`))
+    return this.#run(sql, [], () => this.#get(`SELECT last_insert_rowid() AS id`))
   }
 
   async create(sel: Selection.Mutable, data: {}) {
