@@ -38,9 +38,9 @@ const createRow = (ref: string, prefix = '', expr = {}) => new Proxy(expr, {
 interface Executable extends Executable.Payload {}
 
 class Executable<S = any, T = any> {
-  public readonly row: Selection.Row<S>
-  public readonly model: Model
-  public readonly driver: Driver
+  public readonly row!: Selection.Row<S>
+  public readonly model!: Model
+  public readonly driver!: Driver
 
   constructor(driver: Driver, payload: Executable.Payload) {
     Object.assign(this, payload)
@@ -67,6 +67,8 @@ class Executable<S = any, T = any> {
       return this.row[field]
     } else if (typeof field === 'function') {
       return field(this.row)
+    } else {
+      throw new TypeError('invalid field definition')
     }
   }
 
@@ -97,8 +99,10 @@ export namespace Selection {
     : F extends Callback<S> ? Eval<ReturnType<F>>
     : never
 
+  export type Value<T> = Eval.Expr<T> & (T extends Comparable ? {} : Row<T>)
+
   export type Row<S> = {
-    [K in keyof S]: Eval.Expr<S[K]> & (S[K] extends Comparable ? {} : Row<S[K]>)
+    [K in keyof S]-?: Value<NonNullable<S[K]>>
   }
 
   export type Yield<S, T> = T | ((row: Row<S>) => T)
@@ -123,10 +127,11 @@ export namespace Selection {
   }
 }
 
-export interface Selection extends Executable.Payload {}
+export interface Selection extends Executable.Payload {
+  args: [Modifier]
+}
 
 export class Selection<S = any> extends Executable<S, S[]> {
-  args: [Modifier]
   tables: Dict<Model> = {}
 
   constructor(driver: Driver, table: string | Selection, query?: Query) {
@@ -134,7 +139,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
       type: 'get',
       ref: randomId(),
       table,
-      query: null,
+      query: null as never,
       args: [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and() }],
     })
     this.tables[this.ref] = this.model
@@ -153,7 +158,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   limit(limit: number): this
   limit(offset: number, limit: number): this
   limit(...args: [number] | [number, number]) {
-    if (args.length > 1) this.offset(args.shift())
+    if (args.length > 1) this.offset(args.shift()!)
     this.args[0].limit = args[0]
     return this
   }
@@ -182,9 +187,9 @@ export class Selection<S = any> extends Executable<S, S[]> {
   ): Selection<Selection.Project<S, T & U>>
   groupBy(fields: any, ...args: any[]) {
     this.args[0].fields = this.resolveFields(fields)
-    this.args[0].group = Object.keys(this.args[0].fields)
+    this.args[0].group = Object.keys(this.args[0].fields!)
     const extra = typeof args[0] === 'function' ? undefined : args.shift()
-    Object.assign(this.args[0].fields, this.resolveFields(extra || {}))
+    Object.assign(this.args[0].fields!, this.resolveFields(extra || {}))
     if (args[0]) this.having(args[0])
     return new Selection(this.driver, this)
   }
@@ -206,7 +211,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   }
 
   /** @deprecated use `selection.execute()` instead */
-  evaluate<T>(callback: Selection.Callback<S, T>): Executable<S, T> {
+  evaluate<T>(callback: Selection.Callback<S, T>): Executable {
     return new Selection(this.driver, this)
       ._action('eval', this.resolveField(callback))
   }

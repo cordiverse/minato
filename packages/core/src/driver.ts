@@ -5,14 +5,10 @@ import { Query } from './query'
 import { Flatten, Indexable, Keys } from './utils'
 import { Direction, Modifier, Selection } from './selection'
 
-export type Result<S, K, T = (...args: any) => any> = {
-  [P in keyof S as S[P] extends T ? P : P extends K ? P : never]: S[P]
-}
-
 export namespace Driver {
   export interface Stats {
-    size?: number
-    tables?: Dict<TableStats>
+    size: number
+    tables: Dict<TableStats>
   }
 
   export interface TableStats {
@@ -31,7 +27,7 @@ export namespace Driver {
 }
 
 export class Database<S = any> {
-  public tables: { [K in Keys<S>]?: Model<S[K]> } = Object.create(null)
+  public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
   private tasks: Dict<Promise<void>> = Object.create(null)
   private stashed = new Set<string>()
@@ -43,8 +39,8 @@ export class Database<S = any> {
   }
 
   private getDriver(name: string) {
-    const model: Model = this.tables[name]
-    if (model.driver) return this.drivers[model.driver]
+    // const model: Model = this.tables[name]
+    // if (model.driver) return this.drivers[model.driver]
     return Object.values(this.drivers)[0]
   }
 
@@ -61,11 +57,11 @@ export class Database<S = any> {
     })
   }
 
-  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Model.Config<S[K]> = {}) {
+  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Partial<Model.Config<S[K]>> = {}) {
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
-      model.driver = config.driver
+      // model.driver = config.driver
     }
     model.extend(fields, config)
     this.tasks[name] = this.prepare(name)
@@ -75,7 +71,7 @@ export class Database<S = any> {
     return new Selection(this.getDriver(table), table, query)
   }
 
-  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<Selection.Resolve<S, T>>, cursor?: Driver.Cursor<K>): Promise<Result<S[T], K>[]> {
+  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<Selection.Resolve<S, T>>, cursor?: Driver.Cursor<K>): Promise<Pick<S[T], K>[]> {
     await this.tasks[table]
     if (Array.isArray(cursor)) {
       cursor = { fields: cursor }
@@ -145,7 +141,7 @@ export class Database<S = any> {
   async stats() {
     const stats: Driver.Stats = { size: 0, tables: {} }
     await Promise.all(Object.values(this.drivers).map(async (driver) => {
-      const { size, tables } = await driver.stats()
+      const { size = 0, tables } = await driver.stats()
       stats.size += size
       Object.assign(stats.tables, tables)
     }))
@@ -161,7 +157,7 @@ export abstract class Driver {
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
   abstract drop(): Promise<void>
-  abstract stats(): Promise<Driver.Stats>
+  abstract stats(): Promise<Partial<Driver.Stats>>
   abstract prepare(name: string): Promise<void>
   abstract get(sel: Selection.Immutable, modifier: Modifier): Promise<any>
   abstract eval(sel: Selection.Immutable, expr: Eval.Expr): Promise<any>

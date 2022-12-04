@@ -5,7 +5,7 @@ import { escape, escapeId } from './utils'
 export * from './utils'
 
 export type QueryOperators = {
-  [K in keyof Query.FieldExpr]?: (key: string, value: Query.FieldExpr[K]) => string
+  [K in keyof Query.FieldExpr]?: (key: string, value: NonNullable<Query.FieldExpr[K]>) => string
 }
 
 export type ExtractUnary<T> = T extends [infer U] ? U : T
@@ -16,8 +16,8 @@ export type EvalOperators = {
 
 export interface Transformer<S = any, T = any> {
   types: Field.Type<S>[]
-  dump: (value: S) => T
-  load: (value: T, initial?: S) => S
+  dump: (value: S) => T | null
+  load: (value: T, initial?: S) => S | null
 }
 
 export class Builder {
@@ -183,13 +183,13 @@ export class Builder {
   parseQuery(query: Query.Expr) {
     const conditions: string[] = []
     for (const key in query) {
-    // logical expression
+      // logical expression
       if (key === '$not') {
-        conditions.push(this.logicalNot(this.parseQuery(query.$not)))
+        conditions.push(this.logicalNot(this.parseQuery(query.$not!)))
       } else if (key === '$and') {
-        conditions.push(this.logicalAnd(query.$and.map(this.parseQuery.bind(this))))
+        conditions.push(this.logicalAnd(query.$and!.map(this.parseQuery.bind(this))))
       } else if (key === '$or') {
-        conditions.push(this.logicalOr(query.$or.map(this.parseQuery.bind(this))))
+        conditions.push(this.logicalOr(query.$or!.map(this.parseQuery.bind(this))))
       } else if (key === '$expr') {
         conditions.push(this.parseEval(query.$expr))
       } else {
@@ -297,7 +297,7 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial } = model.fields[key]
+      const { type, initial } = model.fields[key]!
       const converter = this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
@@ -309,7 +309,7 @@ export class Builder {
   }
 
   stringify(value: any, field?: Field) {
-    const converter = this.types[field?.type]
+    const converter = this.types[field!?.type]
     return converter ? converter.dump(value) : value
   }
 }

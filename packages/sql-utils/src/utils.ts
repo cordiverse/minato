@@ -37,7 +37,7 @@ export function escape(value: any) {
 export function quote(value: string) {
   let chunkIndex = ESCAPE_CHARS_REGEXP.lastIndex = 0
   let escapedVal = ''
-  let match: RegExpExecArray
+  let match: RegExpExecArray | null
 
   while ((match = ESCAPE_CHARS_REGEXP.exec(value))) {
     escapedVal += value.slice(chunkIndex, match.index) + ESCAPE_CHARS_MAP[match[0]]

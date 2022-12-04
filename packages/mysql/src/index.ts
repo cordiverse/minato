@@ -39,6 +39,7 @@ function getTypeDefinition({ type, length, precision, scale }: Field) {
     case 'text': return `text(${length || 65535})`
     case 'list': return `text(${length || 65535})`
     case 'json': return `text(${length || 65535})`
+    default: throw new Error(`unsupported type: ${type}`)
   }
 }
 
@@ -60,7 +61,7 @@ interface IndexInfo {
 interface QueryTask {
   sql: string
   resolve: (value: any) => void
-  reject: (error: Error) => void
+  reject: (reason: unknown) => void
 }
 
 class MySQLBuilder extends Builder {
@@ -87,7 +88,7 @@ namespace MySQLDriver {
 }
 
 class MySQLDriver extends Driver {
-  public pool: Pool
+  public pool!: Pool
   public config: MySQLDriver.Config
   public sql: MySQLBuilder
 
@@ -105,7 +106,7 @@ class MySQLDriver extends Driver {
         const { orgName, orgTable } = field.packet
         const meta = this.database.tables[orgTable]?.fields[orgName]
 
-        if (Field.string.includes(meta?.type)) {
+        if (Field.string.includes(meta!?.type)) {
           return field.string()
         } else if (meta?.type === 'json') {
           const source = field.string()
@@ -156,13 +157,13 @@ class MySQLDriver extends Driver {
     for (const key in fields) {
       let shouldUpdate = false
       const legacy = columns.find(info => info.COLUMN_NAME === key)
-      const { initial, nullable = true } = fields[key]
+      const { initial, nullable = true } = fields[key]!
 
       let def = escapeId(key)
       if (key === primary && autoInc) {
         def += ' int unsigned not null auto_increment'
       } else {
-        const typedef = getTypeDefinition(fields[key])
+        const typedef = getTypeDefinition(fields[key]!)
         // const typename = typedef.split(/[ (]/)[0]
         // if (legacy && legacy.DATA_TYPE !== typename) {
         //   logger.warn(`${name}.${key} data type mismatch: ${legacy.DATA_TYPE} => ${typedef}`)
@@ -191,7 +192,7 @@ class MySQLDriver extends Driver {
     if (!columns.length) {
       create.push(`primary key (${createIndex(primary)})`)
       for (const key in foreign) {
-        const [table, key2] = foreign[key]
+        const [table, key2] = foreign[key]!
         create.push(`foreign key (${escapeId(key)}) references ${escapeId(table)} (${escapeId(key2)})`)
       }
     }
@@ -258,7 +259,7 @@ class MySQLDriver extends Driver {
         if (err['code'] === 'ER_DUP_ENTRY') {
           err = new RuntimeError('duplicate-entry', err.message)
         }
-        err.stack = err.message + error.stack.slice(5)
+        err.stack = err.message + error.stack!.slice(5)
         reject(err)
       })
     })
@@ -310,7 +311,7 @@ class MySQLDriver extends Driver {
 
   async stats() {
     const data = await this._select('information_schema.tables', ['TABLE_NAME', 'TABLE_ROWS', 'DATA_LENGTH'], 'TABLE_SCHEMA = ?', [this.config.database])
-    const stats: Driver.Stats = { size: 0 }
+    const stats: Partial<Driver.Stats> = { size: 0 }
     stats.tables = Object.fromEntries(data.map(({ TABLE_NAME: name, TABLE_ROWS: count, DATA_LENGTH: size }) => {
       stats.size += size
       return [name, { count, size }]
@@ -375,7 +376,7 @@ class MySQLDriver extends Driver {
     const { fields } = model
     if (filter === '0') return
     const updateFields = [...new Set(Object.keys(data).map((key) => {
-      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))
+      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
 
     const update = updateFields.map((field) => {
@@ -417,7 +418,7 @@ class MySQLDriver extends Driver {
     })
     const initFields = Object.keys(model.fields)
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
-      return initFields.find(field => field === key || key.startsWith(field + '.'))
+      return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
     const updateFields = difference(dataFields, keys)
 

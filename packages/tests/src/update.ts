@@ -3,7 +3,7 @@ import { omit } from 'cosmokit'
 import { expect } from 'chai'
 
 interface Bar {
-  id?: number
+  id: number
   text?: string
   num?: number
   bool?: boolean
@@ -14,8 +14,8 @@ interface Bar {
 }
 
 interface Baz {
-  ida?: number
-  idb?: string
+  ida: number
+  idb: string
   value?: string
 }
 
@@ -123,7 +123,7 @@ namespace OrmOperations {
   export const set = function Set(database: Database<Tables>) {
     it('basic support', async () => {
       const table = await setup(database, 'temp2', barTable)
-      const data = table.find(bar => bar.timestamp)
+      const data = table.find(bar => bar.timestamp)!
       data.text = 'thu'
       const magicIds = table.slice(0, 2).map((data) => {
         data.text = 'thu'
@@ -140,8 +140,8 @@ namespace OrmOperations {
 
     it('null override', async () => {
       const table = await setup(database, 'temp2', barTable)
-      const data = table.find(bar => bar.timestamp)
-      data.text = null
+      const data = table.find(bar => bar.timestamp)!
+      data.text = null as never
       await expect(database.set('temp2', { timestamp: { $exists: true } }, { text: null })).eventually.fulfilled
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
@@ -185,11 +185,11 @@ namespace OrmOperations {
 
     it('using expressions', async () => {
       const table = await setup(database, 'temp2', barTable)
-      const data2 = table.find(item => item.id === 2)
-      const data3 = table.find(item => item.id === 3)
+      const data2 = table.find(item => item.id === 2)!
+      const data3 = table.find(item => item.id === 3)!
       const data9 = table.find(item => item.id === 9)
       data2.num = data2.id * 2
-      data3.num = data3.num + 3
+      data3.num = data3.num! + 3
       expect(data9).to.be.undefined
       table.push({ id: 9, num: 999 })
       await expect(database.upsert('temp2', row => [

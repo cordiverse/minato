@@ -34,12 +34,12 @@ interface Result {
 interface EvalTask extends Result {
   expr: any
   resolve: (value: any) => void
-  reject: (error: Error) => void
+  reject: (reason: unknown) => void
 }
 
 class MongoDriver extends Driver {
-  public client: MongoClient
-  public db: Db
+  public client!: MongoClient
+  public db!: Db
   public mongo = this
 
   private _evalTasks: EvalTask[] = []
@@ -116,8 +116,9 @@ class MongoDriver extends Driver {
     const { fields } = this.model(table)
     const coll = this.db.collection(table)
     await Promise.all(Object.keys(fields).map((key) => {
-      if (isNullable(fields[key].initial)) return
-      return coll.updateMany({ [key]: { $exists: false } }, { $set: { [key]: fields[key].initial as never } })
+      const { initial } = fields[key]!
+      if (isNullable(initial)) return
+      return coll.updateMany({ [key]: { $exists: false } }, { $set: { [key]: initial } })
     }))
   }
 
@@ -143,7 +144,7 @@ class MongoDriver extends Driver {
     await fields.insertOne(meta)
   }
 
-  private _internalTableTask: Promise<Collection<Document>>
+  private _internalTableTask?: Promise<Collection<Document>>
 
   async _createInternalTable() {
     return this._internalTableTask ||= this.db.createCollection('_fields').catch(noop)
@@ -323,6 +324,7 @@ class MongoDriver extends Driver {
     for (const item of original) {
       const row = this.patchVirtual(table, item)
       const query = this.transformQuery(pick(row, indexFields), table)
+      if (!query) continue
       bulk.find(query).updateOne({
         $set: pick(executeUpdate(row, update, ref), updateFields),
       })
@@ -352,7 +354,7 @@ class MongoDriver extends Driver {
             { $inc: { autoInc: 1 } },
             { upsert: true, returnDocument: 'after' },
           )
-          data[primary] = value.autoInc
+          data[primary] = value!.autoInc
         }
       }
 
@@ -387,6 +389,7 @@ class MongoDriver extends Driver {
         const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
         const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
         const query = this.transformQuery(pick(item, keys), table)
+        if (!query) continue
         bulk.find(query).updateOne({ $set: override })
       } else {
         const copy = executeUpdate(model.create(), update, ref)

@@ -37,7 +37,7 @@ class MemoryDriver extends Driver {
     const { fields, group, having } = sel.args[0]
     const data = this.$table(table).filter(row => executeQuery(row, query, ref))
     const branches: { index: Dict, table: any[] }[] = []
-    const groupFields = group.length ? pick(fields, group) : fields
+    const groupFields = group.length ? pick(fields!, group) : fields
     for (let row of executeSort(data, args[0], ref)) {
       row = model.format(row, false)
       for (const key in model.fields) {
@@ -45,7 +45,7 @@ class MemoryDriver extends Driver {
       }
       let index = row
       if (fields) {
-        index = valueMap(groupFields, (expr) => executeEval({ [ref]: row }, expr))
+        index = valueMap(groupFields!, (expr) => executeEval({ [ref]: row }, expr))
       }
       let branch = branches.find((branch) => {
         if (!groupFields) return false
@@ -66,8 +66,8 @@ class MemoryDriver extends Driver {
           const value = executeEval(table.map(row => ({ [ref]: row, _: row })), having)
           if (!value) return
         }
-        for (const key in omit(fields, group)) {
-          index[key] = executeEval(table.map(row => ({ [ref]: row, _: row })), fields[key])
+        for (const key in omit(fields!, group)) {
+          index[key] = executeEval(table.map(row => ({ [ref]: row, _: row })), fields![key])
         }
       }
       return model.parse(index)

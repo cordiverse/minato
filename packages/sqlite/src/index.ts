@@ -36,7 +36,7 @@ export interface SQLiteFieldInfo {
 
 namespace SQLiteDriver {
   export interface Config {
-    path?: string
+    path: string
   }
 }
 
@@ -82,10 +82,10 @@ class SQLiteBuilder extends Builder {
 }
 
 class SQLiteDriver extends Driver {
-  db: init.Database
+  db!: init.Database
   sql: Builder
-  writeTask: NodeJS.Timeout
-  sqlite: init.SqlJsStatic
+  writeTask?: NodeJS.Timeout
+  sqlite!: init.SqlJsStatic
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
@@ -95,12 +95,12 @@ class SQLiteDriver extends Driver {
 
   private _getColDefs(table: string, key: string) {
     const model = this.model(table)
-    const { initial, nullable = true } = model.fields[key]
+    const { initial, nullable = true } = model.fields[key]!
     let def = `\`${key}\``
     if (key === model.primary && model.autoInc) {
       def += ' INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT'
     } else {
-      const typedef = getTypeDefinition(model.fields[key])
+      const typedef = getTypeDefinition(model.fields[key]!)
       def += ' ' + typedef + (nullable ? ' ' : ' NOT ') + 'NULL'
       if (initial !== undefined && initial !== null) {
         def += ' DEFAULT ' + this.sql.escape(this.sql.dump(model, { [key]: initial })[key])
@@ -129,7 +129,7 @@ class SQLiteDriver extends Driver {
     } else {
       logger.info('auto creating table %c', table)
       const defs = keys.map(key => this._getColDefs(table, key))
-      const constraints = []
+      const constraints: string[] = []
       if (config.primary && !config.autoInc) {
         constraints.push(`PRIMARY KEY (${this.#joinKeys(makeArray(config.primary))})`)
       }
@@ -137,7 +137,8 @@ class SQLiteDriver extends Driver {
         constraints.push(...config.unique.map(keys => `UNIQUE (${this.#joinKeys(makeArray(keys))})`))
       }
       if (config.foreign) {
-        constraints.push(...Object.entries(config.foreign).map(([key, [table, key2]]) => {
+        constraints.push(...Object.entries(config.foreign).map(([key, value]) => {
+          const [table, key2] = value!
           return `FOREIGN KEY (\`${key}\`) REFERENCES ${escapeId(table)} (\`${key2}\`)`
         }))
       }
@@ -145,7 +146,7 @@ class SQLiteDriver extends Driver {
     }
   }
 
-  init(buffer: ArrayLike<number>) {
+  init(buffer: ArrayLike<number> | null) {
     this.db = new this.sqlite.Database(buffer)
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
   }
@@ -153,7 +154,7 @@ class SQLiteDriver extends Driver {
   async start() {
     const [sqlite, buffer] = await Promise.all([
       init(),
-      this.config.path === ':memory:' ? null : fs.readFile(this.config.path).catch<Buffer>(() => null),
+      this.config.path === ':memory:' ? null : fs.readFile(this.config.path).catch<Buffer | null>(() => null),
     ])
     this.sqlite = sqlite
     this.init(buffer)
@@ -182,7 +183,7 @@ class SQLiteDriver extends Driver {
   #all(sql: string, params: any = []) {
     return this.#exec(sql, params, (stmt) => {
       stmt.bind(params)
-      const result = []
+      const result: any[] = []
       while (stmt.step()) {
         result.push(stmt.getAsObject())
       }
@@ -263,7 +264,7 @@ class SQLiteDriver extends Driver {
     const { model, table, query } = sel
     const { primary, fields } = model
     const updateFields = [...new Set(Object.keys(update).map((key) => {
-      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))
+      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     const primaryFields = makeArray(primary)
     const data = await this.database.get(table, query, union(primaryFields, updateFields) as [])
@@ -293,7 +294,7 @@ class SQLiteDriver extends Driver {
     if (!data.length) return
     const { model, table, ref } = sel
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
-      return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))
+      return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     const relaventFields = union(keys, dataFields)
     const updateFields = difference(dataFields, keys)

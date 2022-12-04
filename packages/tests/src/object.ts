@@ -38,7 +38,7 @@ namespace ObjectOperations {
     it('field extraction', async () => {
       await setup(database)
       const table = await database.get('object', {}, ['meta'])
-      expect(table).to.have.shape([
+      expect(table).to.deep.equal([
         { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
         { meta: { a: '666', embed: { c: 'world' } } },
       ])
@@ -58,7 +58,7 @@ namespace ObjectOperations {
         { id: '2', meta: { embed: { b: 1919 } } },
         { id: '3', meta: { a: 'foo', 'embed.b': 810 } },
       ])).eventually.fulfilled
-      await expect(database.get('object', {})).to.eventually.have.shape(table)
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
 
     it('nested property', async () => {
@@ -73,7 +73,7 @@ namespace ObjectOperations {
         { id: '2', 'meta.a': row.id, 'meta.embed.b': $.multiply(19, 101) },
         { id: '3', 'meta.a': row.id, 'meta.embed': { b: 810 } },
       ])).eventually.fulfilled
-      await expect(database.get('object', {})).to.eventually.have.shape(table)
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }
 
@@ -88,7 +88,7 @@ namespace ObjectOperations {
       await expect(database.set('object', '1', {
         meta: { a: { $: 'id' }, 'embed.b': 514 },
       })).eventually.fulfilled
-      await expect(database.get('object', {})).to.eventually.have.shape(table)
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
 
     it('nested property', async () => {
@@ -103,7 +103,7 @@ namespace ObjectOperations {
         'meta.a': row.id,
         'meta.embed': { b: 514 },
       }))).eventually.fulfilled
-      await expect(database.get('object', {})).to.eventually.have.shape(table)
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }
 }

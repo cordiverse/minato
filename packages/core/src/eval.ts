@@ -81,19 +81,19 @@ export namespace Eval {
 
 export const Eval = ((key, value) => defineProperty({ ['$' + key]: value }, kExpr, true)) as Eval.Static
 
-const operators = {} as Record<keyof Eval.Static, (args: any, data: any) => any>
+const operators = {} as Record<`$${keyof Eval.Static}`, (args: any, data: any) => any>
 
 operators['$'] = getRecursive
 
 type UnaryCallback<T> = T extends (value: infer R) => Eval.Expr<infer S> ? (value: R, data: any[]) => S : never
 function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval.Static[K]>): Eval.Static[K] {
-  operators['$' + key] = callback
+  operators[`$${key}`] = callback
   return (value: any) => Eval(key, value)
 }
 
 type MultaryCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S> ? (args: R, data: any) => S : never
 function multary<K extends keyof Eval.Static>(key: K, callback: MultaryCallback<Eval.Static[K]>): Eval.Static[K] {
-  operators['$' + key] = callback
+  operators[`$${key}`] = callback
   return (...args: any) => Eval(key, args)
 }
 
@@ -138,7 +138,7 @@ type MapUneval<S> = {
 
 export type Update<T = any> = MapUneval<Flatten<T>>
 
-function getRecursive(args: string | string[], data: any) {
+function getRecursive(args: string | string[], data: any): any {
   if (typeof args === 'string') {
     // for backwards compatibility, TODO remove in v2
     return getRecursive(['_', args], data)
@@ -185,7 +185,7 @@ export function executeUpdate(data: any, update: any, ref: string) {
   for (const key in update) {
     let root = data
     const path = key.split('.')
-    const last = path.pop()
+    const last = path.pop()!
     for (const key of path) {
       root = root[key] ||= {}
     }

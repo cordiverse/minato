@@ -131,10 +131,10 @@ export class Transformer {
       const key = this.createKey()
       const value = this.transformAggr(expr[type])
       if (type !== '$count') {
-        group[key] = { [type]: value }
+        group![key] = { [type]: value }
         return '$' + key
       } else {
-        group[key] = { $addToSet: value }
+        group![key] = { $addToSet: value }
         return { $size: '$' + key }
       }
     }
@@ -184,7 +184,7 @@ export class Transformer {
     // orderBy, limit, offset
     const $set = {}
     const $sort = {}
-    const $unset = []
+    const $unset: string[] = []
     for (const [expr, dir] of sort) {
       const value = this.eval(expr)
       if (typeof value === 'string') {

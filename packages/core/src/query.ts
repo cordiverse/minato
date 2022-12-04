@@ -58,12 +58,12 @@ export namespace Query {
   export type FieldQuery<T = any> = FieldExpr<T> | Shorthand<T>
 
   export type Expr<T = any> = LogicalExpr<T> & {
-    [K in keyof T]?: FieldQuery<T[K]>
+    [K in keyof T]?: null | FieldQuery<T[K]>
   }
 }
 
 type QueryOperators = {
-  [K in keyof Query.FieldExpr]?: (query: Query.FieldExpr[K], data: any) => boolean
+  [K in keyof Query.FieldExpr]?: (query: NonNullable<Query.FieldExpr[K]>, data: any) => boolean
 }
 
 const queryOperators: QueryOperators = {

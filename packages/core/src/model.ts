@@ -76,11 +76,11 @@ export namespace Field {
 
 export namespace Model {
   export interface Config<O = {}> {
-    driver?: keyof any
-    autoInc?: boolean
-    primary?: MaybeArray<Keys<O>>
-    unique?: MaybeArray<Keys<O>>[]
-    foreign?: {
+    // driver?: keyof any
+    autoInc: boolean
+    primary: MaybeArray<Keys<O>>
+    unique: MaybeArray<Keys<O>>[]
+    foreign: {
       [K in keyof O]?: [string, string]
     }
   }
@@ -92,13 +92,14 @@ export class Model<S = any> {
   fields: Field.Config<S> = {}
 
   constructor(public name: string) {
+    this.autoInc = false
     this.primary = 'id' as never
     this.unique = []
     this.foreign = {}
   }
 
-  extend(fields: Field.Extension<S>, config?: Model.Config<S>): void
-  extend(fields = {}, config: Model.Config = {}) {
+  extend(fields: Field.Extension<S>, config?: Partial<Model.Config<S>>): void
+  extend(fields = {}, config: Partial<Model.Config> = {}) {
     const { primary, autoInc, unique = [] as [], foreign } = config
 
     this.primary = primary || this.primary
@@ -176,8 +177,9 @@ export class Model<S = any> {
     const result = {} as S
     const keys = makeArray(this.primary)
     for (const key in this.fields) {
-      if (!keys.includes(key) && !isNullable(this.fields[key].initial)) {
-        result[key] = clone(this.fields[key].initial)
+      const { initial } = this.fields[key]!
+      if (!keys.includes(key) && !isNullable(initial)) {
+        result[key] = clone(initial)
       }
     }
     return this.parse({ ...result, ...data })
