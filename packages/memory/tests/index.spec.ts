@@ -13,5 +13,7 @@ describe('@minatojs/driver-memory', () => {
     await database.stopAll()
   })
 
-  test(database)
+  test(database, {
+    migration: false,
+  })
 })

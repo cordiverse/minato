@@ -3,6 +3,9 @@ import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
+import Logger from 'reggol'
+
+const logger = new Logger('mongo')
 
 namespace MongoDriver {
   export interface Config {
@@ -115,11 +118,20 @@ class MongoDriver extends Driver {
   private async _createFields(table: string) {
     const { fields } = this.model(table)
     const coll = this.db.collection(table)
-    await Promise.all(Object.keys(fields).map((key) => {
-      const { initial } = fields[key]!
-      if (isNullable(initial)) return
-      return coll.updateMany({ [key]: { $exists: false } }, { $set: { [key]: initial } })
-    }))
+    const bulk = coll.initializeOrderedBulkOp()
+    for (const key in fields) {
+      const { initial, legacy = [] } = fields[key]!
+      const filter = { [key]: { $exists: false } }
+      for (const oldKey of legacy) {
+        bulk
+          .find({ ...filter, [oldKey]: { $exists: true } })
+          .update({ $rename: { [oldKey]: key } })
+        filter[oldKey] = { $exists: false }
+      }
+      bulk.find(filter).update({ $set: { [key]: initial } })
+      bulk.find({}).update({ $unset: Object.fromEntries(legacy.map(key => [key, ''])) })
+    }
+    if (bulk.batches.length) await bulk.execute()
   }
 
   private async _migratePrimary(table: string) {
@@ -254,6 +266,7 @@ class MongoDriver extends Driver {
   async get(sel: Selection.Immutable) {
     const result = this.createPipeline(sel)
     if (!result) return []
+    logger.debug('%s %s', result.table, JSON.stringify(result.pipeline))
     return this.db
       .collection(result.table)
       .aggregate(result.pipeline, { allowDiskUse: true })
