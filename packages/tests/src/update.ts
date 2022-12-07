@@ -124,9 +124,9 @@ namespace OrmOperations {
     it('basic support', async () => {
       const table = await setup(database, 'temp2', barTable)
       const data = table.find(bar => bar.timestamp)!
-      data.text = 'thu'
-      const magicIds = table.slice(0, 2).map((data) => {
-        data.text = 'thu'
+      data.list = ['2', '3', '3']
+      const magicIds = table.slice(2, 4).map((data) => {
+        data.list = ['2', '3', '3']
         return data.id
       })
       await expect(database.set('temp2', {
@@ -134,7 +134,7 @@ namespace OrmOperations {
           { id: magicIds },
           { timestamp: magicBorn },
         ],
-      }, { text: 'thu' })).eventually.fulfilled
+      }, { list: ['2', '3', '3'] })).eventually.fulfilled
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 

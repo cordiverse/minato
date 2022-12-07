@@ -93,7 +93,7 @@ class MySQLBuilder extends Builder {
     this.define<string[], string>({
       types: ['list'],
       dump: value => value.join(','),
-      load: (value) => value ? value.split(',') : [],
+      load: value => value ? value.split(',') : [],
     })
   }
 
@@ -133,9 +133,6 @@ class MySQLDriver extends Driver {
         } else if (meta?.type === 'json') {
           const source = field.string()
           return source ? JSON.parse(source) : meta.initial
-        } else if (meta?.type === 'list') {
-          const source = field.string()
-          return source ? source.split(',') : []
         } else if (meta?.type === 'time') {
           const source = field.string()
           if (!source) return meta.initial
@@ -350,7 +347,7 @@ class MySQLDriver extends Driver {
     const sql = builder.get(sel)
     if (!sql) return []
     return this.queue(sql).then((data) => {
-      return data.map((row) => model.parse(row))
+      return data.map((row) => this.sql.load(model, row))
     })
   }
 
@@ -367,25 +364,27 @@ class MySQLDriver extends Driver {
     return data.value
   }
 
-  private toUpdateExpr(item: any, field: string, upsert: boolean) {
-    const escaped = escapeId(field)
+  private toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
+    const escaped = escapeId(key)
 
     // update directly
-    if (field in item) {
-      if (isEvalExpr(item[field]) || !upsert) {
-        return this.sql.parseEval(item[field])
-      } else {
+    if (key in item) {
+      if (!isEvalExpr(item[key]) && upsert) {
         return `VALUES(${escaped})`
+      } else if (isEvalExpr(item[key])) {
+        return this.sql.parseEval(item[key])
+      } else {
+        return this.sql.escape(item[key], field)
       }
     }
 
     // update with json_set
     const valueInit = `ifnull(${escaped}, '{}')`
     let value = valueInit
-    for (const key in item) {
-      if (!key.startsWith(field + '.')) continue
-      const rest = key.slice(field.length + 1).split('.')
-      value = `json_set(${value}, '$${rest.map(key => `."${key}"`).join('')}', ${this.sql.parseEval(item[key])})`
+    for (const prop in item) {
+      if (!prop.startsWith(key + '.')) continue
+      const rest = prop.slice(key.length + 1).split('.')
+      value = `json_set(${value}, '$${rest.map(key => `."${key}"`).join('')}', ${this.sql.parseEval(item[prop])})`
     }
 
     if (value === valueInit) {
@@ -406,7 +405,7 @@ class MySQLDriver extends Driver {
 
     const update = updateFields.map((field) => {
       const escaped = escapeId(field)
-      return `${escaped} = ${this.toUpdateExpr(data, field, false)}`
+      return `${escaped} = ${this.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
 
     await this.query(`UPDATE ${table} SET ${update} WHERE ${filter}`)
@@ -463,7 +462,7 @@ class MySQLDriver extends Driver {
       const escaped = escapeId(field)
       const branches: Dict<any[]> = {}
       data.forEach((item) => {
-        (branches[this.toUpdateExpr(item, field, true)] ??= []).push(item)
+        (branches[this.toUpdateExpr(item, field, model.fields[field], true)] ??= []).push(item)
       })
 
       const entries = Object.entries(branches)
