@@ -10,12 +10,12 @@ interface Qux {
 }
 
 interface Tables {
-  'mig:qux': Qux
+  qux: Qux
 }
 
 function MigrationTests(database: Database<Tables>) {
   it('should migrate', async () => {
-    database.extend('mig:qux', {
+    database.extend('qux', {
       id: 'unsigned',
       text: 'string(64)',
       number: 'unsigned',
@@ -24,13 +24,13 @@ function MigrationTests(database: Database<Tables>) {
       unique: ['number'],
     })
 
-    await database.upsert('mig:qux', [
+    await database.upsert('qux', [
       { id: 1, text: 'foo', number: 100 },
     ])
 
-    Reflect.deleteProperty(database.tables, 'mig:qux')
+    Reflect.deleteProperty(database.tables, 'qux')
 
-    database.extend('mig:qux', {
+    database.extend('qux', {
       id: 'unsigned',
       value: { type: 'unsigned', legacy: ['number'] },
       text: { type: 'string', length: 256, legacy: ['string'] },
@@ -38,7 +38,7 @@ function MigrationTests(database: Database<Tables>) {
       unique: ['value'],
     })
 
-    await expect(database.get('mig:qux', {})).to.eventually.deep.equal([
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
       { id: 1, text: 'foo', value: 100 },
     ])
   })

@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-sqlite",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "SQLite Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -25,7 +25,7 @@
     "sqlite"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.0.2"
+    "@minatojs/core": "^2.0.3"
   },
   "devDependencies": {
     "@minatojs/tests": "^1.3.1"

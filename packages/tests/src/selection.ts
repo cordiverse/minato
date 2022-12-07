@@ -15,17 +15,17 @@ interface Bar {
 }
 
 interface Tables {
-  'sel:foo': Foo
-  'sel:bar': Bar
+  foo: Foo
+  bar: Bar
 }
 
 function SelectionTests(database: Database<Tables>) {
-  database.extend('sel:foo', {
+  database.extend('foo', {
     id: 'unsigned',
     value: 'integer',
   })
 
-  database.extend('sel:bar', {
+  database.extend('bar', {
     id: 'unsigned',
     uid: 'unsigned',
     pid: 'unsigned',
@@ -35,13 +35,13 @@ function SelectionTests(database: Database<Tables>) {
   })
 
   before(async () => {
-    await setup(database, 'sel:foo', [
+    await setup(database, 'foo', [
       { id: 1, value: 0 },
       { id: 2, value: 2 },
       { id: 3, value: 2 },
     ])
 
-    await setup(database, 'sel:bar', [
+    await setup(database, 'bar', [
       { uid: 1, pid: 1, value: 0 },
       { uid: 1, pid: 1, value: 1 },
       { uid: 1, pid: 2, value: 0 },
@@ -55,7 +55,7 @@ function SelectionTests(database: Database<Tables>) {
 namespace SelectionTests {
   export function sort(database: Database<Tables>) {
     it('shorthand', async () => {
-      await expect(database.get('sel:foo', {}, {
+      await expect(database.get('foo', {}, {
         sort: { id: 'desc', value: 'asc' }
       })).to.eventually.deep.equal([
         { id: 3, value: 2 },
@@ -63,7 +63,7 @@ namespace SelectionTests {
         { id: 1, value: 0 },
       ])
 
-      await expect(database.get('sel:foo', {}, {
+      await expect(database.get('foo', {}, {
         sort: { value: 'asc', id: 'desc' }
       })).to.eventually.deep.equal([
         { id: 1, value: 0 },
@@ -74,7 +74,7 @@ namespace SelectionTests {
 
     it('callback', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .orderBy(row => $.subtract(row.id, row.value))
         .execute()
       ).to.eventually.deep.equal([
@@ -86,7 +86,7 @@ namespace SelectionTests {
 
     it('limit', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .orderBy('id', 'desc')
         .limit(1)
         .offset(2)
@@ -99,7 +99,7 @@ namespace SelectionTests {
 
   export function project(database: Database<Tables>) {
     it('shorthand', async () => {
-      await expect(database.get('sel:foo', {}, ['id'])).to.eventually.deep.equal([
+      await expect(database.get('foo', {}, ['id'])).to.eventually.deep.equal([
         { id: 1 },
         { id: 2 },
         { id: 3 },
@@ -108,7 +108,7 @@ namespace SelectionTests {
 
     it('callback', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .project({
           id: row => $.add($.multiply(row.id, row.id), 1),
         })
@@ -122,7 +122,7 @@ namespace SelectionTests {
 
     it('chaining', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .project({
           id: row => $.multiply(row.id, row.id),
         })
@@ -140,27 +140,27 @@ namespace SelectionTests {
 
   export function aggregate(database: Database<Tables>) {
     it('shorthand', async () => {
-      await expect(database.eval('sel:foo', row => $.sum(row.id))).to.eventually.equal(6)
-      await expect(database.eval('sel:foo', row => $.count(row.value))).to.eventually.equal(2)
+      await expect(database.eval('foo', row => $.sum(row.id))).to.eventually.equal(6)
+      await expect(database.eval('foo', row => $.count(row.value))).to.eventually.equal(2)
     })
 
     it('inner expressions', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .execute(row => $.avg($.multiply($.subtract(row.id, 1), row.value)))
       ).to.eventually.equal(2)
     })
 
     it('outer expressions', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .execute(row => $.subtract($.sum(row.id), $.count(row.value)))
       ).to.eventually.equal(4)
     })
 
     it('chaining', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .project({
           value: row => $.multiply($.subtract(row.id, 1), row.value),
         })
@@ -172,7 +172,7 @@ namespace SelectionTests {
   export function group(database: Database<Tables>) {
     it('multiple', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .groupBy(['id', 'value'])
         .orderBy('id')
         .execute()
@@ -185,7 +185,7 @@ namespace SelectionTests {
   
     it('callback', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .groupBy({
           key: row => $.subtract(row.id, row.value),
         })
@@ -199,7 +199,7 @@ namespace SelectionTests {
   
     it('extra', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .groupBy('value', {
           sum: row => $.sum(row.id),
           count: row => $.count(row.id),
@@ -214,7 +214,7 @@ namespace SelectionTests {
   
     it('having', async () => {
       await expect(database
-        .select('sel:foo')
+        .select('foo')
         .having(row => $.gt($.sum(row.id), 1))
         .groupBy('value')
         .execute()
@@ -225,7 +225,7 @@ namespace SelectionTests {
 
     it('chaining', async () => {
       await expect(database
-        .select('sel:bar')
+        .select('bar')
         .groupBy(['uid', 'pid'], {
           submit: row => $.sum(1),
           accept: row => $.sum(row.value),
