@@ -129,7 +129,10 @@ class MongoDriver extends Driver {
         filter[oldKey] = { $exists: false }
       }
       bulk.find(filter).update({ $set: { [key]: initial } })
-      bulk.find({}).update({ $unset: Object.fromEntries(legacy.map(key => [key, ''])) })
+      if (legacy.length) {
+        const $unset = Object.fromEntries(legacy.map(key => [key, '']))
+        bulk.find({}).update({ $unset })
+      }
     }
     if (bulk.batches.length) await bulk.execute()
   }
