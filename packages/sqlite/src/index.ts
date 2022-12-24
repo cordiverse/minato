@@ -171,7 +171,9 @@ class SQLiteDriver extends Driver {
       }
     } else if (alter.length) {
       logger.info('auto updating table %c', table)
-      this.#run(`ALTER TABLE ${escapeId(table)} ${alter.join(', ')}`)
+      for (const def of alter) {
+        this.#run(`ALTER TABLE ${escapeId(table)} ${def}`)
+      }
     }
   }
 

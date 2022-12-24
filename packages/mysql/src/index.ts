@@ -45,6 +45,7 @@ function getTypeDef({ type, length, precision, scale }: Field) {
 
 function isDefUpdated(field: Field, column: ColumnInfo, def: string) {
   const typename = def.split(/[ (]/)[0]
+  if (typename === 'text') return !column.DATA_TYPE.endsWith('text')
   if (typename !== column.DATA_TYPE) return true
   switch (field.type) {
     case 'integer':
@@ -54,7 +55,7 @@ function isDefUpdated(field: Field, column: ColumnInfo, def: string) {
     case 'text':
     case 'list':
     case 'json':
-      return !!field.length && column.CHARACTER_MAXIMUM_LENGTH !== field.length
+      return !!field.length && !!column.CHARACTER_MAXIMUM_LENGTH && column.CHARACTER_MAXIMUM_LENGTH !== field.length
     case 'decimal':
       return column.NUMERIC_PRECISION !== field.precision || column.NUMERIC_SCALE !== field.scale
     default: return false

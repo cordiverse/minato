@@ -50,7 +50,7 @@ export class Builder {
 
       // regexp
       $regex: (key, value) => this.createRegExpQuery(key, value),
-      $regexFor: (key, value) => `${this.escape(value)} REGEXP ${key}`,
+      $regexFor: (key, value) => `${this.escape(value)} regexp ${key}`,
 
       // bitwise
       $bitsAllSet: (key, value) => `${key} & ${this.escape(value)} = ${this.escape(value)}`,
