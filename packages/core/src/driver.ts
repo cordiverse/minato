@@ -139,7 +139,7 @@ export class Database<S = any> {
   }
 
   async dropAll() {
-    await Promise.all(Object.values(this.drivers).map(driver => driver.dropAll()))
+    await Promise.all(Object.values(this.drivers).map(driver => driver.drop()))
   }
 
   async stats() {
