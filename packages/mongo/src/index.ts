@@ -178,6 +178,10 @@ class MongoDriver extends Driver {
     ])
   }
 
+  async drop(table: string) {
+    await this.db.dropCollection(table)
+  }
+
   async drop() {
     await Promise.all([
       '_fields',
