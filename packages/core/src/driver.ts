@@ -134,8 +134,13 @@ export class Database<S = any> {
     await Promise.all(drivers.map(driver => driver.stop()))
   }
 
+  async drop<T extends Keys<S>>(table: T) {
+    await this.tasks[table]
+    this.getDriver(table).drop(table)
+  }
+
   async dropAll() {
-    await Promise.all(Object.values(this.drivers).map(driver => driver.drop()))
+    await Promise.all(Object.values(this.drivers).map(driver => driver.dropAll()))
   }
 
   async stats() {
@@ -156,7 +161,8 @@ export namespace Driver {
 export abstract class Driver {
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
-  abstract drop(): Promise<void>
+  abstract drop(table: string): Promise<void>
+  abstract dropAll(): Promise<void>
   abstract stats(): Promise<Partial<Driver.Stats>>
   abstract prepare(name: string): Promise<void>
   abstract get(sel: Selection.Immutable, modifier: Modifier): Promise<any>
