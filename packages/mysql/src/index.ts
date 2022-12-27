@@ -326,11 +326,8 @@ class MySQLDriver extends Driver {
     return this.queue(sql, values)
   }
 
-  async drop(table: string) {
-    this.query(`DROP TABLE ${escapeId(table)}`)
-  }
-
-  async drop() {
+  async drop(table?: string) {
+    if (table) return this.query(`DROP TABLE ${escapeId(table)}`)
     const data = await this._select('information_schema.tables', ['TABLE_NAME'], 'TABLE_SCHEMA = ?', [this.config.database])
     if (!data.length) return
     await this.query(data.map(({ TABLE_NAME }) => `DROP TABLE ${escapeId(TABLE_NAME)}`).join('; '))

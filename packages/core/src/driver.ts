@@ -135,7 +135,7 @@ export class Database<S = any> {
   }
 
   async drop<T extends Keys<S>>(table: T) {
-    this.getDriver(table).drop(table)
+    await this.getDriver(table).drop(table)
   }
 
   async dropAll() {
@@ -160,8 +160,7 @@ export namespace Driver {
 export abstract class Driver {
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
-  abstract drop(table: string): Promise<void>
-  abstract drop(): Promise<void>
+  abstract drop(table?: string): Promise<void>
   abstract stats(): Promise<Partial<Driver.Stats>>
   abstract prepare(name: string): Promise<void>
   abstract get(sel: Selection.Immutable, modifier: Modifier): Promise<any>
