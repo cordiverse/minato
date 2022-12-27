@@ -1,5 +1,5 @@
 import { Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
+import { Dict, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
@@ -178,7 +178,11 @@ class MongoDriver extends Driver {
     ])
   }
 
-  async drop() {
+  async drop(table?: string) {
+    if (table) {
+      await this.db.dropCollection(table)
+      return
+    }
     await Promise.all([
       '_fields',
       ...Object.keys(this.database.tables),

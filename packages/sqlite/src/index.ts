@@ -241,7 +241,8 @@ class SQLiteDriver extends Driver {
     return result
   }
 
-  async drop() {
+  async drop(table?: string) {
+    if (table) return this.#run(`DROP TABLE ${escapeId(table)}`)
     const tables = Object.keys(this.database.tables)
     for (const table of tables) {
       this.#run(`DROP TABLE ${escapeId(table)}`)

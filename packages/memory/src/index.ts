@@ -74,9 +74,12 @@ class MemoryDriver extends Driver {
     }).filter(Boolean)
   }
 
-  async drop() {
-    this.#store = {}
-    // await this.#loader?.drop()
+  async drop(table?: string) {
+    if (table) {
+      delete this.#store[table]
+    } else {
+      this.#store = { _fields: [] }
+    }
   }
 
   async stats() {
