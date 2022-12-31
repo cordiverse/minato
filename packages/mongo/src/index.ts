@@ -1,4 +1,4 @@
-import { Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
+import { BSONType, Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
 import { Dict, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
@@ -88,7 +88,7 @@ class MongoDriver extends Driver {
    * https://www.mongodb.com/docs/manual/indexes/
    */
   private async _createIndexes(table: string) {
-    const { primary, unique } = this.model(table)
+    const { fields, primary, unique } = this.model(table)
     const coll = this.db.collection(table)
     const newSpecs: IndexDescription[] = []
     const oldSpecs = await coll.indexes()
@@ -106,8 +106,13 @@ class MongoDriver extends Driver {
         name,
         key: Object.fromEntries(keys.map(key => [key, 1])),
         unique: true,
-        // https://docs.mongodb.com/manual/core/index-partial/#std-label-partial-index-with-unique-constraints
-        partialFilterExpression: Object.fromEntries(keys.map(key => [key, { $exists: true }])),
+        // https://www.mongodb.com/docs/manual/core/index-partial/#partial-indexes
+        // mongodb seems to not support $ne in partialFilterExpression
+        // so we cannot simply use `{ $ne: null }` to filter out null values
+        // below is a workaround for https://github.com/koishijs/koishi/issues/893
+        partialFilterExpression: Object.fromEntries(keys.map((key) => [key, {
+          $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
+        }])),
       })
     })
 
