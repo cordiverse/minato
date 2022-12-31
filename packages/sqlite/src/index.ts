@@ -1,4 +1,4 @@
-import { Dict, difference, isNullable, makeArray, union, deepEqual } from 'cosmokit'
+import { deepEqual, Dict, difference, isNullable, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
 import { Builder, escape, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
