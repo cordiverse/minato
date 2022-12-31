@@ -335,7 +335,7 @@ class SQLiteDriver extends Driver {
       $or: data.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
     }, relaventFields as [])
     for (const item of data) {
-      const row = results.find(row => keys.every(key => row[key] === item[key] || deepEqual(row[key], item[key], true)))
+      const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
       if (row) {
         this.#update(sel, keys, updateFields, item, row)
       } else {
