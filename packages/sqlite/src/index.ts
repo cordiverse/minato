@@ -1,4 +1,4 @@
-import { Dict, difference, isNullable, makeArray, union } from 'cosmokit'
+import { deepEqual, Dict, difference, isNullable, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
 import { Builder, escape, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
@@ -335,7 +335,7 @@ class SQLiteDriver extends Driver {
       $or: data.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
     }, relaventFields as [])
     for (const item of data) {
-      const row = results.find(row => keys.every(key => row[key] === item[key]))
+      const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
       if (row) {
         this.#update(sel, keys, updateFields, item, row)
       } else {
