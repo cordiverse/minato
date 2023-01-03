@@ -250,8 +250,9 @@ class SQLiteDriver extends Driver {
   }
 
   async stats() {
-    const size = this.db.export().byteLength
-    return { size }
+    const data = this.db.export()
+    this.init(data)
+    return { size: data.byteLength }
   }
 
   async remove(sel: Selection.Mutable) {
