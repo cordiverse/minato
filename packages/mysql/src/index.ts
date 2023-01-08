@@ -88,6 +88,17 @@ interface QueryTask {
 }
 
 class MySQLBuilder extends Builder {
+  protected escapeMap = {
+    '\0' : '\\0',
+    '\b' : '\\b',
+    '\t' : '\\t',
+    '\n' : '\\n',
+    '\r' : '\\r',
+    '\x1a' : '\\Z',
+    '\'' : '\\\'',
+    '\\' : '\\\\',
+  }
+
   constructor(tables: Dict<Model>) {
     super(tables)
 

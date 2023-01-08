@@ -1,6 +1,6 @@
 import { deepEqual, Dict, difference, isNullable, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
-import { Builder, escape, escapeId } from '@minatojs/sql-utils'
+import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
 import Logger from 'reggol'
@@ -42,6 +42,10 @@ namespace SQLiteDriver {
 }
 
 class SQLiteBuilder extends Builder {
+  protected escapeMap = {
+    "'": "''",
+  }
+
   constructor(tables: Dict<Model>) {
     super(tables)
 
@@ -152,7 +156,7 @@ class SQLiteDriver extends Driver {
         let def = `${escapeId(column.name)} ${column.type}`
         def += (column.notnull ? ' NOT ' : ' ') + 'NULL'
         if (column.pk) def += ' PRIMARY KEY'
-        if (column.dflt_value !== null) def += ' DEFAULT ' + escape(column.dflt_value)
+        if (column.dflt_value !== null) def += ' DEFAULT ' + this.sql.escape(column.dflt_value)
         columnDefs.push(def)
         mapping[column.name] = column.name
       }

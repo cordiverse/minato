@@ -1,8 +1,9 @@
 import { Dict, isNullable } from 'cosmokit'
 import { Eval, Field, Model, Modifier, Query, Selection } from '@minatojs/core'
-import { escape, escapeId } from './utils'
 
-export * from './utils'
+export function escapeId(value: string) {
+  return '`' + value + '`'
+}
 
 export type QueryOperators = {
   [K in keyof Query.FieldExpr]?: (key: string, value: NonNullable<Query.FieldExpr[K]>) => string
@@ -21,10 +22,13 @@ export interface Transformer<S = any, T = any> {
 }
 
 export class Builder {
+  protected escapeMap = {}
   protected types: Dict<Transformer> = {}
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
+
+  private escapeRegExp?: RegExp
 
   constructor(public tables: Dict<Model>) {
     this.queryOperators = {
@@ -305,11 +309,44 @@ export class Builder {
   }
 
   escape(value: any, field?: Field) {
-    return escape(this.stringify(value, field))
+    value = this.stringify(value, field)
+    if (isNullable(value)) return 'NULL'
+  
+    switch (typeof value) {
+      case 'boolean':
+      case 'number':
+        return value + ''
+      case 'object':
+        return this.quote(JSON.stringify(value))
+      default:
+        return this.quote(value)
+    }
   }
 
   stringify(value: any, field?: Field) {
     const converter = this.types[field!?.type]
     return converter ? converter.dump(value) : value
+  }
+
+  quote(value: string) {
+    this.escapeRegExp ??= new RegExp(`[${Object.values(this.escapeMap).join('')}]`, 'g')
+    let chunkIndex = this.escapeRegExp.lastIndex = 0
+    let escapedVal = ''
+    let match: RegExpExecArray | null
+  
+    while ((match = this.escapeRegExp.exec(value))) {
+      escapedVal += value.slice(chunkIndex, match.index) + this.escapeMap[match[0]]
+      chunkIndex = this.escapeRegExp.lastIndex
+    }
+  
+    if (chunkIndex === 0) {
+      return "'" + value + "'"
+    }
+  
+    if (chunkIndex < value.length) {
+      return "'" + escapedVal + value.slice(chunkIndex) + "'"
+    }
+  
+    return "'" + escapedVal + "'"
   }
 }
