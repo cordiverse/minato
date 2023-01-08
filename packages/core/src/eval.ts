@@ -62,6 +62,10 @@ export namespace Eval {
     lt: Comparator
     lte: Comparator
 
+    // element
+    in(x: Any, y: Any[]): Expr<boolean>
+    nin(x: Any, y: Any[]): Expr<boolean>
+
     // string
     concat(...args: String[]): Expr<string>
 
@@ -97,6 +101,17 @@ function multary<K extends keyof Eval.Static>(key: K, callback: MultaryCallback<
   return (...args: any) => Eval(key, args)
 }
 
+type BinaryCallback<T> = T extends (...args: any[]) => Eval.Expr<infer S> ? (...args: any[]) => S : never
+function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallback<Eval.Static[K]>): Eval.Static[K] {
+  operators[`$${key}`] = (args, data) => {
+    const left = executeEval(data, args[0])
+    const right = executeEval(data, args[1])
+    if (isNullable(left) || isNullable(right)) return true
+    return callback(left.valueOf(), right.valueOf())
+  }
+  return (...args: any) => Eval(key, args)
+}
+
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen) : executeEval(data, vElse))
 Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback))
@@ -108,12 +123,16 @@ Eval.subtract = multary('subtract', ([left, right], data) => executeEval(data, l
 Eval.divide = multary('divide', ([left, right], data) => executeEval(data, left) / executeEval(data, right))
 
 // comparison
-Eval.eq = multary('eq', ([left, right], data) => executeEval(data, left).valueOf() === executeEval(data, right).valueOf())
-Eval.ne = multary('ne', ([left, right], data) => executeEval(data, left).valueOf() !== executeEval(data, right).valueOf())
-Eval.gt = multary('gt', ([left, right], data) => executeEval(data, left).valueOf() > executeEval(data, right).valueOf())
-Eval.gte = multary('gte', ([left, right], data) => executeEval(data, left).valueOf() >= executeEval(data, right).valueOf())
-Eval.lt = multary('lt', ([left, right], data) => executeEval(data, left).valueOf() < executeEval(data, right).valueOf())
-Eval.lte = multary('lte', ([left, right], data) => executeEval(data, left).valueOf() <= executeEval(data, right).valueOf())
+Eval.eq = comparator('eq', (left, right) => left === right)
+Eval.ne = comparator('ne', (left, right) => left !== right)
+Eval.gt = comparator('gt', (left, right) => left > right)
+Eval.gte = comparator('gte', (left, right) => left >= right)
+Eval.lt = comparator('lt', (left, right) => left < right)
+Eval.lte = comparator('lte', (left, right) => left <= right)
+
+// element
+Eval.in = multary('in', ([value, array], data) => array.includes(executeEval(data, value)))
+Eval.nin = multary('nin', ([value, array], data) => !array.includes(executeEval(data, value)))
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''))
