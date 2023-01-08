@@ -229,7 +229,7 @@ export class Transformer {
       const $project = valueMap(fields, (expr) => this.eval(expr))
       $project._id = 0
       stages.push({ $project })
-    } else if (this.virtualKey) {
+    } else {
       const $project: Dict = { _id: 0 }
       for (const key in model.fields) {
         $project[key] = key === this.virtualKey ? '$_id' : 1
