@@ -13,7 +13,7 @@ Type Driven Database Framework.
 - **Powerful.** It can do everything that SQL can do, even though you are not using SQL drivers.
 - **Well-typed.** Minato is written with TypeScript, and it provides top-level typing support.
 - **Extensible.** Simultaneous accesss to different databases based on your needs.
-- **Modern.** Perform all the operations with a JavaScript API or even in the brower with low code.
+- **Modern.** Perform all the operations with a JavaScript API or even in the browser with low code.
 
 ## Driver Supports
 
