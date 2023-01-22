@@ -1,18 +1,19 @@
 import { defineProperty, isNullable } from 'cosmokit'
-import { Comparable, Flatten, isComparable } from './utils'
+import { Comparable, Flatten, isComparable, makeRegExp } from './utils'
 
-// for backwards compatibility, TODO remove in v2
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
 type $Date = Date
+type $RegExp = RegExp
 
 export type Uneval<U> =
   | U extends number ? Eval.Number
   : U extends string ? Eval.String
   : U extends boolean ? Eval.Boolean
   : U extends $Date ? Eval.Date
+  : U extends $RegExp ? Eval.RegExp
   : any
 
 export type Eval<U> =
@@ -33,6 +34,7 @@ export namespace Eval {
   export type String = string | Expr<string>
   export type Boolean = boolean | Expr<boolean>
   export type Date = $Date | Expr<$Date>
+  export type RegExp = $RegExp | Expr<$RegExp>
   export type Any = Comparable | Expr
 
   export interface Comparator {
@@ -68,6 +70,7 @@ export namespace Eval {
 
     // string
     concat(...args: String[]): Expr<string>
+    regex(x: String, y: String | RegExp): Expr<boolean>
 
     // logical
     and(...args: Boolean[]): Expr<boolean>
@@ -136,6 +139,7 @@ Eval.nin = multary('nin', ([value, array], data) => !array.includes(executeEval(
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''))
+Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(data, regex)).test(executeEval(data, value)))
 
 // logical
 Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, arg)))

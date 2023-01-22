@@ -1,6 +1,6 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval'
-import { Comparable, Indexable, isComparable } from './utils'
+import { Comparable, Indexable, isComparable, makeRegExp } from './utils'
 import { Selection } from './selection'
 
 export type Query<T = any> = Query.Expr<T> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
@@ -32,7 +32,7 @@ export namespace Query {
     $size?: Extract<T, any[], number>
 
     // regexp
-    $regex?: Extract<T, string, RegExp>
+    $regex?: Extract<T, string, string | RegExp>
     $regexFor?: Extract<T, string>
 
     // bitwise
@@ -88,7 +88,7 @@ const queryOperators: QueryOperators = {
   $nin: (query, data) => !query.includes(data),
 
   // regexp
-  $regex: (query, data) => query.test(data),
+  $regex: (query, data) => makeRegExp(query).test(data),
   $regexFor: (query, data) => new RegExp(data, 'i').test(query),
 
   // bitwise
