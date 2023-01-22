@@ -29,7 +29,7 @@
     "@types/chai-as-promised": "^7.1.5"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.1.1"
+    "@minatojs/core": "^2.1.2"
   },
   "dependencies": {
     "chai": "^4.3.7",
