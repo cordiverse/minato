@@ -175,8 +175,8 @@ namespace OrmOperations {
     it('insert new records', async () => {
       const table = await setup(database, 'temp2', barTable)
       const data = [
-        { id: table[table.length - 1].id + 1, text: 'wmlake' },
-        { id: table[table.length - 1].id + 2, text: 'bytower' },
+        { id: table[table.length - 1].id + 1, text: 'wm"lake' },
+        { id: table[table.length - 1].id + 2, text: 'by\'tower' },
       ]
       table.push(...data.map(bar => merge(database.tables.temp2.create(), bar)))
       await expect(database.upsert('temp2', data)).eventually.fulfilled

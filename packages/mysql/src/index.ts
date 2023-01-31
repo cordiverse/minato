@@ -88,6 +88,7 @@ interface QueryTask {
 }
 
 class MySQLBuilder extends Builder {
+  protected escapeRegExp = /[\0\b\t\n\r\x1a'"\\]/g
   protected escapeMap = {
     '\0' : '\\0',
     '\b' : '\\b',
@@ -95,6 +96,7 @@ class MySQLBuilder extends Builder {
     '\n' : '\\n',
     '\r' : '\\r',
     '\x1a' : '\\Z',
+    '\"' : '\\\"',
     '\'' : '\\\'',
     '\\' : '\\\\',
   }

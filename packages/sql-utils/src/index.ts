@@ -23,12 +23,11 @@ export interface Transformer<S = any, T = any> {
 
 export class Builder {
   protected escapeMap = {}
+  protected escapeRegExp?: RegExp
   protected types: Dict<Transformer> = {}
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
-
-  private escapeRegExp?: RegExp
 
   constructor(public tables: Dict<Model>) {
     this.queryOperators = {
@@ -124,8 +123,8 @@ export class Builder {
     return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
   }
 
-  protected createRegExpQuery(key: string, value: RegExp) {
-    return `${key} regexp ${this.escape(value.source)}`
+  protected createRegExpQuery(key: string, value: string | RegExp) {
+    return `${key} regexp ${this.escape(typeof value === 'string' ? value : value.source)}`
   }
 
   protected createElementQuery(key: string, value: any) {

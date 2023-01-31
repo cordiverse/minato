@@ -200,7 +200,7 @@ class SQLiteDriver extends Driver {
   }
 
   async stop() {
-    this.db.close()
+    this.db?.close()
   }
 
   #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
