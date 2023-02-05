@@ -65,7 +65,7 @@ class SQLiteBuilder extends Builder {
 
     this.define<string[], string>({
       types: ['list'],
-      dump: value => value.join(','),
+      dump: value => Array.isArray(value) ? value.join(',') : value,
       load: (value) => value ? value.split(',') : [],
     })
 
