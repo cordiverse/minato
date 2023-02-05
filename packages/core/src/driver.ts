@@ -1,8 +1,8 @@
-import { Dict, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
-import { Flatten, Indexable, Keys } from './utils'
+import { Computed, Flatten, Indexable, Keys } from './utils'
 import { Direction, Modifier, Selection } from './selection'
 
 export namespace Driver {
@@ -26,6 +26,23 @@ export namespace Driver {
   }
 }
 
+type TableLike<S> = Keys<S> | Selection
+
+type TableType<S, T extends TableLike<S>> =
+  | T extends Keys<S> ? S[T]
+  : T extends Selection<infer U> ? U
+  : never
+
+type TableMap1<S, M extends readonly Keys<S>[]> = Intersect<
+  | M extends readonly (infer K extends Keys<S>)[]
+  ? { [P in K]: TableType<S, P> }
+  : never
+>
+
+type TableMap2<S, M extends Dict<TableLike<S>>> = {
+  [K in keyof M]: TableType<S, M[K]>
+}
+
 export class Database<S = any> {
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
@@ -38,7 +55,7 @@ export class Database<S = any> {
     }
   }
 
-  private getDriver(name: string) {
+  private getDriver(table: any) {
     // const model: Model = this.tables[name]
     // if (model.driver) return this.drivers[model.driver]
     return Object.values(this.drivers)[0]
@@ -67,11 +84,20 @@ export class Database<S = any> {
     this.tasks[name] = this.prepare(name)
   }
 
-  select<T extends Selection.Selector<S>>(table: T, query?: Query<Selection.Resolve<S, T>>): Selection<Selection.Resolve<S, T>> {
+  select<T extends Keys<S>>(table: T, query?: Query<S[T]>): Selection<S[T]> {
     return new Selection(this.getDriver(table), table, query)
   }
 
-  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<Selection.Resolve<S, T>>, cursor?: Driver.Cursor<K>): Promise<Pick<S[T], K>[]> {
+  join<M extends readonly Keys<S>[]>(tables: M): Selection<TableMap1<S, M>>
+  join<M extends Dict<TableLike<S>>>(tables: M): Selection<TableMap2<S, M>>
+  join(tables: any) {
+    const selections: Dict<Selection<S>> = Array.isArray(tables)
+      ? Object.fromEntries(tables.map((name) => [name, name]))
+      : tables
+    return new Selection(this.getDriver(tables[0]), selections)
+  }
+
+  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<S[T]>, cursor?: Driver.Cursor<K>): Promise<Pick<S[T], K>[]> {
     await this.tasks[table]
     if (Array.isArray(cursor)) {
       cursor = { fields: cursor }
@@ -91,12 +117,12 @@ export class Database<S = any> {
     return selection.execute()
   }
 
-  async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T>, query?: Query<Selection.Resolve<S, K>>): Promise<T> {
+  async eval<T extends Keys<S>, U>(table: T, expr: Selection.Callback<S[T], U>, query?: Query<S[T]>): Promise<U> {
     await this.tasks[table]
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
-  async set<T extends Keys<S>>(table: T, query: Query<Selection.Resolve<S, T>>, update: Selection.Yield<S[T], Update<S[T]>>) {
+  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Computed<S[T], Update<S[T]>>) {
     await this.tasks[table]
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
@@ -107,7 +133,7 @@ export class Database<S = any> {
     await sel._action('set', sel.model.format(update)).execute()
   }
 
-  async remove<T extends Keys<S>>(table: T, query: Query<Selection.Resolve<S, T>>) {
+  async remove<T extends Keys<S>>(table: T, query: Query<S[T]>) {
     await this.tasks[table]
     const sel = this.select(table, query)
     await sel._action('remove').execute()
@@ -119,7 +145,7 @@ export class Database<S = any> {
     return sel._action('create', sel.model.create(data)).execute()
   }
 
-  async upsert<T extends Keys<S>>(table: T, upsert: Selection.Yield<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
+  async upsert<T extends Keys<S>>(table: T, upsert: Computed<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
     await this.tasks[table]
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
@@ -172,18 +198,32 @@ export abstract class Driver {
 
   constructor(public database: Database) {}
 
-  model<S = any>(table: string | Selection<S>): Model<S> {
+  model<S = any>(table: string | Selection.Immutable | Dict<string | Selection.Immutable>): Model<S> {
     if (typeof table === 'string') {
       const model = this.database.tables[table]
       if (model) return model
       throw new TypeError(`unknown table name "${table}"`)
     }
 
-    if (!table.args[0].fields) return table.model
+    if (table instanceof Selection) {
+      if (!table.args[0].fields) return table.model
+      const model = new Model('temp')
+      model.fields = valueMap(table.args[0].fields, (_, key) => ({
+        type: 'expr',
+      }))
+      return model
+    }
+
     const model = new Model('temp')
-    model.fields = valueMap(table.args[0].fields, () => ({
-      type: 'expr',
-    }))
+    for (const key in table) {
+      const submodel = this.model(table[key])
+      for (const field in submodel.fields) {
+        model.fields[`${key}.${field}`] = {
+          type: 'expr',
+          expr: { $: [key, field] } as any,
+        }
+      }
+    }
     return model
   }
 }

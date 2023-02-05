@@ -3,7 +3,7 @@ import { Driver } from './driver'
 import { Eval, executeEval } from './eval'
 import { Model } from './model'
 import { Query } from './query'
-import { Comparable, Keys, randomId } from './utils'
+import { Keys, Row, randomId } from './utils'
 
 export type Direction = 'asc' | 'desc'
 
@@ -21,7 +21,7 @@ namespace Executable {
 
   export interface Payload {
     type: Action
-    table: string | Selection
+    table: string | Selection | Dict<string | Selection.Immutable>
     ref: string
     query: Query.Expr
     args: any[]
@@ -38,7 +38,7 @@ const createRow = (ref: string, prefix = '', expr = {}) => new Proxy(expr, {
 interface Executable extends Executable.Payload {}
 
 class Executable<S = any, T = any> {
-  public readonly row!: Selection.Row<S>
+  public readonly row!: Row<S>
   public readonly model!: Model
   public readonly driver!: Driver
 
@@ -62,7 +62,7 @@ class Executable<S = any, T = any> {
     return query
   }
 
-  protected resolveField(field: Selection.Field<S>): Eval.Expr {
+  protected resolveField(field: FieldLike<S>): Eval.Expr {
     if (typeof field === 'string') {
       return this.row[field]
     } else if (typeof field === 'function') {
@@ -72,7 +72,7 @@ class Executable<S = any, T = any> {
     }
   }
 
-  protected resolveFields(fields: string | string[] | Dict) {
+  protected resolveFields(fields: string | string[] | Dict<FieldLike<S>>) {
     if (typeof fields === 'string') fields = [fields]
     if (Array.isArray(fields)) {
       const modelFields = Object.keys(this.model.fields)
@@ -91,32 +91,19 @@ class Executable<S = any, T = any> {
   }
 }
 
+type FieldLike<S = any> = Keys<S> | Selection.Callback<S>
+
+type FieldType<S, T extends FieldLike<S>> =
+  | T extends Keys<S> ? S[T]
+  : T extends Selection.Callback<S> ? Eval<ReturnType<T>>
+  : never
+
+type FieldMap<S, M extends Dict<FieldLike<S>>> = {
+  [K in keyof M]: FieldType<S, M[K]>
+}
+
 export namespace Selection {
   export type Callback<S = any, T = any> = (row: Row<S>) => Eval.Expr<T>
-  export type Field<S = any> = Keys<S> | Callback<S>
-  export type Take<S, F extends Field<S>> =
-    | F extends Keys<S> ? S[F]
-    : F extends Callback<S> ? Eval<ReturnType<F>>
-    : never
-
-  export type Value<T> = Eval.Expr<T> & (T extends Comparable ? {} : Row<T>)
-
-  export type Row<S> = {
-    [K in keyof S]-?: Value<NonNullable<S[K]>>
-  }
-
-  export type Yield<S, T> = T | ((row: Row<S>) => T)
-
-  export type Project<S, T extends Dict<Field<S>>> = {
-    [K in keyof T]: Take<S, T[K]>
-  }
-
-  export type Selector<S> = Keys<S>// | Selection
-
-  export type Resolve<S, T> =
-    | T extends Keys<S> ? S[T]
-    // : T extends Selection<infer U> ? U
-    : never
 
   export interface Immutable extends Executable, Executable.Payload {
     tables: Dict<Model>
@@ -132,9 +119,9 @@ export interface Selection extends Executable.Payload {
 }
 
 export class Selection<S = any> extends Executable<S, S[]> {
-  tables: Dict<Model> = {}
+  public tables: Dict<Model> = {}
 
-  constructor(driver: Driver, table: string | Selection, query?: Query) {
+  constructor(driver: Driver, table: string | Selection | Dict<string | Selection.Immutable>, query?: Query) {
     super(driver, {
       type: 'get',
       ref: randomId(),
@@ -149,7 +136,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     }
   }
 
-  where(query: Query) {
+  where(query: Query<S>) {
     this.query.$and ||= []
     this.query.$and.push(this.resolveQuery(query))
     return this
@@ -168,23 +155,23 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return this
   }
 
-  orderBy(field: Selection.Field<S>, direction: Direction = 'asc') {
+  orderBy(field: FieldLike<S>, direction: Direction = 'asc') {
     this.args[0].sort.push([this.resolveField(field), direction])
     return this
   }
 
   groupBy<T extends Keys<S>>(fields: T | T[], cond?: Selection.Callback<S, boolean>): Selection<Pick<S, T>>
-  groupBy<T extends Keys<S>, U extends Dict<Selection.Field<S>>>(
+  groupBy<T extends Keys<S>, U extends Dict<FieldLike<S>>>(
     fields: T | T[],
     extra?: U,
     cond?: Selection.Callback<S, boolean>,
-  ): Selection<Pick<S, T> & Selection.Project<S, U>>
-  groupBy<T extends Dict<Selection.Field<S>>>(fields: T, cond?: Selection.Callback<S, boolean>): Selection<Selection.Project<S, T>>
-  groupBy<T extends Dict<Selection.Field<S>>, U extends Dict<Selection.Field<S>>>(
+  ): Selection<Pick<S, T> & FieldMap<S, U>>
+  groupBy<T extends Dict<FieldLike<S>>>(fields: T, cond?: Selection.Callback<S, boolean>): Selection<FieldMap<S, T>>
+  groupBy<T extends Dict<FieldLike<S>>, U extends Dict<FieldLike<S>>>(
     fields: T,
     extra?: U,
     cond?: Selection.Callback<S, boolean>,
-  ): Selection<Selection.Project<S, T & U>>
+  ): Selection<FieldMap<S, T & U>>
   groupBy(fields: any, ...args: any[]) {
     this.args[0].fields = this.resolveFields(fields)
     this.args[0].group = Object.keys(this.args[0].fields!)
@@ -200,8 +187,8 @@ export class Selection<S = any> extends Executable<S, S[]> {
   }
 
   project<T extends Keys<S>>(fields: T | T[]): Selection<Pick<S, T>>
-  project<T extends Dict<Selection.Field<S>>>(fields: T): Selection<Selection.Project<S, T>>
-  project(fields: Keys<S>[] | Dict<Selection.Field<S>>) {
+  project<T extends Dict<FieldLike<S>>>(fields: T): Selection<FieldMap<S, T>>
+  project(fields: Keys<S>[] | Dict<FieldLike<S>>) {
     this.args[0].fields = this.resolveFields(fields)
     return new Selection(this.driver, this)
   }
@@ -212,17 +199,16 @@ export class Selection<S = any> extends Executable<S, S[]> {
 
   /** @deprecated use `selection.execute()` instead */
   evaluate<T>(callback: Selection.Callback<S, T>): Executable {
-    return new Selection(this.driver, this)
-      ._action('eval', this.resolveField(callback))
+    const selection = new Selection(this.driver, this)
+    selection.ref = this.ref
+    return selection._action('eval', this.resolveField(callback))
   }
 
   execute(): Promise<S[]>
   execute<T>(callback: Selection.Callback<S, T>): Promise<T>
   execute(callback?: any) {
     if (!callback) return super.execute()
-    return new Selection(this.driver, this)
-      ._action('eval', this.resolveField(callback))
-      .execute()
+    return this.evaluate(callback).execute()
   }
 }
 

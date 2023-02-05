@@ -1,5 +1,5 @@
 import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
-import { isEvalExpr } from './eval'
+import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
@@ -10,7 +10,7 @@ export interface Field<T = any> {
   initial?: T
   precision?: number
   scale?: number
-  expr?: Selection.Callback
+  expr?: Eval.Expr
   legacy?: string[]
 }
 

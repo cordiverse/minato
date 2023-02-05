@@ -1,4 +1,5 @@
 import { Intersect } from 'cosmokit'
+import { Eval } from './eval'
 
 export type Values<S> = S[keyof S]
 
@@ -24,6 +25,14 @@ type FlatMap<S, T = never, P extends string = ''> = Values<{
 }>
 
 export type Flatten<S> = Intersect<FlatMap<S>>
+
+export type Cell<T> = Eval.Expr<T> & (T extends Comparable ? {} : Row<T>)
+
+export type Row<S> = {
+  [K in keyof S]-?: Cell<NonNullable<S[K]>>
+}
+
+export type Computed<S, T> = T | ((row: Row<S>) => T)
 
 export function isComparable(value: any): value is Comparable {
   return typeof value === 'string'
