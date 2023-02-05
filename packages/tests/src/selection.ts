@@ -242,6 +242,67 @@ namespace SelectionTests {
       ])
     })
   }
+
+  export function join(database: Database<Tables>) {
+    it('inner', async () => {
+      await expect(database
+        .join(['foo', 'bar'] as const)
+        .execute()
+      ).to.eventually.have.length(18)
+    })
+
+    // it('inner', async () => {
+    //   await expect(database
+    //     .select('foo')
+    //     .join('bar', {
+    //       uid: 'uid',
+    //       pid: 'pid',
+    //     })
+    //     .orderBy('id')
+    //     .execute()
+    //   ).to.eventually.deep.equal([
+    //     { id: 1, uid: 1, pid: 1, value: 1 },
+    //     { id: 2, uid: 1, pid: 2, value: 0 },
+    //     { id: 3, uid: 2, pid: 1, value: 1 },
+    //   ])
+    // })
+
+    // it('outer', async () => {
+    //   await expect(database
+    //     .select('foo')
+    //     .leftJoin('bar', {
+    //       uid: 'uid',
+    //       pid: 'pid',
+    //     })
+    //     .orderBy('id')
+    //     .execute()
+    //   ).to.eventually.deep.equal([
+    //     { id: 1, uid: 1, pid: 1, value: 1 },
+    //     { id: 2, uid: 1, pid: 2, value: 0 },
+    //     { id: 3, uid: 2, pid: 1, value: 1 },
+    //     { id: 4, uid: 2, pid: 2, value: null },
+    //   ])
+    // })
+
+    // it('chaining', async () => {
+    //   await expect(database
+    //     .select('foo')
+    //     .join('bar', {
+    //       uid: 'uid',
+    //       pid: 'pid',
+    //     })
+    //     .join('baz', {
+    //       uid: 'uid',
+    //     })
+    //     .orderBy('id')
+    //     .execute()
+    //   ).to.eventually.deep.equal([
+    //     { id: 1, uid: 1, pid: 1, value: 1, name: 'foo' },
+    //     { id: 2, uid: 1, pid: 2, value: 0, name: 'foo' },
+    //     { id: 3, uid: 2, pid: 1, value: 1, name: 'bar' },
+    //   ])
+    // })
+  }
 }
 
 export default SelectionTests

@@ -277,14 +277,8 @@ class SQLiteDriver extends Driver {
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const output = this.sql.parseEval(expr)
-    let sql = this.sql.get(sel.table as Selection)
-    const prefix = `SELECT ${output} AS value `
-    if (sql.startsWith('SELECT * ')) {
-      sql = prefix + sql.slice(9)
-    } else {
-      sql = `${prefix}FROM (${sql}) ${sql.ref}`
-    }
-    const { value } = this.#get(sql)
+    const inner = this.sql.get(sel.table as Selection, true)
+    const { value } = this.#get(`SELECT ${output} AS value FROM (${inner}) ${sel.ref}`)
     return value
   }
 
