@@ -200,7 +200,6 @@ export class Selection<S = any> extends Executable<S, S[]> {
   /** @deprecated use `selection.execute()` instead */
   evaluate<T>(callback: Selection.Callback<S, T>): Executable {
     const selection = new Selection(this.driver, this)
-    selection.ref = this.ref
     return selection._action('eval', this.resolveField(callback))
   }
 

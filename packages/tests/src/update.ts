@@ -90,7 +90,7 @@ namespace OrmOperations {
         await expect(database.get('temp2', { id: obj.id })).to.eventually.have.shape([obj])
       }
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
-      await expect(database.remove('temp2', { id: 7 })).to.eventually.fulfilled
+      await database.remove('temp2', { id: 7 })
       await expect(database.create('temp2', {})).to.eventually.have.shape({ id: 8 })
     })
 
@@ -129,12 +129,12 @@ namespace OrmOperations {
         data.list = ['2', '3', '3']
         return data.id
       })
-      await expect(database.set('temp2', {
+      await database.set('temp2', {
         $or: [
           { id: magicIds },
           { timestamp: magicBorn },
         ],
-      }, { list: ['2', '3', '3'] })).eventually.fulfilled
+      }, { list: ['2', '3', '3'] })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -142,7 +142,7 @@ namespace OrmOperations {
       const table = await setup(database, 'temp2', barTable)
       const data = table.find(bar => bar.timestamp)!
       data.text = null as never
-      await expect(database.set('temp2', { timestamp: { $exists: true } }, { text: null })).eventually.fulfilled
+      await database.set('temp2', { timestamp: { $exists: true } }, { text: null })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -150,9 +150,9 @@ namespace OrmOperations {
       const table = await setup(database, 'temp2', barTable)
       table[1].num = table[1].id * 2
       table[2].num = table[2].id * 2
-      await expect(database.set('temp2', [table[1].id, table[2].id, 9], row => ({
+      await database.set('temp2', [table[1].id, table[2].id, 9], row => ({
         num: $.multiply(2, row.id),
-      }))).eventually.fulfilled
+      }))
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
   }
@@ -168,7 +168,7 @@ namespace OrmOperations {
         const index = table.findIndex(obj => obj.id === update.id)
         table[index] = merge(table[index], update)
       })
-      await expect(database.upsert('temp2', data)).eventually.fulfilled
+      await database.upsert('temp2', data)
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -179,7 +179,7 @@ namespace OrmOperations {
         { id: table[table.length - 1].id + 2, text: 'by\'tower' },
       ]
       table.push(...data.map(bar => merge(database.tables.temp2.create(), bar)))
-      await expect(database.upsert('temp2', data)).eventually.fulfilled
+      await database.upsert('temp2', data)
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -192,11 +192,11 @@ namespace OrmOperations {
       data3.num = data3.num! + 3
       expect(data9).to.be.undefined
       table.push({ id: 9, num: 999 })
-      await expect(database.upsert('temp2', row => [
+      await database.upsert('temp2', row => [
         { id: 2, num: $.multiply(2, row.id) },
         { id: 3, num: $.add(3, row.num) },
         { id: 9, num: 999 },
-      ])).eventually.fulfilled
+      ])
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
   }
@@ -204,21 +204,21 @@ namespace OrmOperations {
   export const remove = function Remove(database: Database<Tables>) {
     it('basic support', async () => {
       await setup(database, 'temp3', bazTable)
-      await expect(database.remove('temp3', { ida: 1, idb: 'a' })).eventually.fulfilled
+      await database.remove('temp3', { ida: 1, idb: 'a' })
       await expect(database.get('temp3', {})).eventually.length(3)
-      await expect(database.remove('temp3', { ida: 1, idb: 'b', value: 'b' })).eventually.fulfilled
+      await database.remove('temp3', { ida: 1, idb: 'b', value: 'b' })
       await expect(database.get('temp3', {})).eventually.length(3)
-      await expect(database.remove('temp3', { idb: 'b' })).eventually.fulfilled
+      await database.remove('temp3', { idb: 'b' })
       await expect(database.get('temp3', {})).eventually.length(1)
-      await expect(database.remove('temp3', {})).eventually.fulfilled
+      await database.remove('temp3', {})
       await expect(database.get('temp3', {})).eventually.length(0)
     })
 
     it('advanced query', async () => {
       const table = await setup(database, 'temp2', barTable)
-      await expect(database.remove('temp2', { id: { $gt: table[1].id } })).eventually.fulfilled
+      await database.remove('temp2', { id: { $gt: table[1].id } })
       await expect(database.get('temp2', {})).eventually.length(2)
-      await expect(database.remove('temp2', { id: { $lte: table[1].id } })).eventually.fulfilled
+      await database.remove('temp2', { id: { $lte: table[1].id } })
       await expect(database.get('temp2', {})).eventually.length(0)
     })
   }

@@ -101,7 +101,7 @@ class MySQLBuilder extends Builder {
     '\\' : '\\\\',
   }
 
-  constructor(tables: Dict<Model>) {
+  constructor(tables?: Dict<Model>) {
     super(tables)
 
     this.define<string[], string>({
@@ -167,7 +167,7 @@ class MySQLDriver extends Driver {
       ...config,
     }
 
-    this.sql = new MySQLBuilder(database.tables)
+    this.sql = new MySQLBuilder()
   }
 
   async start() {
@@ -362,20 +362,15 @@ class MySQLDriver extends Driver {
     const sql = builder.get(sel)
     if (!sql) return []
     return this.queue(sql).then((data) => {
-      return data.map((row) => this.sql.load(model, row))
+      return data.map((row) => builder.load(model, row))
     })
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const output = this.sql.parseEval(expr)
-    let sql = this.sql.get(sel.table as Selection)
-    const prefix = `SELECT ${output} AS value `
-    if (sql.startsWith('SELECT * ')) {
-      sql = prefix + sql.slice(9)
-    } else {
-      sql = `${prefix}FROM (${sql}) ${sql.ref}`
-    }
-    const [data] = await this.queue(sql)
+    const builder = new MySQLBuilder(sel.tables)
+    const output = builder.parseEval(expr)
+    const inner = builder.get(sel.table as Selection, true)
+    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${sel.ref}`)
     return data.value
   }
 

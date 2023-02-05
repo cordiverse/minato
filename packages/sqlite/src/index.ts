@@ -46,7 +46,7 @@ class SQLiteBuilder extends Builder {
     "'": "''",
   }
 
-  constructor(tables: Dict<Model>) {
+  constructor(tables?: Dict<Model>) {
     super(tables)
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
@@ -95,7 +95,7 @@ class SQLiteDriver extends Driver {
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
 
-    this.sql = new SQLiteBuilder(database.tables)
+    this.sql = new SQLiteBuilder()
   }
 
   /** synchronize table schema */
@@ -267,18 +267,19 @@ class SQLiteDriver extends Driver {
   }
 
   async get(sel: Selection.Immutable) {
-    const { tables } = sel
+    const { model, tables } = sel
     const builder = new SQLiteBuilder(tables)
     const sql = builder.get(sel)
     if (!sql) return []
     const rows = this.#all(sql)
-    return rows.map(row => this.sql.load(sel.model, row))
+    return rows.map(row => builder.load(model, row))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const output = this.sql.parseEval(expr)
-    const inner = this.sql.get(sel.table as Selection, true)
-    const { value } = this.#get(`SELECT ${output} AS value FROM (${inner}) ${sel.ref}`)
+    const builder = new SQLiteBuilder(sel.tables)
+    const output = builder.parseEval(expr)
+    const inner = builder.get(sel.table as Selection, true)
+    const { value } = this.#get(`SELECT ${output} AS value FROM ${inner} ${sel.ref}`)
     return value
   }
 

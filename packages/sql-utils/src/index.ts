@@ -29,7 +29,7 @@ export class Builder {
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
 
-  constructor(public tables: Dict<Model>) {
+  constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
       // logical
       $or: (key, value) => this.logicalOr(value.map(value => this.parseFieldQuery(key, value))),
@@ -231,11 +231,11 @@ export class Builder {
       return this.getRecursive(['_', args])
     }
     const [table, key] = args
-    const fields = this.tables[table]?.fields || {}
+    const fields = this.tables?.[table]?.fields || {}
     if (fields[key]?.expr) {
       return this.parseEvalExpr(fields[key]?.expr)
     }
-    const prefix = table === '_' || key in fields ? '' : `${escapeId(table)}.`
+    const prefix = !this.tables || key in fields ? '' : `${escapeId(table)}.`
     return this.transformKey(key, fields, prefix) 
   }
 
@@ -269,12 +269,6 @@ export class Builder {
     const filter = this.parseQuery(query)
     if (filter === '0') return
 
-    // get suffix
-    let suffix = this.suffix(args[0])
-    if (filter !== '1') {
-      suffix = ` WHERE ${filter}` + suffix
-    }
-
     // get prefix
     const fields = args[0].fields ?? Object.fromEntries(Object.keys(model.fields).map(k => [k, { $: [ref, k] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
@@ -282,26 +276,34 @@ export class Builder {
       value = this.parseEval(value)
       return key === value ? key : `${value} AS ${key}`
     }).join(', ')
-    let prefix: string
+    let prefix: string | undefined
     if (typeof table === 'string') {
       prefix = escapeId(table)
     } else if (table instanceof Selection) {
-      const inner = this.get(table, true)
-      if (!inner) return
-      if (!args[0].fields && !suffix) return inner
-      prefix = `(${inner})`
+      prefix = this.get(table, true)
+      if (!prefix) return
     } else {
-      prefix = `(${Object.entries(table).map(([key, table]) => {
+      prefix = Object.entries(table).map(([key, table]) => {
         if (typeof table !== 'string') {
-          return `(${this.get(table, true)}) AS ${escapeId(key)}`
+          return `${this.get(table, true)} AS ${escapeId(key)}`
         } else {
           return key === table ? escapeId(table) : `${escapeId(table)} AS ${escapeId(key)}`
         }
-      }).join(' JOIN ')})`
+      }).join(' JOIN ')
+    }
+
+    // get suffix
+    let suffix = this.suffix(args[0])
+    if (filter !== '1') {
+      suffix = ` WHERE ${filter}` + suffix
+    }
+    if (!prefix.includes(' ') || prefix.startsWith('(')) {
+      suffix = ` ${ref}` + suffix
     }
 
     if (inline && !args[0].fields && !suffix) return prefix
-    return `SELECT ${keys} FROM ${prefix} ${ref}${suffix}`
+    const result = `SELECT ${keys} FROM ${prefix}${suffix}`
+    return inline ? `(${result})` : result
   }
 
   define<S, T>(converter: Transformer<S, T>) {
