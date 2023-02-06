@@ -2,7 +2,7 @@ import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
-import { Computed, Flatten, Indexable, Keys, Row } from './utils'
+import { Flatten, Indexable, Keys, Row } from './utils'
 import { Direction, Modifier, Selection } from './selection'
 
 export namespace Driver {
@@ -144,7 +144,7 @@ export class Database<S = any> {
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
-  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Computed<S[T], Update<S[T]>>) {
+  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Row.Computed<S[T], Update<S[T]>>) {
     await this.tasks[table]
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
@@ -167,7 +167,7 @@ export class Database<S = any> {
     return sel._action('create', sel.model.create(data)).execute()
   }
 
-  async upsert<T extends Keys<S>>(table: T, upsert: Computed<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
+  async upsert<T extends Keys<S>>(table: T, upsert: Row.Computed<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
     await this.tasks[table]
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
