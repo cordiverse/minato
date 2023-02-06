@@ -77,7 +77,7 @@ const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
 export class Transformer {
   private counter = 0
 
-  constructor(public virtualKey?: string) {}
+  constructor(public virtualKey?: string, public lookup?: boolean) {}
 
   public createKey() {
     return '_temp_' + ++this.counter
@@ -91,6 +91,8 @@ export class Transformer {
     if (expr.$) {
       if (typeof expr.$ === 'string') {
         return '$' + this.getActualKey(expr.$)
+      } else if (this.lookup) {
+        return '$' + expr.$[0] + '.' + this.getActualKey(expr.$[1])
       } else {
         return '$' + this.getActualKey(expr.$[1])
       }

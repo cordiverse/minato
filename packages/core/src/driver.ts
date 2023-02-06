@@ -105,14 +105,14 @@ export class Database<S = any> {
     if (Array.isArray(tables)) {
       const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, name])))
       if (typeof query === 'function') {
-        sel.args[0].having = query(...tables.map(name => sel.row[name]))
+        sel.args[0].having = Eval.and(query(...tables.map(name => sel.row[name])))
       }
       sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
       return sel
     } else {
       const sel = new Selection(this.getDriver(tables[0]), tables)
       if (typeof query === 'function') {
-        sel.args[0].having = query(sel.row)
+        sel.args[0].having = Eval.and(query(sel.row))
       }
       sel.args[0].optional = optional
       return sel

@@ -22,7 +22,7 @@ namespace Executable {
 
   export interface Payload {
     type: Action
-    table: string | Selection.Immutable | Dict<string | Selection.Immutable>
+    table: string | Selection | Dict<string | Selection.Immutable>
     ref: string
     query: Query.Expr
     args: any[]
@@ -128,7 +128,7 @@ export interface Selection extends Executable.Payload {
 export class Selection<S = any> extends Executable<S, S[]> {
   public tables: Dict<Model> = {}
 
-  constructor(driver: Driver, table: string | Selection.Immutable | Dict<string | Selection.Immutable>, query?: Query) {
+  constructor(driver: Driver, table: string | Selection | Dict<string | Selection.Immutable>, query?: Query) {
     super(driver, {
       type: 'get',
       ref: randomId(),

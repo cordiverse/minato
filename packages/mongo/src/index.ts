@@ -246,7 +246,11 @@ class MongoDriver extends Driver {
     return new Transformer(this.getVirtualKey(table)).query(query)
   }
 
-  private createPipeline(sel: Selection.Immutable) {
+  private createPipeline(sel: string | Selection.Immutable) {
+    if (typeof sel === 'string') {
+      sel = this.database.select(sel)
+    }
+
     const { table, query } = sel
     const pipeline: any[] = []
     const result = { pipeline } as Result
@@ -254,11 +258,38 @@ class MongoDriver extends Driver {
     if (typeof table === 'string') {
       result.table = table
       transformer.virtualKey = this.getVirtualKey(table)
-    } else {
+    } else if (table instanceof Selection) {
       const predecessor = this.createPipeline(table)
       if (!predecessor) return
       result.table = predecessor.table
-      pipeline.unshift(...predecessor.pipeline)
+      pipeline.push(...predecessor.pipeline)
+    } else {
+      for (const [name, subtable] of Object.entries(table)) {
+        const predecessor = this.createPipeline(subtable)
+        if (!predecessor) return
+        if (!result.table) {
+          result.table = predecessor.table
+          pipeline.push(...predecessor.pipeline, {
+            $replaceRoot: { newRoot: { [name]: '$$ROOT' } },
+          })
+          continue
+        }
+        const $lookup = {
+          from: predecessor.table,
+          as: name,
+          pipeline: predecessor.pipeline,
+        }
+        const $unwind = {
+          path: `$${name}`,
+        }
+        pipeline.push({ $lookup }, { $unwind })
+        if (sel.args[0].having['$and'].length) {
+          transformer.lookup = true
+          const $expr = transformer.eval(sel.args[0].having)
+          pipeline.push({ $match: { $expr } })
+          transformer.lookup = false
+        }
+      }
     }
 
     // where
