@@ -28,14 +28,25 @@ class MemoryDriver extends Driver {
     // await this.#loader?.stop(this.#store)
   }
 
-  $table(sel: string | Selection): any[] {
+  table(sel: string | Selection.Immutable | Dict<string | Selection.Immutable>, expr?: any): any[] {
     if (typeof sel === 'string') {
       return this.#store[sel] ||= []
     }
 
+    if (!(sel instanceof Selection)) {
+      const entries = Object.entries(sel).map(([name, sel]) => [name, this.table(sel)] as const)
+      const catesian = (entries: (readonly [string, any[]])[]): any[] => {
+        if (!entries.length) return []
+        const [[name, rows], ...tail] = entries
+        if (!tail.length) return rows.map(row => ({ [name]: row }))
+        return rows.flatMap(row => catesian(tail).map(tail => ({ ...tail, [name]: row })))
+      }
+      return catesian(entries).filter(data => executeEval(data, expr))
+    }
+
     const { ref, query, table, args, model } = sel
     const { fields, group, having } = sel.args[0]
-    const data = this.$table(table).filter(row => executeQuery(row, query, ref))
+    const data = this.table(table, having).filter(row => executeQuery(row, query, ref))
     const branches: { index: Dict, table: any[] }[] = []
     const groupFields = group.length ? pick(fields!, group) : fields
     for (let row of executeSort(data, args[0], ref)) {
@@ -87,19 +98,19 @@ class MemoryDriver extends Driver {
   }
 
   async get(sel: Selection.Immutable) {
-    return this.$table(sel as Selection)
+    return this.table(sel as Selection)
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const { query, table } = sel
-    const ref = typeof table === 'string' ? sel.ref : table.ref
-    const data = this.$table(table).filter(row => executeQuery(row, query, ref))
+    const ref = typeof table === 'string' ? sel.ref : table.ref as string
+    const data = this.table(table).filter(row => executeQuery(row, query, ref))
     return executeEval(data.map(row => ({ [ref]: row, _: row })), expr)
   }
 
   async set(sel: Selection.Mutable, data: {}) {
     const { table, ref, query } = sel
-    this.$table(table)
+    this.table(table)
       .filter(row => executeQuery(row, query, ref))
       .forEach(row => executeUpdate(row, data, ref))
     this.$save(table)
@@ -107,14 +118,14 @@ class MemoryDriver extends Driver {
 
   async remove(sel: Selection.Mutable) {
     const { ref, query, table } = sel
-    this.#store[table] = this.$table(table).filter(row => !executeQuery(row, query, ref))
+    this.#store[table] = this.table(table).filter(row => !executeQuery(row, query, ref))
     this.$save(table)
   }
 
   async create(sel: Selection.Mutable, data: any) {
     const { table, model } = sel
     const { primary, autoInc } = model
-    const store = this.$table(table)
+    const store = this.table(table)
     if (!Array.isArray(primary) && autoInc && !(primary in data)) {
       let meta = this.#store._fields.find(row => row.table === table && row.field === primary)
       if (!meta) {
@@ -138,7 +149,7 @@ class MemoryDriver extends Driver {
   async upsert(sel: Selection.Mutable, data: any, keys: string[]) {
     const { table, model, ref } = sel
     for (const update of data) {
-      const row = this.$table(table).find(row => {
+      const row = this.table(table).find(row => {
         return keys.every(key => row[key] === update[key])
       })
       if (row) {

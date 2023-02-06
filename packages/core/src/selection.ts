@@ -22,7 +22,7 @@ namespace Executable {
 
   export interface Payload {
     type: Action
-    table: string | Selection | Dict<string | Selection.Immutable>
+    table: string | Selection.Immutable | Dict<string | Selection.Immutable>
     ref: string
     query: Query.Expr
     args: any[]
@@ -31,7 +31,7 @@ namespace Executable {
 
 const createRow = (ref: string, expr = {}, prefix = '') => new Proxy(expr, {
   get(target, key) {
-    if (typeof key === 'symbol' || key in target) return Reflect.get(target, key)
+    if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
     return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`)
   },
 })
@@ -128,7 +128,7 @@ export interface Selection extends Executable.Payload {
 export class Selection<S = any> extends Executable<S, S[]> {
   public tables: Dict<Model> = {}
 
-  constructor(driver: Driver, table: string | Selection | Dict<string | Selection.Immutable>, query?: Query) {
+  constructor(driver: Driver, table: string | Selection.Immutable | Dict<string | Selection.Immutable>, query?: Query) {
     super(driver, {
       type: 'get',
       ref: randomId(),
