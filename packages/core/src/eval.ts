@@ -57,7 +57,7 @@ export namespace Eval {
     divide(x: Number, y: Number): Expr<number>
 
     // comparison
-    eq(x: Any, y: Any): Expr<boolean>
+    eq(...args: Any[]): Expr<boolean>
     ne(x: Any, y: Any): Expr<boolean>
     gt: Comparator
     gte: Comparator

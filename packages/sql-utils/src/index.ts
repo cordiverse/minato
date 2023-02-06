@@ -290,6 +290,8 @@ export class Builder {
           return key === table ? escapeId(table) : `${escapeId(table)} AS ${escapeId(key)}`
         }
       }).join(' JOIN ')
+      const filter = this.parseEval(args[0].having)
+      if (filter !== '1') prefix += ` ON ${filter}`
     }
 
     // get suffix

@@ -2,7 +2,7 @@ import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
-import { Computed, Flatten, Indexable, Keys } from './utils'
+import { Computed, Flatten, Indexable, Keys, Row } from './utils'
 import { Direction, Modifier, Selection } from './selection'
 
 export namespace Driver {
@@ -39,9 +39,20 @@ type TableMap1<S, M extends readonly Keys<S>[]> = Intersect<
   : never
 >
 
-type TableMap2<S, M extends Dict<TableLike<S>>> = {
-  [K in keyof M]: TableType<S, M[K]>
+type TableMap2<S, U extends Dict<TableLike<S>>> = {
+  [K in keyof U]: TableType<S, U[K]>
 }
+
+type JoinParameters<S, U extends readonly Keys<S>[]> =
+  | U extends readonly [infer K extends Keys<S>, ...infer R]
+  ? [Row<S[K]>, ...JoinParameters<S, Extract<R, readonly Keys<S>[]>>]
+  : []
+
+type JoinCallback1<S, U extends readonly Keys<S>[]> = (...args: JoinParameters<S, U>) => Eval.Expr<boolean>
+
+type JoinCallback2<S, U extends Dict<TableLike<S>>> = (args: {
+  [K in keyof U]: Row<TableType<S, U[K]>>
+}) => Eval.Expr<boolean>
 
 export class Database<S = any> {
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
@@ -88,13 +99,24 @@ export class Database<S = any> {
     return new Selection(this.getDriver(table), table, query)
   }
 
-  join<M extends readonly Keys<S>[]>(tables: M): Selection<TableMap1<S, M>>
-  join<M extends Dict<TableLike<S>>>(tables: M): Selection<TableMap2<S, M>>
-  join(tables: any) {
-    const selections: Dict<Selection<S>> = Array.isArray(tables)
-      ? Object.fromEntries(tables.map((name) => [name, name]))
-      : tables
-    return new Selection(this.getDriver(tables[0]), selections)
+  join<U extends readonly Keys<S>[]>(tables: U, callback?: JoinCallback1<S, U>, optional?: boolean[]): Selection<TableMap1<S, U>>
+  join<U extends Dict<TableLike<S>>>(tables: U, callback?: JoinCallback2<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<TableMap2<S, U>>
+  join(tables: any, query?: any, optional?: any) {
+    if (Array.isArray(tables)) {
+      const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, name])))
+      if (typeof query === 'function') {
+        sel.args[0].having = query(...tables.map(name => sel.row[name]))
+      }
+      sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
+      return sel
+    } else {
+      const sel = new Selection(this.getDriver(tables[0]), tables)
+      if (typeof query === 'function') {
+        sel.args[0].having = query(sel.row)
+      }
+      sel.args[0].optional = optional
+      return sel
+    }
   }
 
   async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<S[T]>, cursor?: Driver.Cursor<K>): Promise<Pick<S[T], K>[]> {

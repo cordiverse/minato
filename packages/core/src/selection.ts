@@ -14,6 +14,7 @@ export interface Modifier {
   group: string[]
   having: Eval.Expr<boolean>
   fields?: Dict<Eval.Expr>
+  optional: Dict<boolean>
 }
 
 namespace Executable {
@@ -28,10 +29,10 @@ namespace Executable {
   }
 }
 
-const createRow = (ref: string, prefix = '', expr = {}) => new Proxy(expr, {
+const createRow = (ref: string, expr = {}, prefix = '') => new Proxy(expr, {
   get(target, key) {
-    if (typeof key === 'symbol' || key.startsWith('$')) return Reflect.get(target, key)
-    return createRow(ref, `${prefix}${key}.`, Eval('', [ref, `${prefix}${key}`]))
+    if (typeof key === 'symbol' || key in target) return Reflect.get(target, key)
+    return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`)
   },
 })
 
@@ -44,8 +45,14 @@ class Executable<S = any, T = any> {
 
   constructor(driver: Driver, payload: Executable.Payload) {
     Object.assign(this, payload)
+    const expr = {}
+    if (typeof payload.table !== 'string' && !(payload.table instanceof Selection)) {
+      for (const key in payload.table) {
+        expr[key] = createRow(key)
+      }
+    }
     defineProperty(this, 'driver', driver)
-    defineProperty(this, 'row', createRow(this.ref))
+    defineProperty(this, 'row', createRow(this.ref, expr))
     defineProperty(this, 'model', driver.model(this.table))
   }
 
@@ -127,7 +134,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
       ref: randomId(),
       table,
       query: null as never,
-      args: [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and() }],
+      args: [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and(), optional: {} }],
     })
     this.tables[this.ref] = this.model
     this.query = this.resolveQuery(query)
@@ -160,18 +167,18 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return this
   }
 
-  groupBy<T extends Keys<S>>(fields: T | T[], cond?: Selection.Callback<S, boolean>): Selection<Pick<S, T>>
-  groupBy<T extends Keys<S>, U extends Dict<FieldLike<S>>>(
-    fields: T | T[],
+  groupBy<K extends Keys<S>>(fields: K | K[], query?: Selection.Callback<S, boolean>): Selection<Pick<S, K>>
+  groupBy<K extends Keys<S>, U extends Dict<FieldLike<S>>>(
+    fields: K | K[],
     extra?: U,
-    cond?: Selection.Callback<S, boolean>,
-  ): Selection<Pick<S, T> & FieldMap<S, U>>
-  groupBy<T extends Dict<FieldLike<S>>>(fields: T, cond?: Selection.Callback<S, boolean>): Selection<FieldMap<S, T>>
-  groupBy<T extends Dict<FieldLike<S>>, U extends Dict<FieldLike<S>>>(
-    fields: T,
+    query?: Selection.Callback<S, boolean>,
+  ): Selection<Pick<S, K> & FieldMap<S, U>>
+  groupBy<K extends Dict<FieldLike<S>>>(fields: K, query?: Selection.Callback<S, boolean>): Selection<FieldMap<S, K>>
+  groupBy<K extends Dict<FieldLike<S>>, U extends Dict<FieldLike<S>>>(
+    fields: K,
     extra?: U,
-    cond?: Selection.Callback<S, boolean>,
-  ): Selection<FieldMap<S, T & U>>
+    query?: Selection.Callback<S, boolean>,
+  ): Selection<FieldMap<S, K & U>>
   groupBy(fields: any, ...args: any[]) {
     this.args[0].fields = this.resolveFields(fields)
     this.args[0].group = Object.keys(this.args[0].fields!)
@@ -181,13 +188,13 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return new Selection(this.driver, this)
   }
 
-  having(cond: Selection.Callback<S, boolean>) {
-    this.args[0].having['$and'].push(this.resolveField(cond))
+  having(query: Selection.Callback<S, boolean>) {
+    this.args[0].having['$and'].push(this.resolveField(query))
     return this
   }
 
-  project<T extends Keys<S>>(fields: T | T[]): Selection<Pick<S, T>>
-  project<T extends Dict<FieldLike<S>>>(fields: T): Selection<FieldMap<S, T>>
+  project<K extends Keys<S>>(fields: K | K[]): Selection<Pick<S, K>>
+  project<U extends Dict<FieldLike<S>>>(fields: U): Selection<FieldMap<S, U>>
   project(fields: Keys<S>[] | Dict<FieldLike<S>>) {
     this.args[0].fields = this.resolveFields(fields)
     return new Selection(this.driver, this)
