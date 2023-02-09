@@ -235,7 +235,7 @@ export class Builder {
     if (fields[key]?.expr) {
       return this.parseEvalExpr(fields[key]?.expr)
     }
-    const prefix = !this.tables || key in fields ? '' : `${escapeId(table)}.`
+    const prefix = !this.tables || table === '_' || key in fields ? '' : `${escapeId(table)}.`
     return this.transformKey(key, fields, prefix) 
   }
 
