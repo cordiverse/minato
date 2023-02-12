@@ -25,7 +25,7 @@
     "mysql"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.2.0"
+    "@minatojs/core": "^2.2.2"
   },
   "devDependencies": {
     "@minatojs/tests": "^1.4.0",

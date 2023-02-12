@@ -9,7 +9,6 @@
   ],
   "license": "MIT",
   "scripts": {
-    "preinstall": "yakumo preinstall || true",
     "build": "yakumo build",
     "bump": "yakumo version",
     "dep": "yakumo upgrade",

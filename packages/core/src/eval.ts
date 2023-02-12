@@ -43,12 +43,18 @@ export namespace Eval {
     (x: Date, y: Date): Expr<boolean>
   }
 
+  export interface Branch<T> {
+    case: Boolean
+    then: T | Expr<T>
+  }
+
   export interface Static {
     (key: string, value: any): Eval.Expr
 
     // univeral
     if<T extends Comparable>(cond: Any, vThen: T | Expr<T>, vElse: T | Expr<T>): Expr<T>
     ifNull<T extends Comparable>(...args: (T | Expr<T>)[]): Expr<T>
+    switch<T>(branches: Branch<T>[], vDefault: T | Expr<T>): Expr<T>
 
     // arithmetic
     add(...args: Number[]): Expr<number>
@@ -113,6 +119,14 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
     return callback(left.valueOf(), right.valueOf())
   }
   return (...args: any) => Eval(key, args)
+}
+
+Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault })
+operators.$switch = (args, data) => {
+  for (const branch of args.branches) {
+    if (executeEval(data, branch.case)) return executeEval(data, branch.then)
+  }
+  return executeEval(data, args.default)
 }
 
 // univeral
