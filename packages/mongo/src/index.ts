@@ -440,7 +440,7 @@ class MongoDriver extends Driver {
 
     const bulk = coll.initializeUnorderedBulkOp()
     for (const update of data) {
-      const item = original.find(item => keys.every(key => item[key].valueOf() === update[key].valueOf()))
+      const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key].valueOf()))
       if (item) {
         const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
         const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
