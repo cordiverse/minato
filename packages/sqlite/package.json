@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-sqlite",
-  "version": "3.3.3",
+  "version": "3.3.10",
   "description": "SQLite Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",

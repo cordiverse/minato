@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mysql",
-  "version": "2.3.2",
+  "version": "2.3.4",
   "description": "MySQL Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",

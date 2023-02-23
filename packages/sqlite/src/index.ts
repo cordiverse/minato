@@ -186,10 +186,21 @@ class SQLiteDriver extends Driver {
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
   }
 
+  async load() {
+    if (this.config.path === ':memory:') return null
+    return fs.readFile(this.config.path).catch(() => null)
+  }
+
   async start() {
     const [sqlite, buffer] = await Promise.all([
-      init(),
-      this.config.path === ':memory:' ? null : fs.readFile(this.config.path).catch<Buffer | null>(() => null),
+      init({
+        locateFile: (file: string) => process.env.KOISHI_BASE
+          ? process.env.KOISHI_BASE + '/' + file
+          : process.env.KOISHI_ENV === 'browser'
+            ? '/' + file
+            : require.resolve('@minatojs/sql.js/dist/' + file),
+      }),
+      this.load(),
     ])
     this.sqlite = sqlite
     this.init(buffer)

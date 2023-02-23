@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "2.3.1",
+  "version": "2.3.3",
   "description": "MongoDB Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
