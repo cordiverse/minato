@@ -1,6 +1,6 @@
 import { BSONType, Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
 import { Dict, makeArray, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeEval, executeUpdate, Model, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 import Logger from 'reggol'
@@ -395,24 +395,30 @@ class MongoDriver extends Driver {
     await this.db.collection(table).deleteMany(filter)
   }
 
+  private async ensurePrimary(table: string, data: any[]) {
+    const model = this.model(table)
+    const { primary, autoInc } = model
+    if (typeof primary === 'string' && autoInc) {
+      const missing = data.filter(item => !(primary in item))
+      if (!missing.length) return
+      const { value } = await this.db.collection('_fields').findOneAndUpdate(
+        { table, field: primary },
+        { $inc: { autoInc: missing.length } },
+        { upsert: true },
+      )
+      for (let i = 1; i <= missing.length; i++) {
+        missing[i - 1][primary] = value!.autoInc + i
+      }
+    }
+  }
+
   async create(sel: Selection.Mutable, data: any) {
     const { table } = sel
     const lastTask = Promise.resolve(this._createTasks[table]).catch(noop)
     return this._createTasks[table] = lastTask.then(async () => {
       const model = this.model(table)
       const coll = this.db.collection(table)
-      const { primary, autoInc } = model
-
-      if (typeof primary === 'string' && !(primary in data)) {
-        if (autoInc) {
-          const { value } = await this.db.collection('_fields').findOneAndUpdate(
-            { table, field: primary },
-            { $inc: { autoInc: 1 } },
-            { upsert: true, returnDocument: 'after' },
-          )
-          data[primary] = value!.autoInc
-        }
-      }
+      await this.ensurePrimary(table, [data])
 
       try {
         data = model.create(data)
@@ -439,8 +445,9 @@ class MongoDriver extends Driver {
     }).toArray()).map(row => this.patchVirtual(table, row))
 
     const bulk = coll.initializeUnorderedBulkOp()
+    const insertion: any[] = []
     for (const update of data) {
-      const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key].valueOf()))
+      const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
       if (item) {
         const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
         const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
@@ -448,9 +455,13 @@ class MongoDriver extends Driver {
         if (!query) continue
         bulk.find(query).updateOne({ $set: override })
       } else {
-        const copy = executeUpdate(model.create(), update, ref)
-        bulk.insert(this.unpatchVirtual(table, copy))
+        insertion.push(update)
       }
+    }
+    await this.ensurePrimary(table, insertion)
+    for (const update of insertion) {
+      const copy = executeUpdate(model.create(), update, ref)
+      bulk.insert(this.unpatchVirtual(table, copy))
     }
     await bulk.execute()
   }
