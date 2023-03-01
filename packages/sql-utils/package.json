@@ -32,6 +32,6 @@
     "@minatojs/core": "^2.2.2"
   },
   "dependencies": {
-    "cosmokit": "^1.4.0"
+    "cosmokit": "^1.4.1"
   }
 }

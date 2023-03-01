@@ -35,7 +35,7 @@ export interface SQLiteFieldInfo {
   pk: boolean
 }
 
-namespace SQLiteDriver {
+export namespace SQLiteDriver {
   export interface Config {
     path: string
   }
@@ -86,7 +86,7 @@ class SQLiteBuilder extends Builder {
   }
 }
 
-class SQLiteDriver extends Driver {
+export class SQLiteDriver extends Driver {
   db!: init.Database
   sql: Builder
   writeTask?: NodeJS.Timeout

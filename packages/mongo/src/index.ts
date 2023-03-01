@@ -7,7 +7,7 @@ import Logger from 'reggol'
 
 const logger = new Logger('mongo')
 
-namespace MongoDriver {
+export namespace MongoDriver {
   export interface Config {
     username?: string
     password?: string
@@ -40,7 +40,7 @@ interface EvalTask extends Result {
   reject: (reason: unknown) => void
 }
 
-class MongoDriver extends Driver {
+export class MongoDriver extends Driver {
   public client!: MongoClient
   public db!: Db
   public mongo = this

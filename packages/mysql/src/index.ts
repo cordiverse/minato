@@ -119,11 +119,11 @@ class MySQLBuilder extends Builder {
   }
 }
 
-namespace MySQLDriver {
+export namespace MySQLDriver {
   export interface Config extends PoolConfig {}
 }
 
-class MySQLDriver extends Driver {
+export class MySQLDriver extends Driver {
   public pool!: Pool
   public config: MySQLDriver.Config
   public sql: MySQLBuilder
