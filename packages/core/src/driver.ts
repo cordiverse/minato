@@ -57,13 +57,24 @@ type JoinCallback2<S, U extends Dict<TableLike<S>>> = (args: {
 export class Database<S = any> {
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
-  private tasks: Dict<Promise<void>> = Object.create(null)
+  public migrating = false
+  private prepareTasks: Dict<Promise<void>> = Object.create(null)
+  private migrateTasks: Dict<Promise<void>> = Object.create(null)
+
   private stashed = new Set<string>()
 
   refresh() {
     for (const name in this.tables) {
-      this.tasks[name] = this.prepare(name)
+      this.prepareTasks[name] = this.prepare(name)
     }
+  }
+
+  get prepared() {
+    const tasks = Object.values(this.prepareTasks)
+    if (!this.migrating) {
+      tasks.push(...Object.values(this.migrateTasks))
+    }
+    return Promise.all(tasks)
   }
 
   private getDriver(table: any) {
@@ -74,15 +85,10 @@ export class Database<S = any> {
 
   private async prepare(name: string) {
     this.stashed.add(name)
-    await this.tasks[name]
-    return new Promise<void>(async (resolve) => {
-      Promise.resolve().then(async () => {
-        if (this.stashed.delete(name)) {
-          await this.getDriver(name)?.prepare(name)
-        }
-        resolve()
-      })
-    })
+    await this.prepareTasks[name]
+    await Promise.resolve()
+    if (!this.stashed.delete(name)) return
+    await this.getDriver(name)?.prepare(name)
   }
 
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Partial<Model.Config<S[K]>> = {}) {
@@ -92,7 +98,11 @@ export class Database<S = any> {
       // model.driver = config.driver
     }
     model.extend(fields, config)
-    this.tasks[name] = this.prepare(name)
+    this.prepareTasks[name] = this.prepare(name)
+  }
+
+  deprecate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {
+    this.extend(name, fields, { callback })
   }
 
   select<T extends Keys<S>>(table: T, query?: Query<S[T]>): Selection<S[T]> {
@@ -120,32 +130,14 @@ export class Database<S = any> {
   }
 
   async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<S[T]>, cursor?: Driver.Cursor<K>): Promise<Pick<S[T], K>[]> {
-    await this.tasks[table]
-    if (Array.isArray(cursor)) {
-      cursor = { fields: cursor }
-    } else if (!cursor) {
-      cursor = {}
-    }
-
-    const selection = this.select(table, query)
-    if (cursor.fields) selection.project(cursor.fields)
-    if (cursor.limit !== undefined) selection.limit(cursor.limit)
-    if (cursor.offset !== undefined) selection.offset(cursor.offset)
-    if (cursor.sort) {
-      for (const field in cursor.sort) {
-        selection.orderBy(field as any, cursor.sort[field])
-      }
-    }
-    return selection.execute()
+    return this.select(table, query).execute(cursor)
   }
 
   async eval<T extends Keys<S>, U>(table: T, expr: Selection.Callback<S[T], U>, query?: Query<S[T]>): Promise<U> {
-    await this.tasks[table]
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
   async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Row.Computed<S[T], Update<S[T]>>) {
-    await this.tasks[table]
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)
@@ -156,19 +148,16 @@ export class Database<S = any> {
   }
 
   async remove<T extends Keys<S>>(table: T, query: Query<S[T]>) {
-    await this.tasks[table]
     const sel = this.select(table, query)
     await sel._action('remove').execute()
   }
 
   async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
-    await this.tasks[table]
     const sel = this.select(table)
     return sel._action('create', sel.model.create(data)).execute()
   }
 
   async upsert<T extends Keys<S>>(table: T, upsert: Row.Computed<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
-    await this.tasks[table]
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))

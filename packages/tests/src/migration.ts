@@ -9,12 +9,20 @@ interface Qux {
   flag: boolean
 }
 
+interface Qux2 {
+  id: number
+  flag: boolean
+}
+
 interface Tables {
   qux: Qux
+  qux2: Qux2
 }
 
 function MigrationTests(database: Database<Tables>) {
-  it('should migrate', async () => {
+  it('should migrate field', async () => {
+    Reflect.deleteProperty(database.tables, 'qux')
+
     database.extend('qux', {
       id: 'unsigned',
       text: 'string(64)',
@@ -25,7 +33,8 @@ function MigrationTests(database: Database<Tables>) {
     })
 
     await database.upsert('qux', [
-      { id: 1, text: 'foo', number: 100 },
+      { id: 1, text: 'foo', number: 100, flag: true },
+      { id: 2, text: 'bar', number: 200, flag: false },
     ])
 
     Reflect.deleteProperty(database.tables, 'qux')
@@ -38,8 +47,26 @@ function MigrationTests(database: Database<Tables>) {
       unique: ['value'],
     })
 
+    database.extend('qux2', {
+      id: 'unsigned',
+      flag: 'boolean',
+    })
+    
+    database.deprecate('qux', {
+      flag: 'boolean',
+    }, async (database) => {
+      const data = await database.get('qux', {}, ['id', 'flag'])
+      await database.upsert('qux2', data)
+    })
+
     await expect(database.get('qux', {})).to.eventually.deep.equal([
       { id: 1, text: 'foo', value: 100 },
+      { id: 2, text: 'bar', value: 200 },
+    ])
+
+    await expect(database.get('qux2', {})).to.eventually.deep.equal([
+      { id: 1, flag: true },
+      { id: 2, flag: false },
     ])
   })
 }

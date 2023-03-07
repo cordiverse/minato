@@ -93,7 +93,8 @@ class Executable<S = any, T = any> {
     }
   }
 
-  execute(): Promise<T> {
+  async execute(): Promise<T> {
+    await this.driver.database.prepared
     return this.driver[this.type as any](this, ...this.args)
   }
 }
@@ -210,11 +211,26 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return selection._action('eval', this.resolveField(callback))
   }
 
-  execute(): Promise<S[]>
+  execute<K extends Keys<S> = Keys<S>>(cursor?: Driver.Cursor<K>): Promise<Pick<S, K>[]>
   execute<T>(callback: Selection.Callback<S, T>): Promise<T>
-  execute(callback?: any) {
-    if (!callback) return super.execute()
-    return this.evaluate(callback).execute()
+  execute(cursor?: any) {
+    if (typeof cursor === 'function') {
+      return this.evaluate(cursor).execute()
+    }
+    if (Array.isArray(cursor)) {
+      cursor = { fields: cursor }
+    } else if (!cursor) {
+      cursor = {}
+    }
+    if (cursor.fields) this.project(cursor.fields)
+    if (cursor.limit !== undefined) this.limit(cursor.limit)
+    if (cursor.offset !== undefined) this.offset(cursor.offset)
+    if (cursor.sort) {
+      for (const field in cursor.sort) {
+        this.orderBy(field as any, cursor.sort[field])
+      }
+    }
+    return super.execute()
   }
 }
 
