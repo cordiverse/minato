@@ -174,13 +174,32 @@ export class MongoDriver extends Driver {
   async prepare(table: string) {
     await Promise.all([
       this._createInternalTable(),
-      this.db.createCollection(table).catch(noop)
+      this.db.createCollection(table).catch(noop),
     ])
     await Promise.all([
       this._createIndexes(table),
       this._createFields(table),
       this._migratePrimary(table),
     ])
+
+    // migrate deprecated fields (do not await)
+    const $unset = {}
+    const model = this.model(table)
+    const coll = this.db.collection(table)
+    const database = Object.create(this.database)
+    database.migrating = true
+    database.migrateTasks[table] = Promise.allSettled([...model.migrations].map(async ([callback, keys]) => {
+      try {
+        await callback(database)
+        keys.forEach(key => $unset[key] = '')
+      } catch (err) {
+        logger.error(err)
+      }
+    })).then(async () => {
+      if (!Object.keys($unset).length) return
+      logger.info('auto migrating table %c', table)
+      await coll.updateMany({}, { $unset })
+    })
   }
 
   async drop(table?: string) {

@@ -69,18 +69,19 @@ export class Database<S = any> {
     }
   }
 
-  get prepared() {
-    const tasks = Object.values(this.prepareTasks)
+  async prepared() {
+    await Promise.all(Object.values(this.prepareTasks))
     if (!this.migrating) {
-      tasks.push(...Object.values(this.migrateTasks))
+      await Promise.all(Object.values(this.migrateTasks))
     }
-    return Promise.all(tasks)
   }
 
   private getDriver(table: any) {
     // const model: Model = this.tables[name]
     // if (model.driver) return this.drivers[model.driver]
-    return Object.values(this.drivers)[0]
+    const driver = Object.values(this.drivers)[0]
+    if (driver) driver.database = this
+    return driver
   }
 
   private async prepare(name: string) {
@@ -101,7 +102,7 @@ export class Database<S = any> {
     this.prepareTasks[name] = this.prepare(name)
   }
 
-  deprecate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {
+  migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {
     this.extend(name, fields, { callback })
   }
 
