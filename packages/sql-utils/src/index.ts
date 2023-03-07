@@ -270,7 +270,10 @@ export class Builder {
     if (filter === '0') return
 
     // get prefix
-    const fields = args[0].fields ?? Object.fromEntries(Object.keys(model.fields).map(k => [k, { $: [ref, k] }]))
+    const fields = args[0].fields ?? Object.fromEntries(Object
+      .entries(model.fields)
+      .filter(([, field]) => !field!.deprecated)
+      .map(([key]) => [key, { $: [ref, key] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
       key = escapeId(key)
       value = this.parseEval(value)

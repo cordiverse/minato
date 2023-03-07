@@ -51,8 +51,8 @@ function MigrationTests(database: Database<Tables>) {
       id: 'unsigned',
       flag: 'boolean',
     })
-    
-    database.deprecate('qux', {
+
+    database.migrate('qux', {
       flag: 'boolean',
     }, async (database) => {
       const data = await database.get('qux', {}, ['id', 'flag'])

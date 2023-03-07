@@ -202,7 +202,8 @@ export class MySQLDriver extends Driver {
 
     // field definitions
     for (const key in fields) {
-      const { initial, nullable = true } = fields[key]!
+      const { deprecated, initial, nullable = true } = fields[key]!
+      if (deprecated) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.COLUMN_NAME))
       let shouldUpdate = column?.COLUMN_NAME !== key
@@ -263,7 +264,7 @@ export class MySQLDriver extends Driver {
 
     if (!columns.length) {
       logger.info('auto creating table %c', name)
-      return this.queue(`CREATE TABLE ?? (${create.join(', ')}) COLLATE = ?`, [name, this.config.charset])
+      return this.query(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}) COLLATE = ${this.sql.escape(this.config.charset)}`)
     }
 
     const operations = [
@@ -273,8 +274,26 @@ export class MySQLDriver extends Driver {
     if (operations.length) {
       // https://dev.mysql.com/doc/refman/5.7/en/alter-table.html
       logger.info('auto updating table %c', name)
-      await this.queue(`ALTER TABLE ?? ${operations.join(', ')}`, [name])
+      await this.query(`ALTER TABLE ${escapeId(name)} ${operations.join(', ')}`)
     }
+
+    // migrate deprecated fields (do not await)
+    const dropKeys: string[] = []
+    const database = Object.create(this.database)
+    database.migrating = true
+    database.migrateTasks[name] = Promise.allSettled([...table.migrations].map(async ([callback, keys]) => {
+      if (!keys.every(key => columns.find(info => info.COLUMN_NAME === key))) return
+      try {
+        await callback(database)
+        dropKeys.push(...keys)
+      } catch (err) {
+        logger.error(err)
+      }
+    })).then(async () => {
+      if (!dropKeys.length) return
+      logger.info('auto migrating table %c', name)
+      await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
+    })
   }
 
   _joinKeys = (keys: readonly string[]) => {
