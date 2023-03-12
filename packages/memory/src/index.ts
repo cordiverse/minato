@@ -52,6 +52,7 @@ export class MemoryDriver extends Driver {
     for (let row of executeSort(data, args[0], ref)) {
       row = model.format(row, false)
       for (const key in model.fields) {
+        if (model.fields[key]!.deprecated) continue
         row[key] ??= null
       }
       let index = row

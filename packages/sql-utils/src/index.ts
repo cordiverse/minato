@@ -115,7 +115,7 @@ export class Builder {
   }
 
   protected createNullQuery(key: string, value: boolean) {
-    return `${key} is ${value ? 'not ' : ''} null`
+    return `${key} is ${value ? 'not ' : ''}null`
   }
 
   protected createMemberQuery(key: string, value: any[], notStr = '') {

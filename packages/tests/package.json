@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/tests",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Test Cases for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -29,7 +29,7 @@
     "@types/chai-as-promised": "^7.1.5"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.2.2"
+    "@minatojs/core": "^2.3.1"
   },
   "dependencies": {
     "chai": "^4.3.7",

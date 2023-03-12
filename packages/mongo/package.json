@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "2.4.2",
+  "version": "2.5.1",
   "description": "MongoDB Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -26,10 +26,10 @@
     "mongodb"
   ],
   "devDependencies": {
-    "@minatojs/tests": "^1.4.0"
+    "@minatojs/tests": "^1.5.0"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.2.2"
+    "@minatojs/core": "^2.3.1"
   },
   "dependencies": {
     "mongodb": "^4.14.0",
