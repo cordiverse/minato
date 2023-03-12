@@ -279,20 +279,15 @@ export class MySQLDriver extends Driver {
 
     // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
-    const database = Object.create(this.database)
-    database.migrating = true
-    database.migrateTasks[name] = Promise.allSettled([...table.migrations].map(async ([callback, keys]) => {
-      if (!keys.every(key => columns.find(info => info.COLUMN_NAME === key))) return
-      try {
-        await callback(database)
-        dropKeys.push(...keys)
-      } catch (err) {
-        logger.error(err)
-      }
-    })).then(async () => {
-      if (!dropKeys.length) return
-      logger.info('auto migrating table %c', name)
-      await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
+    this.migrate(name, {
+      error: logger.warn,
+      before: keys => keys.every(key => columns.some(info => info.COLUMN_NAME === key)),
+      after: keys => dropKeys.push(...keys),
+      finalize: async () => {
+        if (!dropKeys.length) return
+        logger.info('auto migrating table %c', name)
+        await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
+      },
     })
   }
 

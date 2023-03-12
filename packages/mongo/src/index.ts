@@ -1,5 +1,5 @@
 import { BSONType, Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, makeArray, noop, omit, pick } from 'cosmokit'
+import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Model, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
@@ -88,7 +88,7 @@ export class MongoDriver extends Driver {
    * https://www.mongodb.com/docs/manual/indexes/
    */
   private async _createIndexes(table: string) {
-    const { fields, primary, unique } = this.model(table)
+    const { primary, unique } = this.model(table)
     const coll = this.db.collection(table)
     const newSpecs: IndexDescription[] = []
     const oldSpecs = await coll.indexes()
@@ -125,7 +125,8 @@ export class MongoDriver extends Driver {
     const coll = this.db.collection(table)
     const bulk = coll.initializeOrderedBulkOp()
     for (const key in fields) {
-      const { initial, legacy = [] } = fields[key]!
+      const { initial, legacy = [], deprecated } = fields[key]!
+      if (deprecated) continue
       const filter = { [key]: { $exists: false } }
       for (const oldKey of legacy) {
         bulk
@@ -133,7 +134,7 @@ export class MongoDriver extends Driver {
           .update({ $rename: { [oldKey]: key } })
         filter[oldKey] = { $exists: false }
       }
-      bulk.find(filter).update({ $set: { [key]: initial } })
+      bulk.find(filter).update({ $set: { [key]: initial ?? null } })
       if (legacy.length) {
         const $unset = Object.fromEntries(legacy.map(key => [key, '']))
         bulk.find({}).update({ $unset })
@@ -176,29 +177,23 @@ export class MongoDriver extends Driver {
       this._createInternalTable(),
       this.db.createCollection(table).catch(noop),
     ])
+
     await Promise.all([
       this._createIndexes(table),
       this._createFields(table),
       this._migratePrimary(table),
     ])
 
-    // migrate deprecated fields (do not await)
     const $unset = {}
-    const model = this.model(table)
-    const coll = this.db.collection(table)
-    const database = Object.create(this.database)
-    database.migrating = true
-    database.migrateTasks[table] = Promise.allSettled([...model.migrations].map(async ([callback, keys]) => {
-      try {
-        await callback(database)
-        keys.forEach(key => $unset[key] = '')
-      } catch (err) {
-        logger.error(err)
-      }
-    })).then(async () => {
-      if (!Object.keys($unset).length) return
-      logger.info('auto migrating table %c', table)
-      await coll.updateMany({}, { $unset })
+    this.migrate(table, {
+      error: logger.warn,
+      before: () => true,
+      after: keys => keys.forEach(key => $unset[key] = ''),
+      finalize: async () => {
+        if (!Object.keys($unset).length) return
+        const coll = this.db.collection(table)
+        await coll.updateMany({}, { $unset })
+      },
     })
   }
 

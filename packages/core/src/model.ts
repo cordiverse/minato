@@ -187,7 +187,8 @@ export class Model<S = any> {
     const result = {} as S
     const keys = makeArray(this.primary)
     for (const key in this.fields) {
-      const { initial } = this.fields[key]!
+      const { initial, deprecated } = this.fields[key]!
+      if (deprecated) continue
       if (!keys.includes(key) && !isNullable(initial)) {
         result[key] = clone(initial)
       }

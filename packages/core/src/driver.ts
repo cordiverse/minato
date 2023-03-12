@@ -1,4 +1,4 @@
-import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Awaitable, Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Eval, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
@@ -238,4 +238,29 @@ export abstract class Driver {
     }
     return model
   }
+
+  async migrate(name: string, hooks: MigrationHooks) {
+    const database = Object.create(this.database)
+    const model = this.model(name)
+    database.migrating = true
+    if (this.database.migrating) await database.migrateTasks[name]
+    database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
+      return Promise.all([...model.migrations].map(async ([migrate, keys]) => {
+        try {
+          if (!hooks.before(keys)) return
+          await migrate(database)
+          hooks.after(keys)
+        } catch (reason) {
+          hooks.error(reason)
+        }
+      }))
+    }).then(hooks.finalize).catch(hooks.error)
+  }
+}
+
+export interface MigrationHooks {
+  before: (keys: string[]) => boolean
+  after: (keys: string[]) => void
+  finalize: () => Awaitable<void>
+  error: (reason: any) => void
 }

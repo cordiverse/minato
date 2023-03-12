@@ -99,7 +99,7 @@ export class SQLiteDriver extends Driver {
   }
 
   /** synchronize table schema */
-  async prepare(table: string) {
+  async prepare(table: string, dropKeys?: string[]) {
     const columns = this.#all(`PRAGMA table_info(${escapeId(table)})`) as SQLiteFieldInfo[]
     const model = this.model(table)
     const columnDefs: string[] = []
@@ -110,7 +110,11 @@ export class SQLiteDriver extends Driver {
 
     // field definitions
     for (const key in model.fields) {
-      if (model.fields[key]!.deprecated) continue
+      if (model.fields[key]!.deprecated) {
+        if (dropKeys?.includes(key)) shouldMigrate = true
+        continue
+      }
+
       const legacy = [key, ...model.fields[key]!.legacy || []]
       const column = columns.find(({ name }) => legacy.includes(name))
       const { initial, nullable = true } = model.fields[key]!
@@ -147,26 +151,25 @@ export class SQLiteDriver extends Driver {
       }))
     }
 
-    const migrateTable = (dropKeys?: string[]) => {
-      const _columnDefs = [...columnDefs]
-      const _mapping = { ...mapping }
-      console.log(mapping)
-
+    if (!columns.length) {
+      logger.info('auto creating table %c', table)
+      this.#run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
+    } else if (shouldMigrate) {
       // preserve old columns
       for (const { name, type, notnull, pk, dflt_value } of columns) {
-        if (_mapping[name] || dropKeys?.includes(name)) continue
+        if (mapping[name] || dropKeys?.includes(name)) continue
         let def = `${escapeId(name)} ${type}`
         def += (notnull ? ' NOT ' : ' ') + 'NULL'
         if (pk) def += ' PRIMARY KEY'
         if (dflt_value !== null) def += ' DEFAULT ' + this.sql.escape(dflt_value)
-        _columnDefs.push(def)
-        _mapping[name] = name
+        columnDefs.push(def)
+        mapping[name] = name
       }
 
       const temp = table + '_temp'
-      const fields = (dropKeys ? Object.values(_mapping) : Object.keys(_mapping)).map(escapeId).join(', ')
+      const fields = Object.keys(mapping).map(escapeId).join(', ')
       logger.info('auto migrating table %c', table)
-      this.#run(`CREATE TABLE ${escapeId(temp)} (${[..._columnDefs, ...indexDefs].join(', ')})`)
+      this.#run(`CREATE TABLE ${escapeId(temp)} (${[...columnDefs, ...indexDefs].join(', ')})`)
       try {
         this.#run(`INSERT INTO ${escapeId(temp)} SELECT ${fields} FROM ${escapeId(table)}`)
         this.#run(`DROP TABLE ${escapeId(table)}`)
@@ -175,13 +178,6 @@ export class SQLiteDriver extends Driver {
         throw error
       }
       this.#run(`ALTER TABLE ${escapeId(temp)} RENAME TO ${escapeId(table)}`)
-    }
-
-    if (!columns.length) {
-      logger.info('auto creating table %c', table)
-      this.#run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
-    } else if (shouldMigrate) {
-      migrateTable()
     } else if (alter.length) {
       logger.info('auto updating table %c', table)
       for (const def of alter) {
@@ -189,21 +185,16 @@ export class SQLiteDriver extends Driver {
       }
     }
 
-    // migrate deprecated fields (do not await)
-    const dropKeys: string[] = []
-    const database = Object.create(this.database)
-    database.migrating = true
-    database.migrateTasks[table] = Promise.allSettled([...model.migrations].map(async ([callback, keys]) => {
-      if (!keys.every(key => columns.find(info => info.name === key))) return
-      try {
-        await callback(database)
-        dropKeys.push(...keys)
-      } catch (err) {
-        logger.error(err)
-      }
-    })).then(async () => {
-      if (!dropKeys.length) return
-      migrateTable(dropKeys)
+    if (dropKeys) return
+    dropKeys = []
+    this.migrate(table, {
+      error: logger.warn,
+      before: keys => keys.every(key => columns.some(({ name }) => name === key)),
+      after: keys => dropKeys!.push(...keys),
+      finalize: () => {
+        if (!dropKeys!.length) return
+        this.prepare(table, dropKeys)
+      },
     })
   }
 
