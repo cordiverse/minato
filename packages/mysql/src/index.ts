@@ -464,7 +464,7 @@ export class MySQLDriver extends Driver {
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.fields)
+    const initFields = Object.keys(model.fields).filter(key => !model.fields[key]?.deprecated)
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
