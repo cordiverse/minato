@@ -71,7 +71,7 @@ class SQLiteBuilder extends Builder {
 
     this.define<Date, number>({
       types: ['date', 'time', 'timestamp'],
-      dump: value => value === null ? null : +value,
+      dump: value => value === null ? null : +new Date(value),
       load: (value) => value === null ? null : new Date(value),
     })
   }
