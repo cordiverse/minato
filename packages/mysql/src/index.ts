@@ -88,17 +88,18 @@ interface QueryTask {
 }
 
 class MySQLBuilder extends Builder {
+  // eslint-disable-next-line no-control-regex
   protected escapeRegExp = /[\0\b\t\n\r\x1a'"\\]/g
   protected escapeMap = {
-    '\0' : '\\0',
-    '\b' : '\\b',
-    '\t' : '\\t',
-    '\n' : '\\n',
-    '\r' : '\\r',
-    '\x1a' : '\\Z',
-    '\"' : '\\\"',
-    '\'' : '\\\'',
-    '\\' : '\\\\',
+    '\0': '\\0',
+    '\b': '\\b',
+    '\t': '\\t',
+    '\n': '\\n',
+    '\r': '\\r',
+    '\x1a': '\\Z',
+    '\"': '\\\"',
+    '\'': '\\\'',
+    '\\': '\\\\',
   }
 
   constructor(tables?: Dict<Model>) {
@@ -348,7 +349,7 @@ export class MySQLDriver extends Driver {
 
   _select<T extends {}>(table: string, fields: readonly (string & keyof T)[], conditional?: string, values?: readonly any[]): Promise<T[]>
   _select(table: string, fields: string[], conditional?: string, values: readonly any[] = []) {
-    let sql = `SELECT ${this._joinKeys(fields)} FROM ${escapeId(table)}`
+    let sql = `SELECT ${this._joinKeys(fields)} FROM ${table}`
     if (conditional) sql += ` WHERE ${conditional}`
     return this.queue(sql, values)
   }
