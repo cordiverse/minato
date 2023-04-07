@@ -348,7 +348,7 @@ export class MySQLDriver extends Driver {
 
   _select<T extends {}>(table: string, fields: readonly (string & keyof T)[], conditional?: string, values?: readonly any[]): Promise<T[]>
   _select(table: string, fields: string[], conditional?: string, values: readonly any[] = []) {
-    let sql = `SELECT ${this._joinKeys(fields)} FROM ${table}`
+    let sql = `SELECT ${this._joinKeys(fields)} FROM ${escapeId(table)}`
     if (conditional) sql += ` WHERE ${conditional}`
     return this.queue(sql, values)
   }
@@ -432,7 +432,7 @@ export class MySQLDriver extends Driver {
       return `${escaped} = ${this.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
 
-    await this.query(`UPDATE ${table} SET ${update} WHERE ${filter}`)
+    await this.query(`UPDATE ${escapeId(table)} SET ${update} WHERE ${filter}`)
   }
 
   async remove(sel: Selection.Mutable) {
