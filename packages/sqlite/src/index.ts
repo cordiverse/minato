@@ -284,7 +284,7 @@ export class SQLiteDriver extends Driver {
   async stats() {
     const data = this.db.export()
     this.init(data)
-    const stats: Partial<Driver.Stats> = { size: data.byteLength, tables: {} }
+    const stats: Driver.Stats = { size: data.byteLength, tables: {} }
     const tableNames: Array<{ name: string }> = this.#all('SELECT name FROM sqlite_master WHERE type=\'table\' ORDER BY name;')
     tableNames.forEach(tbl => {
       stats.tables[tbl.name] = this.#get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)
