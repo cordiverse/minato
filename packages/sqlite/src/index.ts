@@ -285,9 +285,11 @@ export class SQLiteDriver extends Driver {
     const data = this.db.export()
     this.init(data)
     const stats: Driver.Stats = { size: data.byteLength, tables: {} }
-    const tableNames: Array<{ name: string }> = this.#all('SELECT name FROM sqlite_master WHERE type=\'table\' ORDER BY name;')
+    const tableNames: Array<{ name: string }> = this.#all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
+    const dbstats: Array<{ name: string, size: number }> = this.#all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;') // Require DBSTAT Virtual Table (SQLite should be compiled with SQLITE_ENABLE_DBSTAT_VTAB)
     tableNames.forEach(tbl => {
       stats.tables[tbl.name] = this.#get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)
+      stats.tables[tbl.name].size = dbstats.find(o => o.name === tbl.name)!.size
     })
     return stats
   }
