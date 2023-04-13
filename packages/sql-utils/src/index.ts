@@ -5,6 +5,18 @@ export function escapeId(value: string) {
   return '`' + value + '`'
 }
 
+export function transformRandom(sql: string, randomFunction: string) {
+  const regex = /('[^']*'|"[^"]*"|`[^`]*`)|%%__RANDOM\(\)__%%/g;
+
+  return sql.replace(regex, (match, group) => {
+    if (group) {
+      return group; // 返回引号内的字符串，不进行替换
+    } else {
+      return randomFunction; // 替换 %%__RANDOM()__%% 为 randomFunction
+    }
+  });
+}
+
 export type QueryOperators = {
   [K in keyof Query.FieldExpr]?: (key: string, value: NonNullable<Query.FieldExpr[K]>) => string
 }
@@ -111,6 +123,9 @@ export class Builder {
       $min: (expr) => `min(${this.parseAggr(expr)})`,
       $max: (expr) => `max(${this.parseAggr(expr)})`,
       $count: (expr) => `count(distinct ${this.parseAggr(expr)})`,
+
+      // random
+      $random: () => '%%__RANDOM()__%%',
     }
   }
 
@@ -236,7 +251,7 @@ export class Builder {
       return this.parseEvalExpr(fields[key]?.expr)
     }
     const prefix = !this.tables || table === '_' || key in fields ? '' : `${escapeId(table)}.`
-    return this.transformKey(key, fields, prefix) 
+    return this.transformKey(key, fields, prefix)
   }
 
   parseEval(expr: any): string {
@@ -338,7 +353,7 @@ export class Builder {
   escape(value: any, field?: Field) {
     value = this.stringify(value, field)
     if (isNullable(value)) return 'NULL'
-  
+
     switch (typeof value) {
       case 'boolean':
       case 'number':
@@ -360,20 +375,20 @@ export class Builder {
     let chunkIndex = this.escapeRegExp.lastIndex = 0
     let escapedVal = ''
     let match: RegExpExecArray | null
-  
+
     while ((match = this.escapeRegExp.exec(value))) {
       escapedVal += value.slice(chunkIndex, match.index) + this.escapeMap[match[0]]
       chunkIndex = this.escapeRegExp.lastIndex
     }
-  
+
     if (chunkIndex === 0) {
       return "'" + value + "'"
     }
-  
+
     if (chunkIndex < value.length) {
       return "'" + escapedVal + value.slice(chunkIndex) + "'"
     }
-  
+
     return "'" + escapedVal + "'"
   }
 }
