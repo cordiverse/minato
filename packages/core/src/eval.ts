@@ -89,6 +89,9 @@ export namespace Eval {
     max(value: Number): Expr<number>
     min(value: Number): Expr<number>
     count(value: Any): Expr<number>
+
+    // random
+    random(value?: never): Expr<number>
   }
 }
 
@@ -166,6 +169,9 @@ Eval.avg = unary('avg', (expr, table) => table.reduce((prev, curr) => prev + exe
 Eval.max = unary('max', (expr, table) => Math.max(...table.map(data => executeAggr(expr, data))))
 Eval.min = unary('min', (expr, table) => Math.min(...table.map(data => executeAggr(expr, data))))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size)
+
+// random
+Eval.random = unary('random', (expr, table) => Math.random())
 
 export { Eval as $ }
 
