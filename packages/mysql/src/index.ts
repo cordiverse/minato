@@ -2,7 +2,7 @@ import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, RuntimeError, Selection } from '@minatojs/core'
-import { Builder, escapeId } from '@minatojs/sql-utils'
+import { Builder, escapeId, transformRandom } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
 declare module 'mysql' {
@@ -305,6 +305,7 @@ export class MySQLDriver extends Driver {
 
   query<T = any>(sql: string): Promise<T> {
     const error = new Error()
+    sql = transformRandom(sql, 'RAND()')
     return new Promise((resolve, reject) => {
       this.pool.query(sql, (err: Error, results) => {
         if (!err) return resolve(results)
