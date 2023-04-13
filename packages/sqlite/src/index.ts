@@ -1,6 +1,6 @@
 import { deepEqual, Dict, difference, isNullable, makeArray, union } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
-import { Builder, escapeId } from '@minatojs/sql-utils'
+import { Builder, escapeId, transformRandom } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
 import Logger from 'reggol'
@@ -233,6 +233,7 @@ export class SQLiteDriver extends Driver {
 
   #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
     try {
+      sql = sql = transformRandom(sql, 'RANDOM()')
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
       stmt.free()
