@@ -156,12 +156,12 @@ export class SQLiteDriver extends Driver {
       this.#run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
     } else if (shouldMigrate) {
       // preserve old columns
-      for (const { name, type, notnull, pk, dflt_value } of columns) {
+      for (const { name, type, notnull, pk, dflt_value: value } of columns) {
         if (mapping[name] || dropKeys?.includes(name)) continue
         let def = `${escapeId(name)} ${type}`
         def += (notnull ? ' NOT ' : ' ') + 'NULL'
         if (pk) def += ' PRIMARY KEY'
-        if (dflt_value !== null) def += ' DEFAULT ' + this.sql.escape(dflt_value)
+        if (value !== null) def += ' DEFAULT ' + this.sql.escape(value)
         columnDefs.push(def)
         mapping[name] = name
       }
@@ -228,6 +228,7 @@ export class SQLiteDriver extends Driver {
   }
 
   async stop() {
+    await new Promise(resolve => setTimeout(resolve, 0))
     this.db?.close()
   }
 
@@ -259,16 +260,18 @@ export class SQLiteDriver extends Driver {
     return this.#exec(sql, params, stmt => stmt.getAsObject(params))
   }
 
+  #export() {
+    const data = this.db.export()
+    fs.writeFile(this.config.path, data)
+    this.init(data)
+  }
+
   #run(sql: string, params: any = [], callback?: () => any) {
     this.#exec(sql, params, stmt => stmt.run(params))
     const result = callback?.()
     if (this.config.path) {
-      const data = this.db.export()
-      const timer = this.writeTask = setTimeout(() => {
-        if (this.writeTask !== timer) return
-        fs.writeFile(this.config.path, data)
-      }, 0)
-      this.init(data)
+      clearTimeout(this.writeTask)
+      this.writeTask = setTimeout(() => this.#export(), 0)
     }
     return result
   }
@@ -285,8 +288,8 @@ export class SQLiteDriver extends Driver {
     const data = this.db.export()
     this.init(data)
     const stats: Driver.Stats = { size: data.byteLength, tables: {} }
-    const tableNames: Array<{ name: string }> = this.#all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
-    const dbstats: Array<{ name: string, size: number }> = this.#all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
+    const tableNames: { name: string }[] = this.#all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
+    const dbstats: { name: string; size: number }[] = this.#all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
     tableNames.forEach(tbl => {
       stats.tables[tbl.name] = this.#get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)
       stats.tables[tbl.name].size = dbstats.find(o => o.name === tbl.name)!.size
