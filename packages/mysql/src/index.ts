@@ -246,6 +246,7 @@ export class MySQLDriver extends Driver {
     }
 
     for (const key of unique) {
+      let oldIndex: IndexInfo | undefined
       let shouldUpdate = false
       const oldKeys = makeArray(key).map((key) => {
         const legacy = [key, ...fields[key]!.legacy || []]
@@ -253,13 +254,16 @@ export class MySQLDriver extends Driver {
         if (column?.COLUMN_NAME !== key) shouldUpdate = true
         return column?.COLUMN_NAME
       })
-      const name = oldKeys.join('_')
-      const index = indexes.find(info => info.INDEX_NAME === name)
-      if (!index) {
-        create.push(`UNIQUE INDEX (${createIndex(key)})`)
+      if (oldKeys.every(Boolean)) {
+        const name = 'unique:' + oldKeys.join('+')
+        oldIndex = indexes.find(info => info.INDEX_NAME === name)
+      }
+      const name = 'unique:' + makeArray(key).join('+')
+      if (!oldIndex) {
+        create.push(`UNIQUE INDEX ${escapeId(name)} (${createIndex(key)})`)
       } else if (shouldUpdate) {
-        create.push(`UNIQUE INDEX (${createIndex(key)})`)
-        update.push(`DROP INDEX ${escapeId(name)}`)
+        create.push(`UNIQUE INDEX ${escapeId(name)} (${createIndex(key)})`)
+        update.push(`DROP INDEX ${escapeId(oldIndex.INDEX_NAME)}`)
       }
     }
 
