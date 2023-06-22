@@ -3,7 +3,7 @@ import { Driver } from './driver'
 import { Eval, executeEval } from './eval'
 import { Model } from './model'
 import { Query } from './query'
-import { Keys, Row, randomId } from './utils'
+import { Keys, randomId, Row } from './utils'
 
 export type Direction = 'asc' | 'desc'
 
