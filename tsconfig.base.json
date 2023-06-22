@@ -10,6 +10,7 @@
     "esModuleInterop": true,
     "moduleResolution": "node",
     "strict": true,
+    "strictNullChecks": false,
     "noImplicitAny": false,
     "noImplicitThis": false,
     "strictFunctionTypes": false,

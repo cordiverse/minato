@@ -25,11 +25,11 @@
     "unit"
   ],
   "devDependencies": {
-    "@types/chai": "^4.3.4",
+    "@types/chai": "^4.3.5",
     "@types/chai-as-promised": "^7.1.5"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.3.1"
+    "@minatojs/core": "^2.3.2"
   },
   "dependencies": {
     "chai": "^4.3.7",

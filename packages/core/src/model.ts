@@ -169,10 +169,8 @@ export class Model<S = any> {
     for (const key in source) {
       let node = result
       const segments = key.split('.').reverse()
-      let prefix = ''
       for (let index = segments.length - 1; index > 0; index--) {
         const segment = segments[index]
-        prefix += segment + '.'
         node = node[segment] ??= {}
       }
       if (key in source) {
