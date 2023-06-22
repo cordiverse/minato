@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, Model, Modifier, Query, Selection } from '@minatojs/core'
+import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -167,7 +167,7 @@ export class Builder {
       conditions.push(this.createMemberQuery(key, query))
     } else if (query instanceof RegExp) {
       conditions.push(this.createRegExpQuery(key, query))
-    } else if (typeof query === 'string' || typeof query === 'number' || query instanceof Date) {
+    } else if (isComparable(query)) {
       conditions.push(this.createEqualQuery(key, query))
     } else if (isNullable(query)) {
       conditions.push(this.createNullQuery(key, false))
@@ -236,7 +236,7 @@ export class Builder {
       return this.parseEvalExpr(fields[key]?.expr)
     }
     const prefix = !this.tables || table === '_' || key in fields ? '' : `${escapeId(table)}.`
-    return this.transformKey(key, fields, prefix) 
+    return this.transformKey(key, fields, prefix)
   }
 
   parseEval(expr: any): string {
@@ -338,7 +338,7 @@ export class Builder {
   escape(value: any, field?: Field) {
     value = this.stringify(value, field)
     if (isNullable(value)) return 'NULL'
-  
+
     switch (typeof value) {
       case 'boolean':
       case 'number':
@@ -360,20 +360,20 @@ export class Builder {
     let chunkIndex = this.escapeRegExp.lastIndex = 0
     let escapedVal = ''
     let match: RegExpExecArray | null
-  
+
     while ((match = this.escapeRegExp.exec(value))) {
       escapedVal += value.slice(chunkIndex, match.index) + this.escapeMap[match[0]]
       chunkIndex = this.escapeRegExp.lastIndex
     }
-  
+
     if (chunkIndex === 0) {
       return "'" + value + "'"
     }
-  
+
     if (chunkIndex < value.length) {
       return "'" + escapedVal + value.slice(chunkIndex) + "'"
     }
-  
+
     return "'" + escapedVal + "'"
   }
 }

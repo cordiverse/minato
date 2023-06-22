@@ -1,5 +1,5 @@
 import { Dict, isNullable, valueMap } from 'cosmokit'
-import { Query, Selection } from '@minatojs/core'
+import { isComparable, Query, Selection } from '@minatojs/core'
 import { Filter, FilterOperators } from 'mongodb'
 
 function createFieldFilter(query: Query.FieldQuery, key: string) {
@@ -15,7 +15,7 @@ function createFieldFilter(query: Query.FieldQuery, key: string) {
 
 function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filter<any>[]) {
   // shorthand syntax
-  if (typeof query === 'string' || typeof query === 'number' || query instanceof Date) {
+  if (isComparable(query)) {
     return { $eq: query }
   } else if (Array.isArray(query)) {
     if (!query.length) return false
