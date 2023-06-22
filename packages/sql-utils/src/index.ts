@@ -167,7 +167,7 @@ export class Builder {
       conditions.push(this.createMemberQuery(key, query))
     } else if (query instanceof RegExp) {
       conditions.push(this.createRegExpQuery(key, query))
-    } else if (typeof query === 'string' || typeof query === 'number' || query instanceof Date) {
+    } else if (typeof query === 'string' || typeof query === 'number' || typeof query === 'boolean' || query instanceof Date) {
       conditions.push(this.createEqualQuery(key, query))
     } else if (isNullable(query)) {
       conditions.push(this.createNullQuery(key, false))

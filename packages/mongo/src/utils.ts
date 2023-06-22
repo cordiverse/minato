@@ -15,7 +15,7 @@ function createFieldFilter(query: Query.FieldQuery, key: string) {
 
 function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filter<any>[]) {
   // shorthand syntax
-  if (typeof query === 'string' || typeof query === 'number' || query instanceof Date) {
+  if (typeof query === 'string' || typeof query === 'number' || typeof query === 'boolean' || query instanceof Date) {
     return { $eq: query }
   } else if (Array.isArray(query)) {
     if (!query.length) return false
