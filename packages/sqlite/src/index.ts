@@ -369,15 +369,20 @@ export class SQLiteDriver extends Driver {
     }))]
     const relaventFields = union(keys, dataFields)
     const updateFields = difference(dataFields, keys)
-    const results = await this.database.get(table, {
-      $or: data.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
-    }, relaventFields as [])
-    for (const item of data) {
-      const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
-      if (row) {
-        this.#update(sel, keys, updateFields, item, row)
-      } else {
-        this.#create(table, executeUpdate(model.create(), item, ref))
+    // Error: Expression tree is too large (maximum depth 1000)
+    const step = Math.floor(960 / keys.length)
+    for (let i = 0; i < data.length; i += step) {
+      const chunk = data.slice(i, i + step)
+      const results = await this.database.get(table, {
+        $or: chunk.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
+      }, relaventFields as [])
+      for (const item of chunk) {
+        const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
+        if (row) {
+          this.#update(sel, keys, updateFields, item, row)
+        } else {
+          this.#create(table, executeUpdate(model.create(), item, ref))
+        }
       }
     }
   }
