@@ -1,6 +1,6 @@
 import { BSONType, Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, clone, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeUpdate, hasEvalExpr, Model, Query, RuntimeError, Selection } from '@minatojs/core'
+import { Dict, makeArray, noop, omit, pick } from 'cosmokit'
+import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 import Logger from 'reggol'
@@ -395,7 +395,7 @@ export class MongoDriver extends Driver {
     const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
 
     await coll.updateMany(filter, [
-      ...transformer.walkedKeys.length ? [{ $set: preset  }] : [],
+      ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
       ...$unset.length ? [{ $unset }] : [],
       { $set },
       ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
@@ -490,26 +490,21 @@ export class MongoDriver extends Driver {
     } else {
       const bulk = coll.initializeUnorderedBulkOp()
       const initial = model.create()
-      const shouldUnset = !!Object.keys(initial).length
+      const hasInitial = !!Object.keys(initial).length
   
       for (const update of data) {
         const query = this.transformQuery(pick(update, keys), table)
         const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
-        const executeUpdateUnexpand = (update: any, ref: string, data = {}) => {
-          for (const key in update) {
-            data[key] = transformer.eval(update[key])
-          }
-          return data
-        }
-        const $set = this.unpatchVirtual(table, executeUpdateUnexpand(update, ref))
+        const $set = this.unpatchVirtual(table, Object.fromEntries(Object.entries(update)
+          .map(([key, value]) => [key, transformer.eval(value)])))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)
         const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
 
         bulk.find(query).upsert().updateOne([
-          ...transformer.walkedKeys.length ? [{ $set: preset  }] : [],
-          ...shouldUnset ? [{ $replaceRoot: { newRoot: { $mergeObjects: [ initial, '$$ROOT' ] } } }] : [],
+          ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
+          ...hasInitial ? [{ $replaceRoot: { newRoot: { $mergeObjects: [ initial, '$$ROOT' ] } } }] : [],
           ...$unset.length ? [{ $unset }] : [],
           { $set },
           ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
