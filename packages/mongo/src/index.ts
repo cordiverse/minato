@@ -1,8 +1,8 @@
 import { BSONType, Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, makeArray, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
+import { Dict, clone, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
+import { Database, Driver, Eval, executeEval, executeUpdate, hasEvalExpr, Model, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
-import { Transformer } from './utils'
+import { Transformer, parseUnusedFields } from './utils'
 import Logger from 'reggol'
 
 const logger = new Logger('mongo')
@@ -386,6 +386,15 @@ export class MongoDriver extends Driver {
     if (!filter) return
     const indexFields = makeArray(sel.model.primary)
     const coll = this.db.collection(table)
+
+    // Skip exprEval if possible
+    if (!hasEvalExpr(update)) {
+      await coll.updateMany(filter, {
+        $set: update
+      })
+      return
+    }
+
     const original = await coll.find(filter).toArray()
     if (!original.length) return
 
@@ -407,6 +416,12 @@ export class MongoDriver extends Driver {
     const filter = this.transformQuery(query, table)
     if (!filter) return
     await this.db.collection(table).deleteMany(filter)
+  }
+
+  private shouldEnsurePrimary(table: string) {
+    const model = this.model(table)
+    const { primary, autoInc } = model
+    return typeof primary === 'string' && autoInc
   }
 
   private async ensurePrimary(table: string, data: any[]) {
@@ -452,32 +467,70 @@ export class MongoDriver extends Driver {
     if (!data.length) return
     const { table, ref, model } = sel
     const coll = this.db.collection(table)
-    const original = (await coll.find({
-      $or: data.map((item) => {
-        return this.transformQuery(pick(item, keys), table)
-      }),
-    }).toArray()).map(row => this.patchVirtual(table, row))
 
-    const bulk = coll.initializeUnorderedBulkOp()
-    const insertion: any[] = []
-    for (const update of data) {
-      const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
-      if (item) {
-        const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
-        const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
-        const query = this.transformQuery(pick(item, keys), table)
-        if (!query) continue
-        bulk.find(query).updateOne({ $set: override })
-      } else {
-        insertion.push(update)
+    // If ensure primary, we must figure out number of insertions
+    if (this.shouldEnsurePrimary(table) || data.some(item => hasEvalExpr(item))) {
+      const original = (await coll.find({
+        $or: data.map((item) => {
+          return this.transformQuery(pick(item, keys), table)
+        }),
+      }).toArray()).map(row => this.patchVirtual(table, row))
+
+      const bulk = coll.initializeUnorderedBulkOp()
+      const insertion: any[] = []
+      for (const update of data) {
+        const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
+        if (item) {
+          const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
+          const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
+          const query = this.transformQuery(pick(item, keys), table)
+          if (!query) continue
+          bulk.find(query).updateOne({ $set: override })
+        } else {
+          insertion.push(update)
+        }
+      }
+      await this.ensurePrimary(table, insertion)
+      for (const update of insertion) {
+        const copy = executeUpdate(model.create(), update, ref)
+        bulk.insert(this.unpatchVirtual(table, copy))
+      }
+      await bulk.execute()
+    } else {
+      const bulk = coll.initializeUnorderedBulkOp()
+      const initial = this._createInitial(model)
+      const shouldComputeInitial = !!Object.keys(initial).length
+      const executeUpdateUnexpand = (update: any, ref: string, data = {}) => {
+        for (const key in update) {
+          data[key] = executeEval({ [ref]: data, _: data }, update[key])
+        }
+        return data
+      }
+
+      for (const update of data) {
+        const query = this.transformQuery(pick(update, keys), table)
+        const override = this.unpatchVirtual(table, executeUpdateUnexpand(update, ref))
+        const setOnInsert = shouldComputeInitial ? Object.fromEntries(parseUnusedFields(initial, override)) : {}
+        bulk.find(query).upsert().updateOne({
+          $set: override,
+          $setOnInsert: setOnInsert,
+        })
+      }
+      await bulk.execute()
+    }
+  }
+
+  private _createInitial<S>(model: Model<S>) {
+    const result = {} as S
+    const keys = makeArray(model.primary)
+    for (const key in model.fields) {
+      const { initial, deprecated } = model.fields[key]!
+      if (deprecated) continue
+      if (!keys.includes(key) && !isNullable(initial)) {
+        result[key] = model.resolveValue(key, clone(initial))
       }
     }
-    await this.ensurePrimary(table, insertion)
-    for (const update of insertion) {
-      const copy = executeUpdate(model.create(), update, ref)
-      bulk.insert(this.unpatchVirtual(table, copy))
-    }
-    await bulk.execute()
+    return result
   }
 }
 

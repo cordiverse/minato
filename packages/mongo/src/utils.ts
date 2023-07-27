@@ -240,3 +240,22 @@ export class Transformer {
     }
   }
 }
+
+export function * parseUnusedFields(initialModel: any, updateModel: any, prefix: string = '') {
+  for (const key in initialModel){
+    const initialKey = prefix + key, newPrefix = initialKey + '.'
+    // Already hit, reject initial
+    if (initialKey in updateModel) continue
+
+    // Search for partial results
+    const newUpdateEntries = Object.entries(updateModel).filter(([k, m]) => k.startsWith(newPrefix))
+
+    // No overlapping, accept initial
+    if (!newUpdateEntries.length) {
+      yield [initialKey, initialModel[key]]
+      continue
+    }
+    const nextUpdateModel = Object.fromEntries(newUpdateEntries)
+    yield * parseUnusedFields(initialModel[key], nextUpdateModel, newPrefix)
+  }
+}
