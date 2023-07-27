@@ -2,10 +2,11 @@ import { BSONType, Collection, Db, IndexDescription, MongoClient, MongoError } f
 import { Dict, clone, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, hasEvalExpr, Model, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
-import { Transformer, parseUnusedFields } from './utils'
+import { Transformer } from './utils'
 import Logger from 'reggol'
 
 const logger = new Logger('mongo')
+const tempKey = '__temp_minato_mongo__'
 
 export namespace MongoDriver {
   export interface Config {
@@ -384,31 +385,21 @@ export class MongoDriver extends Driver {
     const { query, table, ref } = sel
     const filter = this.transformQuery(query, table)
     if (!filter) return
-    const indexFields = makeArray(sel.model.primary)
     const coll = this.db.collection(table)
 
-    // Skip exprEval if possible
-    if (!hasEvalExpr(update)) {
-      await coll.updateMany(filter, {
-        $set: update
-      })
-      return
-    }
+    const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
+    const $set = transformer.eval(update)
+    const $unset = Object.entries($set)
+      .filter(([_, value]) => typeof value === 'object')
+      .map(([key, _]) => key)
+    const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
 
-    const original = await coll.find(filter).toArray()
-    if (!original.length) return
-
-    const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
-    const bulk = coll.initializeUnorderedBulkOp()
-    for (const item of original) {
-      const row = this.patchVirtual(table, item)
-      const query = this.transformQuery(pick(row, indexFields), table)
-      if (!query) continue
-      bulk.find(query).updateOne({
-        $set: pick(executeUpdate(row, update, ref), updateFields),
-      })
-    }
-    await bulk.execute()
+    await coll.updateMany(filter, [
+      ...transformer.walkedKeys.length ? [{ $set: preset  }] : [],
+      ...$unset.length ? [{ $unset }] : [],
+      { $set },
+      ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
+    ])
   }
 
   async remove(sel: Selection.Mutable) {
@@ -469,7 +460,7 @@ export class MongoDriver extends Driver {
     const coll = this.db.collection(table)
 
     // If ensure primary, we must figure out number of insertions
-    if (this.shouldEnsurePrimary(table) || data.some(item => hasEvalExpr(item))) {
+    if (this.shouldEnsurePrimary(table)) {
       const original = (await coll.find({
         $or: data.map((item) => {
           return this.transformQuery(pick(item, keys), table)
@@ -498,39 +489,34 @@ export class MongoDriver extends Driver {
       await bulk.execute()
     } else {
       const bulk = coll.initializeUnorderedBulkOp()
-      const initial = this._createInitial(model)
-      const shouldComputeInitial = !!Object.keys(initial).length
-      const executeUpdateUnexpand = (update: any, ref: string, data = {}) => {
-        for (const key in update) {
-          data[key] = executeEval({ [ref]: data, _: data }, update[key])
-        }
-        return data
-      }
-
+      const initial = model.create()
+      const shouldUnset = !!Object.keys(initial).length
+  
       for (const update of data) {
         const query = this.transformQuery(pick(update, keys), table)
-        const override = this.unpatchVirtual(table, executeUpdateUnexpand(update, ref))
-        const setOnInsert = shouldComputeInitial ? Object.fromEntries(parseUnusedFields(initial, override)) : {}
-        bulk.find(query).upsert().updateOne({
-          $set: override,
-          $setOnInsert: setOnInsert,
-        })
+        const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
+        const executeUpdateUnexpand = (update: any, ref: string, data = {}) => {
+          for (const key in update) {
+            data[key] = transformer.eval(update[key])
+          }
+          return data
+        }
+        const $set = this.unpatchVirtual(table, executeUpdateUnexpand(update, ref))
+        const $unset = Object.entries($set)
+          .filter(([_, value]) => typeof value === 'object')
+          .map(([key, _]) => key)
+        const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
+
+        bulk.find(query).upsert().updateOne([
+          ...transformer.walkedKeys.length ? [{ $set: preset  }] : [],
+          ...shouldUnset ? [{ $replaceRoot: { newRoot: { $mergeObjects: [ initial, '$$ROOT' ] } } }] : [],
+          ...$unset.length ? [{ $unset }] : [],
+          { $set },
+          ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
+        ])
       }
       await bulk.execute()
     }
-  }
-
-  private _createInitial<S>(model: Model<S>) {
-    const result = {} as S
-    const keys = makeArray(model.primary)
-    for (const key in model.fields) {
-      const { initial, deprecated } = model.fields[key]!
-      if (deprecated) continue
-      if (!keys.includes(key) && !isNullable(initial)) {
-        result[key] = model.resolveValue(key, clone(initial))
-      }
-    }
-    return result
   }
 }
 

@@ -76,8 +76,11 @@ const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
 
 export class Transformer {
   private counter = 0
+  public walkedKeys: string[]
 
-  constructor(public virtualKey?: string, public lookup?: boolean) {}
+  constructor(public virtualKey?: string, public lookup?: boolean, public recursivePrefix: string = '$') {
+    this.walkedKeys = []
+  }
 
   public createKey() {
     return '_temp_' + ++this.counter
@@ -90,11 +93,14 @@ export class Transformer {
   private transformEvalExpr(expr: any, group?: Dict) {
     if (expr.$) {
       if (typeof expr.$ === 'string') {
-        return '$' + this.getActualKey(expr.$)
+        this.walkedKeys.push(this.getActualKey(expr.$))
+        return this.recursivePrefix + this.getActualKey(expr.$)
       } else if (this.lookup) {
-        return '$' + expr.$[0] + '.' + this.getActualKey(expr.$[1])
+        this.walkedKeys.push(expr.$[0] + '.' + this.getActualKey(expr.$[1]))
+        return this.recursivePrefix + expr.$[0] + '.' + this.getActualKey(expr.$[1])
       } else {
-        return '$' + this.getActualKey(expr.$[1])
+        this.walkedKeys.push(this.getActualKey(expr.$[1]))
+        return this.recursivePrefix + this.getActualKey(expr.$[1])
       }
     }
 
@@ -117,14 +123,15 @@ export class Transformer {
     }
 
     if (typeof expr === 'string') {
-      return '$' + expr
+      this.walkedKeys.push(expr)
+      return this.recursivePrefix + expr
     }
 
     return this.transformEvalExpr(expr)
   }
 
   public eval(expr: any, group?: Dict) {
-    if (typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
+    if (isNullable(expr) || typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
       return expr
     }
 
@@ -238,24 +245,5 @@ export class Transformer {
       }
       stages.push({ $project })
     }
-  }
-}
-
-export function * parseUnusedFields(initialModel: any, updateModel: any, prefix: string = '') {
-  for (const key in initialModel){
-    const initialKey = prefix + key, newPrefix = initialKey + '.'
-    // Already hit, reject initial
-    if (initialKey in updateModel) continue
-
-    // Search for partial results
-    const newUpdateEntries = Object.entries(updateModel).filter(([k, m]) => k.startsWith(newPrefix))
-
-    // No overlapping, accept initial
-    if (!newUpdateEntries.length) {
-      yield [initialKey, initialModel[key]]
-      continue
-    }
-    const nextUpdateModel = Object.fromEntries(newUpdateEntries)
-    yield * parseUnusedFields(initialModel[key], nextUpdateModel, newPrefix)
   }
 }
