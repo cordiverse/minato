@@ -118,7 +118,7 @@ export class Transformer {
   }
 
   private transformAggr(expr: any) {
-    if (typeof expr === 'number' || typeof expr === 'boolean') {
+    if (typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return expr
     }
 
@@ -131,7 +131,7 @@ export class Transformer {
   }
 
   public eval(expr: any, group?: Dict) {
-    if (isNullable(expr) || typeof expr === 'number' || typeof expr === 'string' || typeof expr === 'boolean') {
+    if (isComparable(expr) || isNullable(expr)) {
       return expr
     }
 
