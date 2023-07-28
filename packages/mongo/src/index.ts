@@ -495,8 +495,7 @@ export class MongoDriver extends Driver {
       for (const update of data) {
         const query = this.transformQuery(pick(update, keys), table)
         const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
-        const $set = this.unpatchVirtual(table, Object.fromEntries(Object.entries(update)
-          .map(([key, value]) => [key, transformer.eval(value)])))
+        const $set = transformer.eval(update)
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)
