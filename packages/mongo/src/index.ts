@@ -382,7 +382,7 @@ export class MongoDriver extends Driver {
   }
 
   async set(sel: Selection.Mutable, update: {}) {
-    const { query, table, ref } = sel
+    const { query, table } = sel
     const filter = this.transformQuery(query, table)
     if (!filter) return
     const coll = this.db.collection(table)

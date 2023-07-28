@@ -5,12 +5,6 @@ export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
-export function hasEvalExpr(value: any, exprKeys?: ('' | keyof Eval.Static)[]): boolean {
-  return value && typeof value === 'object' && Object.keys(value).some(key =>
-    (key.startsWith('$') && (!exprKeys?.length || exprKeys.includes(key.slice(1) as any)))
-    || hasEvalExpr(value[key], exprKeys))
-}
-
 type $Date = Date
 type $RegExp = RegExp
 
