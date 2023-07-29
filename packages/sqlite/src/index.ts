@@ -214,7 +214,7 @@ export class SQLiteDriver extends Driver {
         locateFile: (file: string) => process.env.KOISHI_BASE
           ? process.env.KOISHI_BASE + '/' + file
           : process.env.KOISHI_ENV === 'browser'
-            ? '/' + file
+            ? '/modules/@koishijs/plugin-database-sqlite/' + file
             : require.resolve('@minatojs/sql.js/dist/' + file),
       }),
       this.load(),

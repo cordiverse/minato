@@ -491,9 +491,9 @@ export class MongoDriver extends Driver {
       const bulk = coll.initializeUnorderedBulkOp()
       const initial = model.create()
       const hasInitial = !!Object.keys(initial).length
-  
+
       for (const update of data) {
-        const query = this.transformQuery(pick(update, keys), table)
+        const query = this.transformQuery(pick(update, keys), table)!
         const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
         const $set = transformer.eval(update)
         const $unset = Object.entries($set)
@@ -503,7 +503,7 @@ export class MongoDriver extends Driver {
 
         bulk.find(query).upsert().updateOne([
           ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
-          ...hasInitial ? [{ $replaceRoot: { newRoot: { $mergeObjects: [ initial, '$$ROOT' ] } } }] : [],
+          ...hasInitial ? [{ $replaceRoot: { newRoot: { $mergeObjects: [initial, '$$ROOT'] } } }] : [],
           ...$unset.length ? [{ $unset }] : [],
           { $set },
           ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
