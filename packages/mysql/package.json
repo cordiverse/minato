@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mysql",
-  "version": "2.4.6",
+  "version": "2.4.7",
   "description": "MySQL Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -32,9 +32,9 @@
     "@types/mysql": "^2.15.21"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^4.0.4",
+    "@minatojs/sql-utils": "^4.0.5",
     "@vlasky/mysql": "^2.18.6",
-    "cosmokit": "^1.4.2",
-    "reggol": "^1.4.2"
+    "cosmokit": "^1.4.3",
+    "reggol": "^1.4.4"
   }
 }

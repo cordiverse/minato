@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "description": "MongoDB Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "mongodb": "^4.16.0",
-    "cosmokit": "^1.4.2",
-    "reggol": "^1.4.2"
+    "cosmokit": "^1.4.3",
+    "reggol": "^1.4.4"
   }
 }

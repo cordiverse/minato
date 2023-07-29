@@ -174,12 +174,14 @@ export class Selection<S = any> extends Executable<S, S[]> {
     extra?: U,
     query?: Selection.Callback<S, boolean>,
   ): Selection<Pick<S, K> & FieldMap<S, U>>
+
   groupBy<K extends Dict<FieldLike<S>>>(fields: K, query?: Selection.Callback<S, boolean>): Selection<FieldMap<S, K>>
   groupBy<K extends Dict<FieldLike<S>>, U extends Dict<FieldLike<S>>>(
     fields: K,
     extra?: U,
     query?: Selection.Callback<S, boolean>,
   ): Selection<FieldMap<S, K & U>>
+
   groupBy(fields: any, ...args: any[]) {
     this.args[0].fields = this.resolveFields(fields)
     this.args[0].group = Object.keys(this.args[0].fields!)

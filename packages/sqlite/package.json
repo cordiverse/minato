@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-sqlite",
-  "version": "3.5.4",
+  "version": "3.5.6",
   "description": "SQLite Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -31,9 +31,9 @@
     "@minatojs/tests": "^1.5.0"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^4.0.4",
+    "@minatojs/sql-utils": "^4.0.5",
     "@minatojs/sql.js": "^2.0.1",
-    "cosmokit": "^1.4.2",
-    "reggol": "^1.4.2"
+    "cosmokit": "^1.4.3",
+    "reggol": "^1.4.4"
   }
 }
