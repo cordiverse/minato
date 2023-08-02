@@ -1,5 +1,5 @@
 import { BSONType, Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
-import { Dict, makeArray, noop, omit, pick } from 'cosmokit'
+import { Dict, makeArray, noop, omit, pick, isNullable } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
@@ -125,7 +125,9 @@ export class MongoDriver extends Driver {
     const { fields } = this.model(table)
     const coll = this.db.collection(table)
     const bulk = coll.initializeOrderedBulkOp()
+    const virtualKey = this.getVirtualKey(table)
     for (const key in fields) {
+      if (virtualKey === key) continue
       const { initial, legacy = [], deprecated } = fields[key]!
       if (deprecated) continue
       const filter = { [key]: { $exists: false } }
@@ -144,13 +146,45 @@ export class MongoDriver extends Driver {
     if (bulk.batches.length) await bulk.execute()
   }
 
+  private async _migrateVirtual(table: string) {
+    const { primary } = this.model(table)
+    if (Array.isArray(primary)) return
+    const fields = this.db.collection('_fields')
+    const meta: Dict = { table, field: primary }
+    const found = await fields.findOne(meta)
+
+    if (!!found?.virtual === !!this.config.optimizeIndex) return
+    logger.info('Start migrating table %s', table)
+
+    if (found?.migrate && await this.db.listCollections({ name: '_migrate_' + table }).hasNext()) {
+      logger.info('Last time crashed, recover')
+    } else {
+      await this.db.dropCollection('_migrate_' + table).catch(noop)
+      await this.db.collection(table).aggregate([
+        { $addFields: { _temp_id: '$_id' } },
+        { $unset: ['_id'] },
+        { $addFields: this.config.optimizeIndex ? { _id: '$' + primary } : { [primary]: '$_temp_id' } },
+        { $unset: ['_temp_id', ...this.config.optimizeIndex ? [primary] : []] },
+        { $out: '_migrate_' + table },
+      ]).toArray()
+      await fields.updateOne(meta, { $set: { migrate: true } }, { upsert: true })
+    }
+    await this.db.dropCollection(table)
+    await this.db.renameCollection('_migrate_' + table, table)
+    await fields.updateOne(meta,
+      { $set: { virtual: this.config.optimizeIndex, migrate: false } },
+      { upsert: true },
+    )
+    logger.info('Successfully migrated table %s', table)
+  }
+
   private async _migratePrimary(table: string) {
     const { primary, autoInc } = this.model(table)
     if (Array.isArray(primary) || !autoInc) return
     const fields = this.db.collection('_fields')
     const meta: Dict = { table, field: primary }
     const found = await fields.findOne(meta)
-    if (found) return
+    if (!isNullable(found?.autoInc)) return
 
     const coll = this.db.collection(table)
     const bulk = coll.initializeOrderedBulkOp()
@@ -179,6 +213,7 @@ export class MongoDriver extends Driver {
       this.db.createCollection(table).catch(noop),
     ])
 
+    await this._migrateVirtual(table)
     await Promise.all([
       this._createIndexes(table),
       this._createFields(table),
