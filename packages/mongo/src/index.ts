@@ -462,7 +462,7 @@ export class MongoDriver extends Driver {
         { upsert: true },
       )
       for (let i = 1; i <= missing.length; i++) {
-        missing[i - 1][primary] = value!.autoInc + i
+        missing[i - 1][primary] = (value!.autoInc ?? 0) + i
       }
     }
   }
@@ -474,7 +474,6 @@ export class MongoDriver extends Driver {
       const model = this.model(table)
       const coll = this.db.collection(table)
       await this.ensurePrimary(table, [data])
-
       try {
         data = model.create(data)
         const copy = this.unpatchVirtual(table, { ...data })
