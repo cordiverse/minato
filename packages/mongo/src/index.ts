@@ -152,8 +152,21 @@ export class MongoDriver extends Driver {
     const fields = this.db.collection('_fields')
     const meta: Dict = { table, field: primary }
     const found = await fields.findOne(meta)
+    let virtual = !!found?.virtual
+    // If  _fields table was missing for any reason
+    // Test the type of _id to get its possible preference
+    if (!found) {
+      const doc = await this.db.collection(table).findOne()
+      if (doc) virtual = typeof doc._id !== 'object'
+      else {
+        // Empty collection, just set meta and return
+        fields.updateOne(meta, { $set: { virtual: this.config.optimizeIndex } }, { upsert: true })
+        logger.info('Successfully reconfigured table %s', table)
+        return
+      }
+    }
 
-    if (!!found?.virtual === !!this.config.optimizeIndex) return
+    if (virtual === !!this.config.optimizeIndex) return
     logger.info('Start migrating table %s', table)
 
     if (found?.migrate && await this.db.listCollections({ name: '_migrate_' + table }).hasNext()) {
@@ -187,17 +200,21 @@ export class MongoDriver extends Driver {
     if (!isNullable(found?.autoInc)) return
 
     const coll = this.db.collection(table)
-    const bulk = coll.initializeOrderedBulkOp()
-    await coll.find().forEach((data) => {
-      bulk
-        .find({ [primary]: data[primary] })
-        .update({ $set: { [primary]: +data[primary] } })
-    })
-    if (bulk.batches.length) await bulk.execute()
+    // Primary _id cannot be modified thus should always meet the requirements
+    if (!this.config.optimizeIndex) {
+      const bulk = coll.initializeOrderedBulkOp()
+      await coll.find().forEach((data) => {
+        bulk
+          .find({ [primary]: data[primary] })
+          .update({ $set: { [primary]: +data[primary] } })
+      })
+      if (bulk.batches.length) await bulk.execute()
+    }
 
-    const [latest] = await coll.find().sort(primary, -1).limit(1).toArray()
-    meta.autoInc = latest ? +latest[primary] : 0
-    await fields.insertOne(meta)
+    const [latest] = await coll.find().sort(this.config.optimizeIndex ? '_id' : primary, -1).limit(1).toArray()
+    await fields.updateOne(meta, {
+      $set: { autoInc: latest ? +latest[this.config.optimizeIndex ? '_id' : primary] : 0 },
+    }, { upsert: true })
   }
 
   private _internalTableTask?: Promise<Collection<Document>>
