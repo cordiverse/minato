@@ -182,7 +182,7 @@ export class MongoDriver extends Driver {
       ]).toArray()
       await fields.updateOne(meta, { $set: { migrate: true } }, { upsert: true })
     }
-    await this.db.dropCollection(table)
+    await this.db.dropCollection(table).catch(noop)
     await this.db.renameCollection('_migrate_' + table, table)
     await fields.updateOne(meta,
       { $set: { virtual: this.config.optimizeIndex, migrate: false } },
@@ -491,6 +491,7 @@ export class MongoDriver extends Driver {
       const model = this.model(table)
       const coll = this.db.collection(table)
       await this.ensurePrimary(table, [data])
+
       try {
         data = model.create(data)
         const copy = this.unpatchVirtual(table, { ...data })
