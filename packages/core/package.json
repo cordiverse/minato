@@ -30,6 +30,6 @@
     "level"
   ],
   "dependencies": {
-    "cosmokit": "^1.4.3"
+    "cosmokit": "^1.4.4"
   }
 }
