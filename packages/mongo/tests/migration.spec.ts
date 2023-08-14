@@ -82,14 +82,14 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     await initialize(false)
     await expect(database.get('temp1', {})).to.eventually.have.shape(table)
 
+    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await finalize()
     await initialize(true)
-    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await expect(database.get('temp1', {})).to.eventually.have.shape(table)
 
+    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await finalize()
     await initialize(false)
-    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await expect(database.get('temp1', {})).to.eventually.have.shape(table)
   })
 })
