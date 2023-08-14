@@ -500,7 +500,7 @@ export class MongoDriver extends Driver {
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)
         const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, {
-          $ifNull: ['$' + key, initial[key]]
+          $ifNull: ['$' + key, initial[key]],
         }]))
 
         bulk.find(query).upsert().updateOne([
