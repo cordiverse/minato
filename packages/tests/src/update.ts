@@ -199,6 +199,18 @@ namespace OrmOperations {
       ])
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
+
+    it('using expressions with initial values', async () => {
+      const table = await setup(database, 'temp3', bazTable)
+      const data = [
+        { ida: 114, idb: '514', value: 'baz' },
+      ]
+      table.push(...data.map(bar => merge(database.tables.temp3.create(), bar)))
+      await database.upsert('temp3', row => [
+        { ida: 114, idb: '514', value: $.concat(row.value, 'baz') },
+      ])
+      await expect(database.get('temp3', {})).to.eventually.have.deep.members(table)
+    })
   }
 
   export const remove = function Remove(database: Database<Tables>) {

@@ -499,7 +499,9 @@ export class MongoDriver extends Driver {
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)
-        const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
+        const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, {
+          $ifNull: ['$' + key, initial[key]]
+        }]))
 
         bulk.find(query).upsert().updateOne([
           ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
