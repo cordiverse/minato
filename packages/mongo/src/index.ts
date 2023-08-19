@@ -96,7 +96,7 @@ export class MongoDriver extends Driver {
 
     ;[primary, ...unique].forEach((keys, index) => {
       // use internal `_id` for single primary fields
-      if (this.config.optimizeIndex && !index && typeof keys === 'string') return
+      if (primary === keys && !index && this.getVirtualKey(table)) return
 
       // if the index is already created, skip it
       keys = makeArray(keys)
@@ -153,6 +153,7 @@ export class MongoDriver extends Driver {
     const meta: Dict = { table, field: primary }
     const found = await fields.findOne(meta)
     let virtual = !!found?.virtual
+    const useVirtualKey = !!this.getVirtualKey(table)
     // If  _fields table was missing for any reason
     // Test the type of _id to get its possible preference
     if (!found) {
@@ -160,13 +161,12 @@ export class MongoDriver extends Driver {
       if (doc) virtual = typeof doc._id !== 'object'
       else {
         // Empty collection, just set meta and return
-        fields.updateOne(meta, { $set: { virtual: this.config.optimizeIndex } }, { upsert: true })
+        fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
         logger.info('Successfully reconfigured table %s', table)
         return
       }
     }
-
-    if (virtual === !!this.config.optimizeIndex) return
+    if (virtual === useVirtualKey) return
     logger.info('Start migrating table %s', table)
 
     if (found?.migrate && await this.db.listCollections({ name: '_migrate_' + table }).hasNext()) {
@@ -176,8 +176,8 @@ export class MongoDriver extends Driver {
       await this.db.collection(table).aggregate([
         { $addFields: { _temp_id: '$_id' } },
         { $unset: ['_id'] },
-        { $addFields: this.config.optimizeIndex ? { _id: '$' + primary } : { [primary]: '$_temp_id' } },
-        { $unset: ['_temp_id', ...this.config.optimizeIndex ? [primary] : []] },
+        { $addFields: useVirtualKey ? { _id: '$' + primary } : { [primary]: '$_temp_id' } },
+        { $unset: ['_temp_id', ...useVirtualKey ? [primary] : []] },
         { $out: '_migrate_' + table },
       ]).toArray()
       await fields.updateOne(meta, { $set: { migrate: true } }, { upsert: true })
@@ -185,7 +185,7 @@ export class MongoDriver extends Driver {
     await this.db.dropCollection(table).catch(noop)
     await this.db.renameCollection('_migrate_' + table, table)
     await fields.updateOne(meta,
-      { $set: { virtual: this.config.optimizeIndex, migrate: false } },
+      { $set: { virtual: useVirtualKey, migrate: false } },
       { upsert: true },
     )
     logger.info('Successfully migrated table %s', table)
@@ -201,7 +201,7 @@ export class MongoDriver extends Driver {
 
     const coll = this.db.collection(table)
     // Primary _id cannot be modified thus should always meet the requirements
-    if (!this.config.optimizeIndex) {
+    if (!this.getVirtualKey(table)) {
       const bulk = coll.initializeOrderedBulkOp()
       await coll.find().forEach((data) => {
         bulk
@@ -211,9 +211,9 @@ export class MongoDriver extends Driver {
       if (bulk.batches.length) await bulk.execute()
     }
 
-    const [latest] = await coll.find().sort(this.config.optimizeIndex ? '_id' : primary, -1).limit(1).toArray()
+    const [latest] = await coll.find().sort(this.getVirtualKey(table) ? '_id' : primary, -1).limit(1).toArray()
     await fields.updateOne(meta, {
-      $set: { autoInc: latest ? +latest[this.config.optimizeIndex ? '_id' : primary] : 0 },
+      $set: { autoInc: latest ? +latest[this.getVirtualKey(table) ? '_id' : primary] : 0 },
     }, { upsert: true })
   }
 
@@ -285,15 +285,15 @@ export class MongoDriver extends Driver {
   }
 
   private getVirtualKey(table: string) {
-    const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.optimizeIndex) {
+    const { primary, fields } = this.model(table)
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
       return primary
     }
   }
 
   private patchVirtual(table: string, row: any) {
-    const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.optimizeIndex) {
+    const { primary, fields } = this.model(table)
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
       row[primary] = row['_id']
       delete row['_id']
     }
@@ -301,8 +301,8 @@ export class MongoDriver extends Driver {
   }
 
   private unpatchVirtual(table: string, row: any) {
-    const { primary } = this.model(table)
-    if (typeof primary === 'string' && this.config.optimizeIndex) {
+    const { primary, fields } = this.model(table)
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
       row['_id'] = row[primary]
       delete row[primary]
     }
@@ -464,13 +464,19 @@ export class MongoDriver extends Driver {
   private shouldEnsurePrimary(table: string) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    return typeof primary === 'string' && autoInc
+    return typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary'
+  }
+
+  private shouldFillPrimary(table: string) {
+    const model = this.model(table)
+    const { primary, autoInc } = model
+    return typeof primary === 'string' && autoInc && model.fields[primary]?.type === 'primary'
   }
 
   private async ensurePrimary(table: string, data: any[]) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    if (typeof primary === 'string' && autoInc) {
+    if (typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary') {
       const missing = data.filter(item => !(primary in item))
       if (!missing.length) return
       const { value } = await this.db.collection('_fields').findOneAndUpdate(
@@ -495,8 +501,11 @@ export class MongoDriver extends Driver {
       try {
         data = model.create(data)
         const copy = this.unpatchVirtual(table, { ...data })
-        await coll.insertOne(copy)
-        return data
+        // console.log(copy)
+        const insertedId = (await coll.insertOne(copy)).insertedId
+        if (this.shouldFillPrimary(table)) {
+          return { ...data, [model.primary as string]: insertedId }
+        } else return data
       } catch (err) {
         if (err instanceof MongoError && err.code === 11000) {
           throw new RuntimeError('duplicate-entry', err.message)

@@ -4,6 +4,8 @@ import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
+export type Primary = { readonly _tag: unique symbol}
+
 export interface Field<T = any> {
   type: Field.Type<T>
   length?: number
@@ -22,6 +24,7 @@ export namespace Field {
   export const boolean: Type[] = ['boolean']
   export const date: Type[] = ['timestamp', 'date', 'time']
   export const object: Type[] = ['list', 'json']
+  export const primary: Type[] = ['primary']
 
   export type Type<T = any> =
     | T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
@@ -29,6 +32,7 @@ export namespace Field {
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends unknown[] ? 'list' | 'json'
+    : T extends Primary ? 'primary'
     : T extends object ? 'json'
     : 'expr'
 
@@ -119,6 +123,10 @@ export class Model<S = any> {
     for (const key in fields) {
       this.fields[key] = Field.parse(fields[key])
       this.fields[key].deprecated = !!callback
+    }
+
+    if (typeof this.primary === 'string' && !this.autoInc && this.fields[this.primary]?.type === 'primary') {
+      throw new TypeError(`primary type must be used with autoInc`)
     }
 
     // check index

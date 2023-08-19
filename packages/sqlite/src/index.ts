@@ -9,6 +9,7 @@ const logger = new Logger('sqlite')
 
 function getTypeDef({ type }: Field) {
   switch (type) {
+    case 'primary':
     case 'boolean':
     case 'integer':
     case 'unsigned':

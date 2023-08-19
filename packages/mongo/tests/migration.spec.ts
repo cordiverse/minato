@@ -1,4 +1,4 @@
-import { Database } from 'minato'
+import { Database, Primary } from 'minato'
 import Logger from 'reggol'
 import { expect } from 'chai'
 import { } from 'chai-shape'
@@ -7,7 +7,7 @@ import { MongoDriver } from '@minatojs/driver-mongo'
 const logger = new Logger('mongo')
 
 interface Foo {
-  id?: number
+  id?: Primary
   text?: string
   value?: number
   bool?: boolean
@@ -50,7 +50,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     await initialize(false)
 
     database.extend('temp1', {
-      id: 'unsigned',
+      id: 'primary',
       text: 'string',
       value: 'integer',
       bool: 'boolean',
