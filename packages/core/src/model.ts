@@ -32,7 +32,7 @@ export namespace Field {
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends unknown[] ? 'list' | 'json'
-    : T extends Primary ? 'primary'
+    : T extends Primary ? 'primary' | 'unsigned'
     : T extends object ? 'json'
     : 'expr'
 
