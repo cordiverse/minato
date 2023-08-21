@@ -111,7 +111,7 @@ export class Model<S = any> {
 
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
-    this.unique.push(...unique)
+    unique.forEach(key => this.unique.includes(key) || this.unique.push(key))
     Object.assign(this.foreign, foreign)
 
     if (callback) this.migrations.set(callback, Object.keys(fields))
