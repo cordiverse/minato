@@ -125,8 +125,8 @@ export class Model<S = any> {
       this.fields[key].deprecated = !!callback
     }
 
-    if (typeof this.primary === 'string' && !this.autoInc && this.fields[this.primary]?.type === 'primary') {
-      throw new TypeError(`primary type must be used with autoInc`)
+    if (typeof this.primary === 'string' && this.fields[this.primary]?.type === 'primary') {
+      this.autoInc = true
     }
 
     // check index
