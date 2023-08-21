@@ -51,13 +51,14 @@ function isDefUpdated(field: Field, column: ColumnInfo, def: string) {
     case 'integer':
     case 'unsigned':
     case 'char':
+      return !!field.length && !!column.CHARACTER_MAXIMUM_LENGTH && column.CHARACTER_MAXIMUM_LENGTH !== field.length
+    case 'decimal':
+      return column.NUMERIC_PRECISION !== field.precision || column.NUMERIC_SCALE !== field.scale
     case 'string':
     case 'text':
     case 'list':
     case 'json':
-      return !!field.length && !!column.CHARACTER_MAXIMUM_LENGTH && column.CHARACTER_MAXIMUM_LENGTH !== field.length
-    case 'decimal':
-      return column.NUMERIC_PRECISION !== field.precision || column.NUMERIC_SCALE !== field.scale
+      return false
     default: return false
   }
 }
