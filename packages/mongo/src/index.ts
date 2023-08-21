@@ -501,7 +501,6 @@ export class MongoDriver extends Driver {
       try {
         data = model.create(data)
         const copy = this.unpatchVirtual(table, { ...data })
-        // console.log(copy)
         const insertedId = (await coll.insertOne(copy)).insertedId
         if (this.shouldFillPrimary(table)) {
           return { ...data, [model.primary as string]: insertedId }
