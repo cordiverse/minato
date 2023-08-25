@@ -2,9 +2,9 @@ import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { Database } from './driver'
 import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
-import { Flatten, Keys } from './utils'
+import { Flatten, Indexable, Keys } from './utils'
 
-export type Primary = (number | string) & { readonly _tag: unique symbol}
+export type Primary = Indexable & { [key: symbol]: true }
 
 export interface Field<T = any> {
   type: Field.Type<T>
@@ -24,10 +24,9 @@ export namespace Field {
   export const boolean: Type[] = ['boolean']
   export const date: Type[] = ['timestamp', 'date', 'time']
   export const object: Type[] = ['list', 'json']
-  export const primary: Type[] = ['primary', 'unsigned']
 
   export type Type<T = any> =
-    | T extends Primary ? 'primary' | 'unsigned'
+    | T extends Primary ? 'primary'
     : T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'

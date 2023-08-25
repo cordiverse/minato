@@ -7,6 +7,18 @@ import { MongoDriver } from '@minatojs/driver-mongo'
 const logger = new Logger('mongo')
 
 interface Foo {
+  id?: number
+  text?: string
+  value?: number
+  bool?: boolean
+  list?: number[]
+  timestamp?: Date
+  date?: Date
+  time?: Date
+  regex?: string
+}
+
+interface Bar {
   id?: Primary
   text?: string
   value?: number
@@ -20,6 +32,7 @@ interface Foo {
 
 interface Tables {
   temp1: Foo
+  temp2: Bar
 }
 
 describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
@@ -93,7 +106,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   })
 
   it('using primary', async () => {
-    database.extend('temp1', {
+    database.extend('temp2', {
       id: 'primary',
       text: 'string',
       value: 'integer',
@@ -105,23 +118,23 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
       regex: 'string',
     })
 
-    const table: Foo[] = []
-    table.push(await database.create('temp1', {
+    const table: Bar[] = []
+    table.push(await database.create('temp2', {
       text: 'awesome foo',
       timestamp: new Date('2000-01-01'),
       date: new Date('2020-01-01'),
       time: new Date('2020-01-01 12:00:00'),
     }))
-    table.push(await database.create('temp1', { text: 'awesome bar' }))
-    table.push(await database.create('temp1', { text: 'awesome baz' }))
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    table.push(await database.create('temp2', { text: 'awesome bar' }))
+    table.push(await database.create('temp2', { text: 'awesome baz' }))
+    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
 
     await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await resetConfig(true)
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
 
     await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await resetConfig(false)
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
   })
 })
