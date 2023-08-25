@@ -24,15 +24,15 @@ export namespace Field {
   export const boolean: Type[] = ['boolean']
   export const date: Type[] = ['timestamp', 'date', 'time']
   export const object: Type[] = ['list', 'json']
-  export const primary: Type[] = ['primary']
+  export const primary: Type[] = ['primary', 'unsigned']
 
   export type Type<T = any> =
-    | T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
+    | T extends Primary ? 'primary' | 'unsigned'
+    : T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends unknown[] ? 'list' | 'json'
-    : T extends Primary ? 'primary' | 'unsigned'
     : T extends object ? 'json'
     : 'expr'
 
