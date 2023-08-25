@@ -32,6 +32,7 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'timestamp': return 'datetime(3)'
     case 'boolean': return 'bit'
     case 'integer': return getIntegerType(length)
+    case 'primary':
     case 'unsigned': return `${getIntegerType(length)} unsigned`
     case 'decimal': return `decimal(${precision}, ${scale}) unsigned`
     case 'char': return `char(${length || 255})`

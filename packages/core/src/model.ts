@@ -4,6 +4,9 @@ import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
+export const Primary = Symbol('Primary')
+export type Primary = (string | number) & { [Primary]: true }
+
 export interface Field<T = any> {
   type: Field.Type<T>
   length?: number
@@ -24,7 +27,8 @@ export namespace Field {
   export const object: Type[] = ['list', 'json']
 
   export type Type<T = any> =
-    | T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
+    | T extends Primary ? 'primary'
+    : T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
@@ -119,6 +123,10 @@ export class Model<S = any> {
     for (const key in fields) {
       this.fields[key] = Field.parse(fields[key])
       this.fields[key].deprecated = !!callback
+    }
+
+    if (typeof this.primary === 'string' && this.fields[this.primary]?.type === 'primary') {
+      this.autoInc = true
     }
 
     // check index
