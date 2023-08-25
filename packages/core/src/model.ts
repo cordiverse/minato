@@ -4,7 +4,7 @@ import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
-export type Primary = { readonly _tag: unique symbol}
+export type Primary = (number | string) & { readonly _tag: unique symbol}
 
 export interface Field<T = any> {
   type: Field.Type<T>
