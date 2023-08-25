@@ -2,9 +2,10 @@ import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { Database } from './driver'
 import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
-import { Flatten, Indexable, Keys } from './utils'
+import { Flatten, Keys } from './utils'
 
-export type Primary = Indexable & { [key: symbol]: true }
+export const Primary = Symbol('Primary')
+export type Primary = (string | number) & { [Primary]: true }
 
 export interface Field<T = any> {
   type: Field.Type<T>
