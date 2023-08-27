@@ -93,8 +93,8 @@ export class Transformer {
   private transformEvalExpr(expr: any, group?: Dict) {
     // https://jira.mongodb.org/browse/SERVER-54046
     // mongo supports empty object in $set from 6.1.0/7.0.0
-    if (Object.keys(expr).length === 0 && expr.constructor === Object) {
-      return { $literal: {} }
+    if (Object.keys(expr).length === 0) {
+      return { $literal: expr }
     }
 
     if (expr.$) {
