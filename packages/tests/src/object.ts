@@ -75,6 +75,13 @@ namespace ObjectOperations {
       ])).eventually.fulfilled
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
+
+    it('empty object override', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.embed = {}
+      await database.upsert('object',[{ id: '0', meta: { embed: {} } }])
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
   }
 
   export const modify = function Modify(database: Database<Tables>) {
@@ -103,6 +110,13 @@ namespace ObjectOperations {
         'meta.a': row.id,
         'meta.embed': { b: 514 },
       }))).eventually.fulfilled
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('empty object override', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.embed = {}
+      await database.set('object', { id: '0' }, { meta: { embed: {} } })
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }
