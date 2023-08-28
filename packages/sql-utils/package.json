@@ -29,9 +29,9 @@
     "builder"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.3.2"
+    "@minatojs/core": "^2.4.0"
   },
   "dependencies": {
-    "cosmokit": "^1.4.4"
+    "cosmokit": "^1.4.5"
   }
 }

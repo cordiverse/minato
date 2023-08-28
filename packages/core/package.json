@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/core",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "description": "Type Driven Database Framework",
   "main": "lib/index.cjs",
   "module": "lib/index.mjs",
@@ -30,6 +30,6 @@
     "level"
   ],
   "dependencies": {
-    "cosmokit": "^1.4.4"
+    "cosmokit": "^1.4.5"
   }
 }
