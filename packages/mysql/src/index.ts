@@ -120,6 +120,36 @@ class MySQLBuilder extends Builder {
     }
     return super.escape(value, field)
   }
+
+  toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
+    const escaped = escapeId(key)
+
+    // update directly
+    if (key in item) {
+      if (!isEvalExpr(item[key]) && upsert) {
+        return `VALUES(${escaped})`
+      } else if (isEvalExpr(item[key])) {
+        return this.parseEval(item[key])
+      } else {
+        return this.escape(item[key], field)
+      }
+    }
+
+    // update with json_set
+    const valueInit = `ifnull(${escaped}, '{}')`
+    let value = valueInit
+    for (const prop in item) {
+      if (!prop.startsWith(key + '.')) continue
+      const rest = prop.slice(key.length + 1).split('.')
+      value = `json_set(${value}, '$${rest.map(key => `."${key}"`).join('')}', ${this.parseEval(item[prop])})`
+    }
+
+    if (value === valueInit) {
+      return escaped
+    } else {
+      return value
+    }
+  }
 }
 
 export namespace MySQLDriver {
@@ -395,39 +425,10 @@ export class MySQLDriver extends Driver {
     return data.value
   }
 
-  private toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
-    const escaped = escapeId(key)
-
-    // update directly
-    if (key in item) {
-      if (!isEvalExpr(item[key]) && upsert) {
-        return `VALUES(${escaped})`
-      } else if (isEvalExpr(item[key])) {
-        return this.sql.parseEval(item[key])
-      } else {
-        return this.sql.escape(item[key], field)
-      }
-    }
-
-    // update with json_set
-    const valueInit = `ifnull(${escaped}, '{}')`
-    let value = valueInit
-    for (const prop in item) {
-      if (!prop.startsWith(key + '.')) continue
-      const rest = prop.slice(key.length + 1).split('.')
-      value = `json_set(${value}, '$${rest.map(key => `."${key}"`).join('')}', ${this.sql.parseEval(item[prop])})`
-    }
-
-    if (value === valueInit) {
-      return escaped
-    } else {
-      return value
-    }
-  }
-
   async set(sel: Selection.Mutable, data: {}) {
-    const { model, query, table } = sel
-    const filter = this.sql.parseQuery(query)
+    const { model, query, table, tables } = sel
+    const builder = new MySQLBuilder(tables)
+    const filter = builder.parseQuery(query)
     const { fields } = model
     if (filter === '0') return
     const updateFields = [...new Set(Object.keys(data).map((key) => {
@@ -436,15 +437,15 @@ export class MySQLDriver extends Driver {
 
     const update = updateFields.map((field) => {
       const escaped = escapeId(field)
-      return `${escaped} = ${this.toUpdateExpr(data, field, fields[field], false)}`
+      return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
-
-    await this.query(`UPDATE ${escapeId(table)} SET ${update} WHERE ${filter}`)
+    await this.query(`UPDATE ${escapeId(table)} ${sel.ref} SET ${update} WHERE ${filter}`)
   }
 
   async remove(sel: Selection.Mutable) {
-    const { query, table } = sel
-    const filter = this.sql.parseQuery(query)
+    const { query, table, tables } = sel
+    const builder = new MySQLBuilder(tables)
+    const filter = builder.parseQuery(query)
     if (filter === '0') return
     await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
   }
@@ -464,7 +465,8 @@ export class MySQLDriver extends Driver {
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return
-    const { model, table, ref } = sel
+    const { model, table, tables, ref } = sel
+    const builder = new MySQLBuilder(tables)
 
     const merged = {}
     const insertion = data.map((item) => {
@@ -477,13 +479,13 @@ export class MySQLDriver extends Driver {
     }))]
     const updateFields = difference(dataFields, keys)
 
-    const createFilter = (item: any) => this.sql.parseQuery(pick(item, keys))
+    const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
     const createMultiFilter = (items: any[]) => {
       if (items.length === 1) {
         return createFilter(items[0])
       } else if (keys.length === 1) {
         const key = keys[0]
-        return this.sql.parseQuery({ [key]: items.map(item => item[key]) })
+        return builder.parseQuery({ [key]: items.map(item => item[key]) })
       } else {
         return items.map(createFilter).join(' OR ')
       }
@@ -493,7 +495,7 @@ export class MySQLDriver extends Driver {
       const escaped = escapeId(field)
       const branches: Dict<any[]> = {}
       data.forEach((item) => {
-        (branches[this.toUpdateExpr(item, field, model.fields[field], true)] ??= []).push(item)
+        (branches[builder.toUpdateExpr(item, field, model.fields[field], true)] ??= []).push(item)
       })
 
       const entries = Object.entries(branches)

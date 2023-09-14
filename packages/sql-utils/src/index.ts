@@ -223,7 +223,7 @@ export class Builder {
     if (key in fields || !key.includes('.')) return prefix + escapeId(key)
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
-    return `json_unquote(json_extract(${escapeId(prefix + field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
+    return `json_unquote(json_extract(${prefix} ${escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
   }
 
   private getRecursive(args: string | string[]) {
