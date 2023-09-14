@@ -230,6 +230,7 @@ export abstract class Driver {
     for (const key in table) {
       const submodel = this.model(table[key])
       for (const field in submodel.fields) {
+        if (submodel.fields[field]!.deprecated) continue
         model.fields[`${key}.${field}`] = {
           type: 'expr',
           expr: { $: [key, field] } as any,
