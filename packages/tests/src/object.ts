@@ -119,6 +119,20 @@ namespace ObjectOperations {
       await database.set('object', { id: '0' }, { meta: { embed: {} } })
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
+
+    it('expressions w/ json object', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.a = table[0]!.meta!.embed!.c + 'a'
+      await database.set('object', { id: '0' }, row => ({ meta: { a: $.concat(row.meta.embed.c, 'a') } }))
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('expressions w/o json object', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.a = table[0]!.meta!.a + 'a'
+      await database.set('object', { id: '0' }, row => ({ meta: { a: $.concat(row.meta.a, 'a') } }))
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
   }
 }
 
