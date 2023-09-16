@@ -5,6 +5,7 @@ import { setup } from './utils'
 interface Foo {
   id: number
   value: number
+  deprecated: number
 }
 
 interface Bar {
@@ -24,6 +25,8 @@ function SelectionTests(database: Database<Tables>) {
     id: 'unsigned',
     value: 'integer',
   })
+
+  database.migrate('foo', { deprecated: 'unsigned' }, async () => {})
 
   database.extend('bar', {
     id: 'unsigned',
@@ -182,7 +185,7 @@ namespace SelectionTests {
         { id: 3, value: 2 },
       ])
     })
-  
+
     it('callback', async () => {
       await expect(database
         .select('foo')
@@ -196,7 +199,7 @@ namespace SelectionTests {
         { key: 1 },
       ])
     })
-  
+
     it('extra', async () => {
       await expect(database
         .select('foo')
@@ -211,7 +214,7 @@ namespace SelectionTests {
         { value: 2, sum: 5, count: 2 },
       ])
     })
-  
+
     it('having', async () => {
       await expect(database
         .select('foo')
