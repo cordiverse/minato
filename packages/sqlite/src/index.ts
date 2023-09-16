@@ -1,4 +1,4 @@
-import { deepEqual, Dict, difference, isNullable, makeArray, union } from 'cosmokit'
+import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
@@ -339,7 +339,7 @@ export class SQLiteDriver extends Driver {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     const primaryFields = makeArray(primary)
-    const data = await this.database.get(table, query, union(primaryFields, updateFields) as [])
+    const data = await this.database.get(table, query)
     for (const row of data) {
       this.#update(sel, primaryFields, updateFields, update, row)
     }
@@ -368,7 +368,6 @@ export class SQLiteDriver extends Driver {
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
-    const relaventFields = union(keys, dataFields)
     const updateFields = difference(dataFields, keys)
     // Error: Expression tree is too large (maximum depth 1000)
     const step = Math.floor(960 / keys.length)
@@ -376,7 +375,7 @@ export class SQLiteDriver extends Driver {
       const chunk = data.slice(i, i + step)
       const results = await this.database.get(table, {
         $or: chunk.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
-      }, relaventFields as [])
+      })
       for (const item of chunk) {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
