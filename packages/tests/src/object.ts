@@ -8,6 +8,7 @@ interface ObjectModel {
     embed?: {
       b?: number
       c?: string
+      d?: object
     }
   }
 }
@@ -79,7 +80,7 @@ namespace ObjectOperations {
     it('empty object override', async () => {
       const table = await setup(database)
       table[0]!.meta!.embed = {}
-      await database.upsert('object',[{ id: '0', meta: { embed: {} } }])
+      await database.upsert('object', [{ id: '0', meta: { embed: {} } }])
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }
@@ -131,6 +132,16 @@ namespace ObjectOperations {
       const table = await setup(database)
       table[0]!.meta!.a = table[0]!.meta!.a + 'a'
       await database.set('object', { id: '0' }, row => ({ meta: { a: $.concat(row.meta.a, 'a') } }))
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('empty object in json', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.embed!.d = {}
+      await database.set('object',{ id: '0'}, { 'meta.embed.d': {} })
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      table[0]!.meta!.embed!.d = []
+      await database.set('object',{ id: '0'}, { 'meta.embed.d': [] })
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }

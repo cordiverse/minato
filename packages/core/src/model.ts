@@ -158,7 +158,7 @@ export class Model<S = any> {
       key = prefix + key
       if (fields.includes(key)) {
         result[key] = value
-      } else if (!value || typeof value !== 'object' || isEvalExpr(value)) {
+      } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
         const field = fields.find(field => key.startsWith(field + '.'))
         if (field) {
           result[key] = value
