@@ -29,11 +29,11 @@
     "@minatojs/tests": "^1.5.0"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.4.0"
+    "@minatojs/core": "^2.4.1"
   },
   "dependencies": {
     "mongodb": "^4.16.0",
     "cosmokit": "^1.4.5",
-    "reggol": "^1.4.4"
+    "reggol": "^1.5.1"
   }
 }
