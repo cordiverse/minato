@@ -184,14 +184,13 @@ export class Model<S = any> {
         node = node[segment] ??= {}
       }
       if (key in source) {
-        const value = source[key]
-        const fullKey = prefix + key
+        const fullKey = prefix + key, value = source[key]
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
           node[segments[0]] = this.resolveValue(key, value)
         } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
           if (strict) {
-            throw new TypeError(`unknown field "${key}" in model ${this.name}`)
+            throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {
             node[segments[0]] = this.resolveValue(key, value)
           }
