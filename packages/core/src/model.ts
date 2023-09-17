@@ -174,8 +174,8 @@ export class Model<S = any> {
     return result
   }
 
-  parse(source: object) {
-    const result: any = {}
+  parse(source: object, strict = true, prefix = '', result = {} as S) {
+    const fields = Object.keys(this.fields)
     for (const key in source) {
       let node = result
       const segments = key.split('.').reverse()
@@ -184,8 +184,20 @@ export class Model<S = any> {
         node = node[segment] ??= {}
       }
       if (key in source) {
-        const value = this.resolveValue(key, source[key])
-        node[segments[0]] = value
+        const value = source[key]
+        const fullKey = prefix + key
+        const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
+        if (field) {
+          node[segments[0]] = this.resolveValue(key, value)
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
+          if (strict) {
+            throw new TypeError(`unknown field "${key}" in model ${this.name}`)
+          } else {
+            node[segments[0]] = this.resolveValue(key, value)
+          }
+        } else {
+          this.parse(value, strict, prefix + key + '.', node[segments[0]] ??= {})
+        }
       }
     }
     return result

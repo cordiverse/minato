@@ -38,6 +38,17 @@ namespace ObjectOperations {
     return result
   }
 
+  export const create = function Create(database: Database<Tables>) {
+    it('initial value', async () => {
+      const table = await setup(database)
+      table.push(await database.create('object', { id: '2', meta: { embed: { b: 999 } } }))
+      expect(table[table.length - 1]).to.deep.equal({
+        id: '2', meta: { a: '666', embed: { b: 999 } }
+      })
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+  }
+
   export const get = function Get(database: Database<Tables>) {
     it('field extraction', async () => {
       await setup(database)

@@ -143,7 +143,7 @@ class MySQLBuilder extends Builder {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')
       if (rest.length === 1) continue
-      rest.reduce((obj, k) => obj[k] ||= {}, jsonInit)
+      rest.reduce((obj, k) => obj[k] ??= {}, jsonInit)
     }
 
     // update with json_set
