@@ -195,7 +195,7 @@ export class Model<S = any> {
             node[segments[0]] = this.resolveValue(key, value)
           }
         } else {
-          this.parse(value, strict, prefix + key + '.', node[segments[0]] ??= {})
+          this.parse(value, strict, fullKey + '.', node[segments[0]] ??= {})
         }
       }
     }
