@@ -117,8 +117,8 @@ class MySQLBuilder extends Builder {
   escape(value: any, field?: Field<any>) {
     if (value instanceof Date) {
       value = Time.template('yyyy-MM-dd hh:mm:ss', value)
-    } else if (!field && !!value && typeof value === 'object' && Object.keys(value).length === 0) {
-      return Array.isArray(value) ? 'json_array()' : 'json_object()'
+    } else if (!field && !!value && typeof value === 'object') {
+      return `cast(${this.quote(JSON.stringify(value))} as json)`
     }
     return super.escape(value, field)
   }
@@ -137,9 +137,25 @@ class MySQLBuilder extends Builder {
       }
     }
 
+    // prepare nested layout
+    const jsonInit = {}
+    for (const prop in item) {
+      if (!prop.startsWith(key + '.')) continue
+      const rest = prop.slice(key.length + 1).split('.')
+      if (rest.length === 1) continue
+      rest.reduce((obj, k) => obj[k] ||= {}, jsonInit)
+    }
+
     // update with json_set
     const valueInit = `ifnull(${escaped}, '{}')`
     let value = valueInit
+
+    // json_set cannot create deeply nested property when non-exist
+    // therefore we merge a layout to it
+    if (Object.keys(jsonInit).length !== 0) {
+      value = `json_merge(${value}, ${this.quote(JSON.stringify(jsonInit))})`
+    }
+
     for (const prop in item) {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')

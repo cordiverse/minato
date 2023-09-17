@@ -152,23 +152,31 @@ export class Model<S = any> {
     return value
   }
 
-  format(source: object, strict = true, prefix = '', result = {} as S) {
+  #format(source: object, strict: boolean, prefix: string, result: S) {
     const fields = Object.keys(this.fields)
-    Object.entries(source).map(([key, value]) => {
+    return Object.entries(source).map(([key, value]) => {
       key = prefix + key
       if (fields.includes(key)) {
         result[key] = value
-      } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
-        const field = fields.find(field => key.startsWith(field + '.'))
-        if (field) {
-          result[key] = value
-        } else if (strict) {
-          throw new TypeError(`unknown field "${key}" in model ${this.name}`)
-        }
-      } else {
-        this.format(value, strict, key + '.', result)
+        return true
       }
-    })
+      const field = fields.find(field => key.startsWith(field + '.'))
+      if (field) {
+        result[key] = value
+        return true
+      } else if (strict) {
+        throw new TypeError(`unknown field "${key}" in model ${this.name}`)
+      }
+      if (!this.#format(value, strict, key + '.', result)) {
+        result[key] = value
+        return true
+      }
+      return false
+    }).every(x => x)
+  }
+
+  format(source: object, strict = false, prefix = '', result = {} as S) {
+    this.#format(source, strict, prefix, result)
     return result
   }
 

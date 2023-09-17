@@ -8,7 +8,10 @@ interface ObjectModel {
     embed?: {
       b?: number
       c?: string
-      d?: object
+      d?: {
+        foo?: number
+        bar?: object
+      }
     }
   }
 }
@@ -135,13 +138,20 @@ namespace ObjectOperations {
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
 
-    it('empty object in json', async () => {
+    it('object in json', async () => {
       const table = await setup(database)
-      table[0]!.meta!.embed!.d = {}
-      await database.set('object',{ id: '0'}, { 'meta.embed.d': {} })
+      table[1]!.meta!.embed!.d = {}
+      await database.set('object', { id: '1' }, { 'meta.embed.d': {} })
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
-      table[0]!.meta!.embed!.d = []
-      await database.set('object',{ id: '0'}, { 'meta.embed.d': [] })
+      table[0]!.meta!.embed!.d = { foo: 1, bar: { a: 3, b: 4 } }
+      await database.set('object', { id: '0' }, { 'meta.embed.d': { foo: 1, bar: { a: 3, b: 4 } } })
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('nested object in json', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.embed!.d = { foo: 2, bar: { a: 1 } }
+      await database.set('object', { id: '0' }, { 'meta.embed.d.bar': { a: 1 }, 'meta.embed.d.foo': 2 })
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }
