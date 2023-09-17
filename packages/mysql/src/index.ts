@@ -118,7 +118,7 @@ class MySQLBuilder extends Builder {
     if (value instanceof Date) {
       value = Time.template('yyyy-MM-dd hh:mm:ss', value)
     } else if (!field && !!value && typeof value === 'object') {
-      return `cast(${this.quote(JSON.stringify(value))} as json)`
+      return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
     return super.escape(value, field)
   }

@@ -1,6 +1,6 @@
 import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { Database } from './driver'
-import { Eval, isEvalExpr } from './eval'
+import { Eval } from './eval'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
