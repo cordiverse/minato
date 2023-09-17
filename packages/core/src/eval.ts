@@ -58,16 +58,21 @@ export namespace Eval {
 
     // arithmetic
     add(...args: Number[]): Expr<number>
+    mul(...args: Number[]): Expr<number>
     multiply(...args: Number[]): Expr<number>
+    sub(x: Number, y: Number): Expr<number>
     subtract(x: Number, y: Number): Expr<number>
+    div(x: Number, y: Number): Expr<number>
     divide(x: Number, y: Number): Expr<number>
 
     // comparison
     eq(...args: Any[]): Expr<boolean>
     ne(x: Any, y: Any): Expr<boolean>
     gt: Comparator
+    ge: Comparator
     gte: Comparator
     lt: Comparator
+    le: Comparator
     lte: Comparator
 
     // element
@@ -135,17 +140,17 @@ Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, v
 
 // arithmetic
 Eval.add = multary('add', (args, data) => args.reduce<number>((prev, curr) => prev + executeEval(data, curr), 0))
-Eval.multiply = multary('multiply', (args, data) => args.reduce<number>((prev, curr) => prev * executeEval(data, curr), 1))
-Eval.subtract = multary('subtract', ([left, right], data) => executeEval(data, left) - executeEval(data, right))
-Eval.divide = multary('divide', ([left, right], data) => executeEval(data, left) / executeEval(data, right))
+Eval.mul = Eval.multiply = multary('multiply', (args, data) => args.reduce<number>((prev, curr) => prev * executeEval(data, curr), 1))
+Eval.sub = Eval.subtract = multary('subtract', ([left, right], data) => executeEval(data, left) - executeEval(data, right))
+Eval.div = Eval.divide = multary('divide', ([left, right], data) => executeEval(data, left) / executeEval(data, right))
 
 // comparison
 Eval.eq = comparator('eq', (left, right) => left === right)
 Eval.ne = comparator('ne', (left, right) => left !== right)
 Eval.gt = comparator('gt', (left, right) => left > right)
-Eval.gte = comparator('gte', (left, right) => left >= right)
+Eval.ge = Eval.gte = comparator('gte', (left, right) => left >= right)
 Eval.lt = comparator('lt', (left, right) => left < right)
-Eval.lte = comparator('lte', (left, right) => left <= right)
+Eval.le = Eval.lte = comparator('lte', (left, right) => left <= right)
 
 // element
 Eval.in = multary('in', ([value, array], data) => array.includes(executeEval(data, value)))
