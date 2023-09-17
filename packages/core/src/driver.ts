@@ -155,6 +155,13 @@ export class Database<S = any> {
 
   async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
     const sel = this.select(table)
+    const { primary, autoInc } = sel.model
+    if (!autoInc) {
+      const keys = makeArray(primary)
+      if (keys.some(key => !(key in data))) {
+        throw new Error('missing primary key')
+      }
+    }
     return sel._action('create', sel.model.create(data)).execute()
   }
 

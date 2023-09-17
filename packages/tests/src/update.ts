@@ -103,6 +103,10 @@ namespace OrmOperations {
       }
     })
 
+    it('missing primary key', async () => {
+      await expect(database.create('temp3', { ida: 1 })).eventually.rejected
+    })
+
     it('duplicate primary key', async () => {
       await expect(database.create('temp2', { id: barTable[0].id })).eventually.rejected
       await expect(database.create('temp3', { ida: 1, idb: 'a' })).eventually.rejected
