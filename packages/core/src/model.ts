@@ -1,6 +1,6 @@
 import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { Database } from './driver'
-import { Eval } from './eval'
+import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
@@ -152,7 +152,7 @@ export class Model<S = any> {
     return value
   }
 
-  format(source: object, strict = false, prefix = '', result = {} as S) {
+  format(source: object, strict = true, prefix = '', result = {} as S) {
     const fields = Object.keys(this.fields)
     Object.entries(source).map(([key, value]) => {
       key = prefix + key
@@ -163,8 +163,10 @@ export class Model<S = any> {
       const field = fields.find(field => key.startsWith(field + '.'))
       if (field) {
         result[key] = value
-      } else if (strict) {
-        throw new TypeError(`unknown field "${key}" in model ${this.name}`)
+      } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
+        if (strict) {
+          throw new TypeError(`unknown field "${key}" in model ${this.name}`)
+        }
       } else {
         this.format(value, strict, key + '.', result)
       }
