@@ -444,7 +444,7 @@ export class MySQLDriver extends Driver {
   }
 
   async set(sel: Selection.Mutable, data: {}) {
-    const { model, query, table, tables } = sel
+    const { model, query, table, tables, ref } = sel
     const builder = new MySQLBuilder(tables)
     const filter = builder.parseQuery(query)
     const { fields } = model
@@ -457,7 +457,7 @@ export class MySQLDriver extends Driver {
       const escaped = escapeId(field)
       return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
-    await this.query(`UPDATE ${escapeId(table)} ${sel.ref} SET ${update} WHERE ${filter}`)
+    await this.query(`UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
   }
 
   async remove(sel: Selection.Mutable) {
