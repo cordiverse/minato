@@ -31,7 +31,7 @@ export type Row<S> = {
 }
 
 export namespace Row {
-  export type Cell<T> = Eval.Expr<T> & (T extends Comparable ? {} : Row<T>)
+  export type Cell<T> = Eval.Expr<T, false> & (T extends Comparable ? {} : Row<T>)
   export type Computed<S, T> = T | ((row: Row<S>) => T)
 }
 

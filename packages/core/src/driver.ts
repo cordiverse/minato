@@ -134,7 +134,7 @@ export class Database<S = any> {
     return this.select(table, query).execute(cursor)
   }
 
-  async eval<T extends Keys<S>, U>(table: T, expr: Selection.Callback<S[T], U>, query?: Query<S[T]>): Promise<U> {
+  async eval<T extends Keys<S>, U>(table: T, expr: Selection.Callback<S[T], U, true>, query?: Query<S[T]>): Promise<U> {
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 

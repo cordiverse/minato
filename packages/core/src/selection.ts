@@ -111,7 +111,7 @@ type FieldMap<S, M extends Dict<FieldLike<S>>> = {
 }
 
 export namespace Selection {
-  export type Callback<S = any, T = any> = (row: Row<S>) => Eval.Expr<T>
+  export type Callback<S = any, T = any, A extends boolean = boolean> = (row: Row<S>) => Eval.Expr<T, A>
 
   export interface Immutable extends Executable, Executable.Payload {
     tables: Dict<Model>
@@ -209,16 +209,18 @@ export class Selection<S = any> extends Executable<S, S[]> {
   }
 
   /** @deprecated use `selection.execute()` instead */
-  evaluate<T>(callback: Selection.Callback<S, T>): Executable {
+  evaluate<T>(callback: Selection.Callback<S, T, true>): Eval.Expr<T, true>
+  evaluate<T>(callback: Selection.Callback<S, T>): Eval.Expr<T[], boolean>
+  evaluate<T>(callback: Selection.Callback<S, T>): any {
     const selection = new Selection(this.driver, this)
     return selection._action('eval', this.resolveField(callback))
   }
 
   execute<K extends Keys<S> = Keys<S>>(cursor?: Driver.Cursor<K>): Promise<Pick<S, K>[]>
-  execute<T>(callback: Selection.Callback<S, T>): Promise<T>
+  execute<T>(callback: Selection.Callback<S, T, true>): Promise<T>
   execute(cursor?: any) {
     if (typeof cursor === 'function') {
-      return this.evaluate(cursor).execute()
+      return (this.evaluate(cursor) as any).execute()
     }
     if (Array.isArray(cursor)) {
       cursor = { fields: cursor }

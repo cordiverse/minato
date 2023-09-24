@@ -8,12 +8,12 @@ export function isEvalExpr(value: any): value is Eval.Expr {
 type $Date = Date
 type $RegExp = RegExp
 
-export type Uneval<U> =
-  | U extends number ? Eval.Number
-  : U extends string ? Eval.String
-  : U extends boolean ? Eval.Boolean
-  : U extends $Date ? Eval.Date
-  : U extends $RegExp ? Eval.RegExp
+export type Uneval<U, A extends boolean> =
+  | U extends number ? Eval.Number<A>
+  : U extends string ? Eval.String<A>
+  : U extends boolean ? Eval.Boolean<A>
+  : U extends $Date ? Eval.Date<A>
+  : U extends $RegExp ? Eval.RegExp<A>
   : any
 
 export type Eval<U> =
@@ -23,77 +23,76 @@ export type Eval<U> =
 
 const kExpr = Symbol('expr')
 const kType = Symbol('type')
+const kAggr = Symbol('aggr')
 
 export namespace Eval {
-  export interface Expr<T = any> {
+  export interface Expr<T = any, A extends boolean = boolean> {
     [kExpr]: true
     [kType]?: T
+    [kAggr]?: A
   }
 
-  export type Number = number | Expr<number>
-  export type String = string | Expr<string>
-  export type Boolean = boolean | Expr<boolean>
-  export type Date = $Date | Expr<$Date>
-  export type RegExp = $RegExp | Expr<$RegExp>
-  export type Any = Comparable | Expr
+  export type Number<A extends boolean = boolean> = number | Expr<number, A>
+  export type String<A extends boolean = boolean> = string | Expr<string, A>
+  export type Boolean<A extends boolean = boolean> = boolean | Expr<boolean, A>
+  export type Date<A extends boolean = boolean> = $Date | Expr<$Date, A>
+  export type RegExp<A extends boolean = boolean> = $RegExp | Expr<$RegExp, A>
+  export type Any<A extends boolean = boolean> = Comparable | Expr<any, A>
 
-  export interface Comparator {
-    (x: Number, y: Number): Expr<boolean>
-    (x: String, y: String): Expr<boolean>
-    (x: Date, y: Date): Expr<boolean>
-  }
+  export type Binary<S, R> = <T extends S, A extends boolean>(x: T | Expr<T, A>, y: T | Expr<T, A>) => Expr<R, A>
+  export type Multi<S, R> = <T extends S, A extends boolean>(...args: (T | Expr<T, A>)[]) => Expr<R, A>
 
-  export interface Branch<T> {
+  export interface Branch<T, A extends boolean> {
     case: Boolean
-    then: T | Expr<T>
+    then: T | Expr<T, A>
   }
 
   export interface Static {
-    (key: string, value: any): Eval.Expr
+    <A extends boolean>(key: string, value: any): Eval.Expr<any, A>
 
     // univeral
-    if<T extends Comparable>(cond: Any, vThen: T | Expr<T>, vElse: T | Expr<T>): Expr<T>
-    ifNull<T extends Comparable>(...args: (T | Expr<T>)[]): Expr<T>
-    switch<T>(branches: Branch<T>[], vDefault: T | Expr<T>): Expr<T>
+    if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: T | Expr<T, A>, vElse: T | Expr<T, A>): Expr<T, A>
+    ifNull<T extends Comparable, A extends boolean>(...args: (T | Expr<T, A>)[]): Expr<T, A>
+    switch<T, A extends boolean>(branches: Branch<T, A>[], vDefault: T | Expr<T, A>): Expr<T, A>
 
     // arithmetic
-    add(...args: Number[]): Expr<number>
-    mul(...args: Number[]): Expr<number>
-    multiply(...args: Number[]): Expr<number>
-    sub(x: Number, y: Number): Expr<number>
-    subtract(x: Number, y: Number): Expr<number>
-    div(x: Number, y: Number): Expr<number>
-    divide(x: Number, y: Number): Expr<number>
+    add: Multi<number, number>
+    mul: Multi<number, number>
+    multiply: Multi<number, number>
+    sub: Binary<number, number>
+    subtract: Binary<number, number>
+    div: Binary<number, number>
+    divide: Binary<number, number>
 
     // comparison
-    eq(...args: Any[]): Expr<boolean>
-    ne(x: Any, y: Any): Expr<boolean>
-    gt: Comparator
-    ge: Comparator
-    gte: Comparator
-    lt: Comparator
-    le: Comparator
-    lte: Comparator
+    eq: Multi<Comparable, boolean>
+    ne: Binary<Comparable, boolean>
+    gt: Binary<Comparable, boolean>
+    ge: Binary<Comparable, boolean>
+    gte: Binary<Comparable, boolean>
+    lt: Binary<Comparable, boolean>
+    le: Binary<Comparable, boolean>
+    lte: Binary<Comparable, boolean>
 
     // element
-    in(x: Any, y: Any[]): Expr<boolean>
-    nin(x: Any, y: Any[]): Expr<boolean>
+    in<T extends Comparable, A extends boolean>(x: T | Expr<T, A>, array: (T | Expr<T, A>)[] | Expr<T[], A>): Expr<boolean, A>
+    nin<T extends Comparable, A extends boolean>(x: T | Expr<T, A>, array: (T | Expr<T, A>)[] | Expr<T[], A>): Expr<boolean, A>
 
     // string
-    concat(...args: String[]): Expr<string>
-    regex(x: String, y: String | RegExp): Expr<boolean>
+    concat: Multi<string, string>
+    regex<A extends boolean>(x: String<A>, y: String<A> | RegExp<A>): Expr<boolean, A>
 
     // logical
-    and(...args: Boolean[]): Expr<boolean>
-    or(...args: Boolean[]): Expr<boolean>
-    not(value: Boolean): Expr<boolean>
+    and: Multi<Boolean, boolean>
+    or: Multi<Boolean, boolean>
+    not<A extends boolean>(value: Boolean<A>): Expr<boolean, A>
 
     // aggregation
-    sum(value: Number): Expr<number>
-    avg(value: Number): Expr<number>
-    max(value: Number): Expr<number>
-    min(value: Number): Expr<number>
-    count(value: Any): Expr<number>
+    sum(value: Number<false>): Expr<number, true>
+    avg(value: Number<false>): Expr<number, true>
+    max(value: Number<false>): Expr<number, true>
+    min(value: Number<false>): Expr<number, true>
+    count(value: Any<false>): Expr<number, true>
   }
 }
 
@@ -106,13 +105,13 @@ operators['$'] = getRecursive
 type UnaryCallback<T> = T extends (value: infer R) => Eval.Expr<infer S> ? (value: R, data: any[]) => S : never
 function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval.Static[K]>): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return (value: any) => Eval(key, value)
+  return (value: any) => Eval(key, value) as any
 }
 
-type MultaryCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S> ? (args: R, data: any) => S : never
-function multary<K extends keyof Eval.Static>(key: K, callback: MultaryCallback<Eval.Static[K]>): Eval.Static[K] {
+type MultivariateCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S> ? (args: R, data: any) => S : never
+function multary<K extends keyof Eval.Static>(key: K, callback: MultivariateCallback<Eval.Static[K]>): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return (...args: any) => Eval(key, args)
+  return (...args: any) => Eval(key, args) as any
 }
 
 type BinaryCallback<T> = T extends (...args: any[]) => Eval.Expr<infer S> ? (...args: any[]) => S : never
@@ -123,7 +122,7 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
     if (isNullable(left) || isNullable(right)) return true
     return callback(left.valueOf(), right.valueOf())
   }
-  return (...args: any) => Eval(key, args)
+  return (...args: any) => Eval(key, args) as any
 }
 
 Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault })
@@ -153,8 +152,8 @@ Eval.lt = comparator('lt', (left, right) => left < right)
 Eval.le = Eval.lte = comparator('lte', (left, right) => left <= right)
 
 // element
-Eval.in = multary('in', ([value, array], data) => array.includes(executeEval(data, value)))
-Eval.nin = multary('nin', ([value, array], data) => !array.includes(executeEval(data, value)))
+Eval.in = multary('in', ([value, array], data) => executeEval(data, array).includes(executeEval(data, value)))
+Eval.nin = multary('nin', ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value)))
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''))
@@ -175,7 +174,7 @@ Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAg
 export { Eval as $ }
 
 type MapUneval<S> = {
-  [K in keyof S]?: Uneval<S[K]>
+  [K in keyof S]?: Uneval<S[K], false>
 }
 
 export type Update<T = any> = MapUneval<Flatten<T>>
@@ -219,6 +218,9 @@ function executeAggr(expr: any, data: any) {
 export function executeEval(data: any, expr: any) {
   if (isComparable(expr) || isNullable(expr)) {
     return expr
+  }
+  if (Array.isArray(expr)) {
+    return expr.map(item => executeEval(data, item))
   }
   return executeEvalExpr(expr, data)
 }
