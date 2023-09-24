@@ -158,11 +158,13 @@ export class Model<S = any> {
       key = prefix + key
       if (fields.includes(key)) {
         result[key] = value
-      } else if (!value || typeof value !== 'object' || isEvalExpr(value)) {
-        const field = fields.find(field => key.startsWith(field + '.'))
-        if (field) {
-          result[key] = value
-        } else if (strict) {
+        return
+      }
+      const field = fields.find(field => key.startsWith(field + '.'))
+      if (field) {
+        result[key] = value
+      } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
+        if (strict) {
           throw new TypeError(`unknown field "${key}" in model ${this.name}`)
         }
       } else {
@@ -172,8 +174,8 @@ export class Model<S = any> {
     return result
   }
 
-  parse(source: object) {
-    const result: any = {}
+  parse(source: object, strict = true, prefix = '', result = {} as S) {
+    const fields = Object.keys(this.fields)
     for (const key in source) {
       let node = result
       const segments = key.split('.').reverse()
@@ -182,8 +184,19 @@ export class Model<S = any> {
         node = node[segment] ??= {}
       }
       if (key in source) {
-        const value = this.resolveValue(key, source[key])
-        node[segments[0]] = value
+        const fullKey = prefix + key, value = source[key]
+        const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
+        if (field) {
+          node[segments[0]] = this.resolveValue(key, value)
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
+          if (strict) {
+            throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
+          } else {
+            node[segments[0]] = this.resolveValue(key, value)
+          }
+        } else {
+          this.parse(value, strict, fullKey + '.', node[segments[0]] ??= {})
+        }
       }
     }
     return result

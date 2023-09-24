@@ -82,7 +82,7 @@ export class MemoryDriver extends Driver {
           index[key] = executeEval(table.map(row => ({ [ref]: row, _: row })), fields![key])
         }
       }
-      return model.parse(index)
+      return model.parse(index, false)
     }).filter(Boolean)
   }
 

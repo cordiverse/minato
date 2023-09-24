@@ -118,6 +118,7 @@ export namespace Selection {
   }
 
   export interface Mutable extends Executable, Executable.Payload {
+    tables: Dict<Model>
     table: string
   }
 }

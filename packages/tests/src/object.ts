@@ -8,6 +8,10 @@ interface ObjectModel {
     embed?: {
       b?: number
       c?: string
+      d?: {
+        foo?: number
+        bar?: object
+      }
     }
   }
 }
@@ -32,6 +36,17 @@ namespace ObjectOperations {
     result.push(await database.create('object', { id: '1' }))
     expect(result).to.have.length(2)
     return result
+  }
+
+  export const create = function Create(database: Database<Tables>) {
+    it('initial value', async () => {
+      const table = await setup(database)
+      table.push(await database.create('object', { id: '2', meta: { embed: { b: 999 } } }))
+      expect(table[table.length - 1]).to.deep.equal({
+        id: '2', meta: { a: '666', embed: { b: 999 } }
+      })
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
   }
 
   export const get = function Get(database: Database<Tables>) {
@@ -79,7 +94,21 @@ namespace ObjectOperations {
     it('empty object override', async () => {
       const table = await setup(database)
       table[0]!.meta!.embed = {}
-      await database.upsert('object',[{ id: '0', meta: { embed: {} } }])
+      await database.upsert('object', [{ id: '0', meta: { embed: {} } }])
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('expressions w/ json object', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.a = table[0]!.meta!.embed!.c + 'a'
+      await database.upsert('object', row => [{ id: '0', meta: { a: $.concat(row.meta.embed.c, 'a') } }])
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('expressions w/o json object', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.a = table[0]!.meta!.a + 'a'
+      await database.upsert('object', row => [{ id: '0', meta: { a: $.concat(row.meta.a, 'a') } }])
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }
@@ -117,6 +146,37 @@ namespace ObjectOperations {
       const table = await setup(database)
       table[0]!.meta!.embed = {}
       await database.set('object', { id: '0' }, { meta: { embed: {} } })
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('expressions w/ json object', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.a = table[0]!.meta!.embed!.c + 'a'
+      await database.set('object', { id: '0' }, row => ({ meta: { a: $.concat(row.meta.embed.c, 'a') } }))
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('expressions w/o json object', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.a = table[0]!.meta!.a + 'a'
+      await database.set('object', { id: '0' }, row => ({ meta: { a: $.concat(row.meta.a, 'a') } }))
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('object in json', async () => {
+      const table = await setup(database)
+      table[1]!.meta!.embed!.d = {}
+      await database.set('object', { id: '1' }, { 'meta.embed.d': {} })
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      table[0]!.meta!.embed!.d = { foo: 1, bar: { a: 3, b: 4 } }
+      await database.set('object', { id: '0' }, { 'meta.embed.d': { foo: 1, bar: { a: 3, b: 4 } } })
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
+    it('nested object in json', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.embed!.d = { foo: 2, bar: { a: 1 } }
+      await database.set('object', { id: '0' }, { 'meta.embed.d.bar': { a: 1 }, 'meta.embed.d.foo': 2 })
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
   }

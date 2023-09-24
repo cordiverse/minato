@@ -223,7 +223,7 @@ export class Builder {
     if (key in fields || !key.includes('.')) return prefix + escapeId(key)
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
-    return `json_unquote(json_extract(${escapeId(prefix + field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
+    return `json_unquote(json_extract(${prefix} ${escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
   }
 
   private getRecursive(args: string | string[]) {
@@ -235,7 +235,9 @@ export class Builder {
     if (fields[key]?.expr) {
       return this.parseEvalExpr(fields[key]?.expr)
     }
-    const prefix = !this.tables || table === '_' || key in fields ? '' : `${escapeId(table)}.`
+    const prefix = !this.tables || table === '_' || key in fields
+    // the only table must be the main table
+    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${escapeId(table)}.`
     return this.transformKey(key, fields, prefix)
   }
 
