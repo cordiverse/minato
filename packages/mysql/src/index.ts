@@ -357,12 +357,13 @@ export class MySQLDriver extends Driver {
     }).join(', ')
   }
 
-  query<T = any>(sql: string): Promise<T> {
+  query<T = any>(sql: string, debug = true): Promise<T> {
     const error = new Error()
     return new Promise((resolve, reject) => {
+      if (debug) logger.debug('> %s', sql)
       this.pool.query(sql, (err: Error, results) => {
         if (!err) return resolve(results)
-        logger.warn(sql)
+        logger.warn('> %s', sql)
         if (err['code'] === 'ER_DUP_ENTRY') {
           err = new RuntimeError('duplicate-entry', err.message)
         }
@@ -374,11 +375,11 @@ export class MySQLDriver extends Driver {
 
   queue<T = any>(sql: string, values?: any): Promise<T> {
     sql = format(sql, values)
-    logger.debug('> %s', sql)
     if (!this.config.multipleStatements) {
       return this.query(sql)
     }
 
+    logger.debug('> %s', sql)
     return new Promise<any>((resolve, reject) => {
       this._queryTasks.push({ sql, resolve, reject })
       process.nextTick(() => this._flushTasks())
@@ -391,7 +392,7 @@ export class MySQLDriver extends Driver {
     this._queryTasks = []
 
     try {
-      let results = await this.query(tasks.map(task => task.sql).join('; '))
+      let results = await this.query(tasks.map(task => task.sql).join('; '), false)
       if (tasks.length === 1) results = [results]
       tasks.forEach((task, index) => {
         task.resolve(results[index])
