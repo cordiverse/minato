@@ -318,7 +318,7 @@ export class SQLiteDriver extends Driver {
     const builder = new SQLiteBuilder(sel.tables)
     const output = builder.parseEval(expr)
     const inner = builder.get(sel.table as Selection, true)
-    const { value } = this.#get(`SELECT ${output} AS value FROM ${inner} ${sel.ref}`)
+    const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
     return value
   }
 
