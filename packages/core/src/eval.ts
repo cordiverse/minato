@@ -1,8 +1,22 @@
-import { defineProperty, isNullable } from 'cosmokit'
+import { defineProperty, isNullable, valueMap } from 'cosmokit'
+import { RuntimeType } from './runtime'
 import { Comparable, Flatten, isComparable, makeRegExp } from './utils'
 
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
+}
+
+export function getExprRuntimeType(value: any): RuntimeType {
+  if (isNullable(value)) return RuntimeType.any
+  if (RuntimeType.test(value)) return value
+  if (isEvalExpr(value)) return value[kRuntimeType]
+  else if (typeof value === 'string') return RuntimeType.create('string')
+  else if (typeof value === 'number') return RuntimeType.create('number')
+  else if (typeof value === 'boolean') return RuntimeType.create('boolean')
+  else if (value instanceof Date) return RuntimeType.create('date')
+  else if (value instanceof RegExp) return RuntimeType.create('regexp')
+  else if (Array.isArray(value)) return RuntimeType.create(RuntimeType.merge(...value), true)
+  else return RuntimeType.create(valueMap(value, getExprRuntimeType))
 }
 
 type $Date = Date
@@ -24,12 +38,14 @@ export type Eval<U> =
 const kExpr = Symbol('expr')
 const kType = Symbol('type')
 const kAggr = Symbol('aggr')
+const kRuntimeType = Symbol('RuntimeType')
 
 export namespace Eval {
   export interface Expr<T = any, A extends boolean = boolean> {
     [kExpr]: true
     [kType]?: T
     [kAggr]?: A
+    [kRuntimeType]: RuntimeType<T>
   }
 
   export type Number<A extends boolean = boolean> = number | Expr<number, A>
@@ -48,7 +64,7 @@ export namespace Eval {
   }
 
   export interface Static {
-    <A extends boolean>(key: string, value: any): Eval.Expr<any, A>
+    <A extends boolean>(key: string, value: any, type: RuntimeType): Eval.Expr<any, A>
 
     // univeral
     if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: T | Expr<T, A>, vElse: T | Expr<T, A>): Expr<T, A>
@@ -96,22 +112,22 @@ export namespace Eval {
   }
 }
 
-export const Eval = ((key, value) => defineProperty({ ['$' + key]: value }, kExpr, true)) as Eval.Static
+export const Eval = ((key, value, type) => defineProperty({ ['$' + key]: value, [kRuntimeType]: type }, kExpr, true)) as Eval.Static
 
 const operators = {} as Record<`$${keyof Eval.Static}`, (args: any, data: any) => any>
 
 operators['$'] = getRecursive
 
 type UnaryCallback<T> = T extends (value: infer R) => Eval.Expr<infer S> ? (value: R, data: any[]) => S : never
-function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval.Static[K]>): Eval.Static[K] {
+function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval.Static[K]>, type: RuntimeType): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return (value: any) => Eval(key, value) as any
+  return (value: any) => Eval(key, value, type) as any
 }
 
 type MultivariateCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S> ? (args: R, data: any) => S : never
-function multary<K extends keyof Eval.Static>(key: K, callback: MultivariateCallback<Eval.Static[K]>): Eval.Static[K] {
+function multary<K extends keyof Eval.Static>(key: K, callback: MultivariateCallback<Eval.Static[K]>, type: RuntimeType): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return (...args: any) => Eval(key, args) as any
+  return (...args: any[]) => Eval(key, args, type) as any
 }
 
 type BinaryCallback<T> = T extends (...args: any[]) => Eval.Expr<infer S> ? (...args: any[]) => S : never
@@ -122,10 +138,10 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
     if (isNullable(left) || isNullable(right)) return true
     return callback(left.valueOf(), right.valueOf())
   }
-  return (...args: any) => Eval(key, args) as any
+  return (...args: any[]) => Eval(key, args, RuntimeType.create('boolean')) as any
 }
 
-Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault })
+Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault }, getExprRuntimeType(vDefault))
 operators.$switch = (args, data) => {
   for (const branch of args.branches) {
     if (executeEval(data, branch.case)) return executeEval(data, branch.then)
@@ -134,14 +150,22 @@ operators.$switch = (args, data) => {
 }
 
 // univeral
-Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen) : executeEval(data, vElse))
-Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback))
+operators.$if = ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen) : executeEval(data, vElse)
+Eval.if = (...args: any[]) => {
+  return Eval('if', args, RuntimeType.merge(...(args.slice(1))))
+}
+
+operators.$ifNull = ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback)
+Eval.ifNull = (...args: any[]) => {
+  return Eval('ifNull', args, RuntimeType.merge(...args))
+}
 
 // arithmetic
-Eval.add = multary('add', (args, data) => args.reduce<number>((prev, curr) => prev + executeEval(data, curr), 0))
-Eval.mul = Eval.multiply = multary('multiply', (args, data) => args.reduce<number>((prev, curr) => prev * executeEval(data, curr), 1))
-Eval.sub = Eval.subtract = multary('subtract', ([left, right], data) => executeEval(data, left) - executeEval(data, right))
-Eval.div = Eval.divide = multary('divide', ([left, right], data) => executeEval(data, left) / executeEval(data, right))
+Eval.add = multary('add', (args, data) => args.reduce<number>((prev, curr) => prev + executeEval(data, curr), 0), RuntimeType.create('number'))
+Eval.mul = Eval.multiply = multary(
+  'multiply', (args, data) => args.reduce<number>((prev, curr) => prev * executeEval(data, curr), 1), RuntimeType.create('number'))
+Eval.sub = Eval.subtract = multary('subtract', ([left, right], data) => executeEval(data, left) - executeEval(data, right), RuntimeType.create('number'))
+Eval.div = Eval.divide = multary('divide', ([left, right], data) => executeEval(data, left) / executeEval(data, right), RuntimeType.create('number'))
 
 // comparison
 Eval.eq = comparator('eq', (left, right) => left === right)
@@ -152,24 +176,24 @@ Eval.lt = comparator('lt', (left, right) => left < right)
 Eval.le = Eval.lte = comparator('lte', (left, right) => left <= right)
 
 // element
-Eval.in = multary('in', ([value, array], data) => executeEval(data, array).includes(executeEval(data, value)))
-Eval.nin = multary('nin', ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value)))
+Eval.in = multary('in', ([value, array], data) => executeEval(data, array).includes(executeEval(data, value)), RuntimeType.create('boolean'))
+Eval.nin = multary('nin', ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value)), RuntimeType.create('boolean'))
 
 // string
-Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''))
-Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(data, regex)).test(executeEval(data, value)))
+Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''), RuntimeType.create('string'))
+Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(data, regex)).test(executeEval(data, value)), RuntimeType.create('boolean'))
 
 // logical
-Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, arg)))
-Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg)))
-Eval.not = unary('not', (value, data) => !executeEval(data, value))
+Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, arg)), RuntimeType.create('boolean'))
+Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg)), RuntimeType.create('boolean'))
+Eval.not = unary('not', (value, data) => !executeEval(data, value), RuntimeType.create('boolean'))
 
 // aggregation
-Eval.sum = unary('sum', (expr, table) => table.reduce<number>((prev, curr) => prev + executeAggr(expr, curr), 0))
-Eval.avg = unary('avg', (expr, table) => table.reduce((prev, curr) => prev + executeAggr(expr, curr), 0) / table.length)
-Eval.max = unary('max', (expr, table) => Math.max(...table.map(data => executeAggr(expr, data))))
-Eval.min = unary('min', (expr, table) => Math.min(...table.map(data => executeAggr(expr, data))))
-Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size)
+Eval.sum = unary('sum', (expr, table) => table.reduce<number>((prev, curr) => prev + executeAggr(expr, curr), 0), RuntimeType.create('number'))
+Eval.avg = unary('avg', (expr, table) => table.reduce((prev, curr) => prev + executeAggr(expr, curr), 0) / table.length, RuntimeType.create('number'))
+Eval.max = unary('max', (expr, table) => Math.max(...table.map(data => executeAggr(expr, data))), RuntimeType.create('number'))
+Eval.min = unary('min', (expr, table) => Math.min(...table.map(data => executeAggr(expr, data))), RuntimeType.create('number'))
+Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size, RuntimeType.create('number'))
 
 export { Eval as $ }
 

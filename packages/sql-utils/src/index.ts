@@ -275,7 +275,7 @@ export class Builder {
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
-      .map(([key]) => [key, { $: [ref, key] }]))
+      .map(([key, field]) => [key, Eval('', [ref, key], field!.runtimeType!)]))
     const keys = Object.entries(fields).map(([key, value]) => {
       key = escapeId(key)
       value = this.parseEval(value)

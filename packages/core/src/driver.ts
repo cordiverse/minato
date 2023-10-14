@@ -1,5 +1,5 @@
 import { Awaitable, Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
-import { Eval, Update } from './eval'
+import { Eval, getExprRuntimeType, Update } from './eval'
 import { Field, Model } from './model'
 import { Query } from './query'
 import { Flatten, Indexable, Keys, Row } from './utils'
@@ -227,8 +227,9 @@ export abstract class Driver {
     if (table instanceof Selection) {
       if (!table.args[0].fields) return table.model
       const model = new Model('temp')
-      model.fields = valueMap(table.args[0].fields, (_, key) => ({
+      model.fields = valueMap(table.args[0].fields, (expr, key) => ({
         type: 'expr',
+        runtimeType: getExprRuntimeType(expr),
       }))
       return model
     }
@@ -240,7 +241,8 @@ export abstract class Driver {
         if (submodel.fields[field]!.deprecated) continue
         model.fields[`${key}.${field}`] = {
           type: 'expr',
-          expr: { $: [key, field] } as any,
+          expr: Eval('', [key, field], Field.getRuntimeType(submodel.fields[field]!)),
+          runtimeType: Field.getRuntimeType(submodel.fields[field]!),
         }
       }
     }
