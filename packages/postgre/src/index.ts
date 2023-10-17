@@ -120,22 +120,22 @@ export class PostgresDriver extends Driver {
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
-    const size: number = await this.sql
-      `select pg_database_size(${this.config.database}) AS size`
-      .then(([s]) => s.size)
-    const tables: TableInfo[] = await this.sql
+    const tables = await this.sql
       `SELECT *
       FROM information_schema.tables
       WHERE table_schema = ${this.config.schema}`
-    const tableStats = await Promise.all(tables.map(async t => {
-      const entry = `${this.config.schema}.${t.table_name}`
-      const [stat]: Driver.TableStats[] = await this.sql
-        `SELECT pg_total_relation_size(${entry}) AS size,
-        COUNT(*) as count FROM ${this.sql(entry)}`
+    const tableStats = await this.sql.unsafe(tables.map(t => {
+      const entry = `"${this.config.schema}"."${t.table_name}"`
+      return `SELECT pg_total_relation_size('${entry}') AS size, COUNT(*) AS count FROM ${entry}`
+    }).join(' UNION '))
+    const size = tableStats.reduce((p, c) => p += +c.size, 0)
 
-      return [t.table_name, stat] as const
-    }))
-
-    return { size, tables: Object.fromEntries(tableStats)}
+    return {
+      size,
+      tables: Object.fromEntries(tables.map((t, i) => {
+        tableStats[i].size = +tableStats[i].size
+        return [t.table_name, tableStats[i]]
+      }))
+    }
   }
 }
