@@ -116,7 +116,7 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(sel.tables)
     const filter = builder.parseQuery(sel.query)
     if (filter === '0') return
-    await this.sql`DELETE FROM ${sel.table} WHERE ${filter}`
+    await this.sql`DELETE FROM ${sel.table} WHERE ${this.sql(filter)}`
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
@@ -124,18 +124,16 @@ export class PostgresDriver extends Driver {
       `SELECT *
       FROM information_schema.tables
       WHERE table_schema = ${this.config.schema}`
-    const tableStats = await this.sql.unsafe(tables.map(t => {
-      const entry = `"${this.config.schema}"."${t.table_name}"`
-      return `SELECT pg_total_relation_size('${entry}') AS size, COUNT(*) AS count FROM ${entry}`
-    }).join(' UNION '))
-    const size = tableStats.reduce((p, c) => p += +c.size, 0)
+    const tableStats = await this.sql.unsafe(
+      tables.map(({ table_name: name }) => {
+        const entry = `"${this.config.schema}"."${name}"`
+        return `SELECT '${name}' AS name, pg_total_relation_size('${entry}') AS size, COUNT(*) AS count FROM ${entry}`
+      }).join(' UNION ')
+    ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
 
     return {
-      size,
-      tables: Object.fromEntries(tables.map((t, i) => {
-        tableStats[i].size = +tableStats[i].size
-        return [t.table_name, tableStats[i]]
-      }))
+      size: tableStats.reduce((p, c) => p += c[1].size, 0),
+      tables: Object.fromEntries(tableStats)
     }
   }
 }
