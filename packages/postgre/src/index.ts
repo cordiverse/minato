@@ -6,7 +6,7 @@ import Logger from 'reggol'
 
 const logger = new Logger('postgres')
 
-export interface Welcome {
+export interface ColumnInfo {
   table_catalog:            string;
   table_schema:             string;
   table_name:               string;
@@ -16,12 +16,6 @@ export interface Welcome {
   is_nullable:              string;
   data_type:                string;
   character_maximum_length: number;
-  character_octet_length:   number;
-  udt_catalog:              string;
-  udt_schema:               string;
-  udt_name:                 string;
-  dtd_identifier:           string;
-  is_self_referencing:      string;
   is_identity:              string;
   is_updatable:             string;
 }
@@ -60,10 +54,25 @@ export class PostgresDriver extends Driver {
   }
 
   async prepare(name: string): Promise<void> {
-    this.pgsql`SELECT *
-    FROMinformation_schema.columns
+    const columns: ColumnInfo[] = await this.pgsql
+    `SELECT *
+    FROM information_schema.columns
     WHERE TABLE_SCHEMA = ${this.config.database}
     AND TABLE_NAME = ${name}`
+
+    const table = this.model('name')
+    const { fields } = table
+    const operations: postgres.PendingQuery<any>[] = []
+
+    for (const key in fields) {
+      const field = fields[key] as Field<any>
+      if (field.deprecated) continue
+      const names = [key].concat(field.legacy ?? [])
+      const column = columns.find(c => names.includes(c.column_name))
+      let shouldUpdate = column?.column_name !== key
+
+
+    }
   }
 
 }
