@@ -2,15 +2,17 @@ import { Database } from 'minato'
 import Logger from 'reggol'
 import test from '@minatojs/tests'
 
-const logger = new Logger('mysql')
+const logger = new Logger('postgres')
 
-describe('@minatojs/driver-mysql', () => {
+describe('@minatojs/driver-postgres', () => {
   const database = new Database()
 
   before(async () => {
     logger.level = 3
-    await database.connect('mysql', {
-      user: 'koishi',
+    await database.connect('postgres', {
+      host: 'localhost',
+      port: 5432,
+      username: 'koishi',
       password: 'koishi@114514',
       database: 'test',
     })
