@@ -68,9 +68,9 @@ export class PostgresDriver extends Driver {
   async prepare(name: string) {
     const columns: ColumnInfo[] = await this.sql
       `SELECT *
-    FROM information_schema.columns
-    WHERE table_schema = ${this.config.database}
-    AND table_name = ${name}`
+      FROM information_schema.columns
+      WHERE table_schema = ${this.config.schema}
+      AND table_name = ${name}`
 
     const table = this.model('name')
     const { fields } = table
@@ -108,7 +108,7 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseEval(expr)
     const sub = builder.get(sel.table as Selection, true)
-    const [data] = await this.sql`SELECT ${query} AS value FROM ${sub} ${sel.ref}`
+    const [data] = await this.sql`SELECT ${this.sql(query)} AS value FROM ${this.sql(sub)} ${this.sql(sel.ref)}`
     return data?.value
   }
 
