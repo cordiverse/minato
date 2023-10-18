@@ -55,7 +55,7 @@ class Executable<S = any, T = any> {
         expr[key] = createRow(key, {}, '', this.model)
       }
     }
-    defineProperty(this, 'row', createRow(this.ref, {}, '', this.model))
+    defineProperty(this, 'row', createRow(this.ref, expr, '', this.model))
   }
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>
