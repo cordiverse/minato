@@ -35,6 +35,20 @@ interface TableInfo {
   commit_action: null;
 }
 
+function type({ type, length, precision, scale }: Field) {
+  switch (type) {
+    case 'integer': {
+      if (!length) return 'integer'
+      if (scale) return `NUMERIC(${length}, ${scale})`
+      if (length <= 4) return 'integer'
+      if (length <= 2) return 'smallint'
+      if (length <= 8) return 'bigint'
+      return `NUMERIC(${length})`
+    }
+    case 'json': return 'text'
+  }
+}
+
 class PostgresBuilder extends Builder {
 
 }
@@ -66,6 +80,7 @@ export class PostgresDriver extends Driver {
   }
 
   async prepare(name: string) {
+    // TODO
     const columns: ColumnInfo[] = await this.sql
       `SELECT *
       FROM information_schema.columns
@@ -85,11 +100,15 @@ export class PostgresDriver extends Driver {
     }
   }
 
+  async upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<void> {
+    // TODO
+  }
+
   async get(sel: Selection.Immutable) {
     const builder = new PostgresBuilder(sel.tables)
-    const sql = builder.get(sel)
-    if (!sql) return []
-    return this.sql.unsafe(sql).then(data => {
+    const query = builder.get(sel)
+    if (!query) return []
+    return this.sql.unsafe(query).then(data => {
       return data.map(row => builder.load(sel.model, row))
     })
   }
@@ -104,19 +123,21 @@ export class PostgresDriver extends Driver {
     await this.sql`DROP TABLE ${this.sql(tables.map(t => t.table_name))};`
   }
 
-  async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>): Promise<any> {
+  async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>) {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseEval(expr)
     const sub = builder.get(sel.table as Selection, true)
-    const [data] = await this.sql`SELECT ${this.sql(query)} AS value FROM ${this.sql(sub)} ${this.sql(sel.ref)}`
+    const [data] = await this.sql
+      `SELECT ${this.sql(query)} AS value
+      FROM ${this.sql(sub)} ${this.sql(sel.ref)}`
     return data?.value
   }
 
   async remove(sel: Selection.Mutable) {
     const builder = new PostgresBuilder(sel.tables)
-    const filter = builder.parseQuery(sel.query)
-    if (filter === '0') return
-    await this.sql`DELETE FROM ${sel.table} WHERE ${this.sql(filter)}`
+    const query = builder.parseQuery(sel.query)
+    if (query === '0') return
+    await this.sql`DELETE FROM ${sel.table} WHERE ${this.sql(query)}`
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
@@ -127,7 +148,9 @@ export class PostgresDriver extends Driver {
     const tableStats = await this.sql.unsafe(
       tables.map(({ table_name: name }) => {
         const entry = `"${this.config.schema}"."${name}"`
-        return `SELECT '${name}' AS name, pg_total_relation_size('${entry}') AS size, COUNT(*) AS count FROM ${entry}`
+        return `SELECT '${name}' AS name,
+          pg_total_relation_size('${entry}') AS size,
+          COUNT(*) AS count FROM ${entry}`
       }).join(' UNION ')
     ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
 
@@ -136,4 +159,23 @@ export class PostgresDriver extends Driver {
       tables: Object.fromEntries(tableStats)
     }
   }
+
+  async create(sel: Selection.Mutable, data: any) {
+    const [row] = await this.sql
+      `INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
+      RETURNING *`
+    return row
+  }
+
+  async set(sel: Selection.Mutable, data: any) {
+    const builder = new PostgresBuilder(sel.tables)
+    const query = builder.parseQuery(sel.query)
+    if (query === '0') return
+    await this.sql
+      `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
+      SET ${this.sql(data)}
+      WHERE ${this.sql(data)}`
+  }
+
+
 }
