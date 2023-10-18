@@ -35,6 +35,12 @@ interface TableInfo {
   commit_action: null;
 }
 
+interface FieldOperation {
+  key: string
+  field: Field
+  column?: ColumnInfo | undefined
+}
+
 function type({ type, length, precision, scale }: Field) {
   switch (type) {
     case 'integer': {
@@ -73,6 +79,7 @@ export class PostgresDriver extends Driver {
 
   async start() {
     this.sql = postgres(this.config)
+    await this.sql`SET search_path = ${this.config.schema}`
   }
 
   async stop() {
@@ -80,7 +87,6 @@ export class PostgresDriver extends Driver {
   }
 
   async prepare(name: string) {
-    // TODO
     const columns: ColumnInfo[] = await this.sql
       `SELECT *
       FROM information_schema.columns
@@ -91,12 +97,13 @@ export class PostgresDriver extends Driver {
     const { fields } = table
     const operations: postgres.PendingQuery<any>[] = []
 
-    for (const key in fields) {
-      const field = fields[key] as Field<any>
-      if (field.deprecated) continue
-      const names = [key].concat(field.legacy ?? [])
-      const column = columns.find(c => names.includes(c.column_name))
-      let shouldUpdate = column?.column_name !== key
+    const a: FieldOperation[] = Object.entries(fields).map(([key, field]) => {
+      return { key, field, column: columns.find(c => {})}
+    })
+
+    if (!columns?.length) {
+      this.sql`CREATE TABLE ${this.sql(name)} (${1})`
+      return
     }
   }
 
@@ -137,7 +144,7 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseQuery(sel.query)
     if (query === '0') return
-    await this.sql`DELETE FROM ${sel.table} WHERE ${this.sql(query)}`
+    await this.sql`DELETE FROM ${this.sql(sel.table)} WHERE ${this.sql(query)}`
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
@@ -147,10 +154,9 @@ export class PostgresDriver extends Driver {
       WHERE table_schema = ${this.config.schema}`
     const tableStats = await this.sql.unsafe(
       tables.map(({ table_name: name }) => {
-        const entry = `"${this.config.schema}"."${name}"`
         return `SELECT '${name}' AS name,
-          pg_total_relation_size('${entry}') AS size,
-          COUNT(*) AS count FROM ${entry}`
+          pg_total_relation_size('${name}') AS size,
+          COUNT(*) AS count FROM ${name}`
       }).join(' UNION ')
     ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
 
@@ -174,8 +180,6 @@ export class PostgresDriver extends Driver {
     await this.sql
       `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
       SET ${this.sql(data)}
-      WHERE ${this.sql(data)}`
+      WHERE ${this.sql(query)}`
   }
-
-
 }
