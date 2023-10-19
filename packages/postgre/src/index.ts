@@ -37,21 +37,41 @@ interface TableInfo {
 
 interface FieldOperation {
   key: string
-  field: Field
+  names: string[]
+  field?: Field
   column?: ColumnInfo | undefined
+  operations?: 'create' | 'rename'
 }
 
-function type({ type, length, precision, scale }: Field) {
+function type({ type, length, precision, scale, autoInc, initial }: Field & { autoInc?: boolean }) {
   switch (type) {
+    case 'primary':
+    case 'unsigned':
     case 'integer': {
-      if (!length) return 'integer'
-      if (scale) return `NUMERIC(${length}, ${scale})`
-      if (length <= 4) return 'integer'
-      if (length <= 2) return 'smallint'
-      if (length <= 8) return 'bigint'
-      return `NUMERIC(${length})`
+      length ??= 4
+      const numLen = precision || Math.ceil(Math.log10(Math.pow(2, length * 8 - 1))) // TODO: discuss about length define
+      if (autoInc) {
+        if (length <= 2) return 'SERIAL'
+        if (length <= 8) return 'BIGSERIAL'
+        if (length <= 4) return 'SMALLSERIAL'
+        throw new Error(`unsupported type: ${type}`)
+      }
+      let sql: string
+      if (scale) sql = `NUMERIC(${numLen}, ${scale})`
+      else if (length <= 2) sql = 'SMALLINT'
+      else if (length <= 4) sql = 'INTEGER'
+      else if (length <= 8) sql = 'BIGINT'
+      else sql = `NUMERIC(${numLen})`
+      sql += ` DEFAULT ${initial || 0}`
+      return sql
     }
-    case 'json': return 'text'
+    case 'float': return 'REAL'
+    case 'double': return 'DOUBLE PRECISION'
+    case 'char': return `varchar(${length || 64}) DEFAULT ''`
+    case 'string': return `varchar(${length || 255}) DEFAULT ''`
+    case 'text': return `varchar(${length || 65535}) DEFAULT ''`
+    case 'json': return 'TEXT' // TODO: search about pgsql json schema
+    default: throw new Error(`unsupported type: ${type}`)
   }
 }
 
@@ -98,7 +118,14 @@ export class PostgresDriver extends Driver {
     const operations: postgres.PendingQuery<any>[] = []
 
     const a: FieldOperation[] = Object.entries(fields).map(([key, field]) => {
-      return { key, field, column: columns.find(c => {})}
+      const names = [key].concat(field?.legacy ?? [])
+      const column = columns.find(c => names.includes(c.column_name))
+      const operation: FieldOperation['operations'] = (() => {
+        if (!column) return 'create'
+        if (name !== column.column_name) return 'rename'
+      })()
+      const def = this.sql(`${name}`)
+      return { key, field, names, column, operation }
     })
 
     if (!columns?.length) {
