@@ -92,7 +92,7 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
   } else if (type === 'list') {
     def += 'TEXT[]'
     if (initial === undefined) def += ` DEFAULT {}`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    else if (initial !== null) def += ` DEFAULT "${initial.map(s => s.replace(/"/g, '""')).join('", "')}"`
   } else if (type === 'json') {
     def += 'JSON'
     if (initial) def += ` DEFAULT ${initial}` // TODO
