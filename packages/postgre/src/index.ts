@@ -43,34 +43,57 @@ interface FieldOperation {
   operations?: 'create' | 'rename'
 }
 
-function type({ type, length, precision, scale, autoInc, initial }: Field & { autoInc?: boolean }) {
-  switch (type) {
-    case 'primary':
-    case 'unsigned':
-    case 'integer': {
-      length ??= 4
-      const numLen = precision || Math.ceil(Math.log10(Math.pow(2, length * 8 - 1))) // TODO: discuss about length define
-      if (autoInc) {
-        if (length <= 2) return 'SERIAL'
-        if (length <= 8) return 'BIGSERIAL'
-        if (length <= 4) return 'SMALLSERIAL'
-        throw new Error(`unsupported type: ${type}`)
-      }
-      let sql: string
-      if (scale) sql = `NUMERIC(${numLen}, ${scale})`
-      else if (length <= 2) sql = 'SMALLINT'
-      else if (length <= 4) sql = 'INTEGER'
-      else if (length <= 8) sql = 'BIGINT'
-      else sql = `NUMERIC(${numLen})`
-      sql += ` DEFAULT ${initial || 0}`
-      return sql
+function type(field: Field & { autoInc?: boolean, primary: boolean }) {
+  let { type, length, precision, scale, autoInc, initial } = field
+  let def = ''
+  if (['primary', 'unsigned', 'integer'].includes(type)) {
+    length ||= 4
+    if (precision) def += `NUMERIC(${precision}, ${scale ?? 0})`
+    else if (autoInc) {
+      if (length <= 2) def += 'SERIAL'
+      if (length <= 8) def += 'BIGSERIAL'
+      if (length <= 4) def += 'SMALLSERIAL'
+      throw new Error(`unsupported type: ${type}`)
     }
-    case 'float': return 'REAL'
-    case 'double': return 'DOUBLE PRECISION'
-    case 'char': return `varchar(${length || 64}) DEFAULT ''`
-    case 'string': return `varchar(${length || 255}) DEFAULT ''`
-    case 'text': return `varchar(${length || 65535}) DEFAULT ''`
-    case 'json': return 'TEXT' // TODO: search about pgsql json schema
+    else if (length <= 2) def += 'SMALLINT'
+    else if (length <= 4) def += 'INTEGER'
+    else if (length <= 8) def += 'BIGINT'
+    else new Error(`unsupported type: ${type}`)
+    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+  } else if (type === 'decimal') {
+    def += `DECIMAL(${precision}, ${scale})`
+    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+  } else if (type === 'float') {
+    def += 'REAL'
+    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+  } else if (type == 'double') {
+    def += 'DOUBLE PRECISION'
+    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+  } else if (type === 'char') {
+    def += `VARCHAR(${length || 64}) `
+    def += ` DEFAULT '${initial === undefined ? '' : initial }'`
+  } else if (type === 'string') {
+    def += `VARCHAR(${length || 255}) DEFAULT ''`
+    def += ` DEFAULT '${initial === undefined ? '' : initial }'`
+  } else if (type === 'text') {
+    def += `VARCHAR(${length || 65535}) DEFAULT ''`
+    def += ` DEFAULT '${initial === undefined ? '' : initial }'`
+  } else if (type === 'boolean') {
+    def += 'BOOLEAN'
+    def += ` DEFAULT ${initial === undefined ? null : initial }`
+  } else if (type === 'list') {
+    def += 'TEXT[]'
+    // TODO
+  } else if (type === 'json') {
+    def += 'JSON'
+  } else if (type === 'date') {
+    def += 'DATE'
+  } else if (type === 'time') {
+    def += 'TIME'
+  } else if (type === 'timestamp') {
+    def += 'TIMESTAMP'
+  }
+  switch (type) {
     default: throw new Error(`unsupported type: ${type}`)
   }
 }
