@@ -43,7 +43,7 @@ interface FieldOperation {
   operations?: 'create' | 'rename'
 }
 
-function type(field: Field & { autoInc?: boolean, primary: boolean }) {
+function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
   let { type, length, precision, scale, autoInc, initial } = field
   let def = ''
   if (['primary', 'unsigned', 'integer'].includes(type)) {
@@ -59,43 +59,50 @@ function type(field: Field & { autoInc?: boolean, primary: boolean }) {
     else if (length <= 4) def += 'INTEGER'
     else if (length <= 8) def += 'BIGINT'
     else new Error(`unsupported type: ${type}`)
-    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+
+    if (initial === undefined) def += ` DEFAULT 0`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type === 'decimal') {
     def += `DECIMAL(${precision}, ${scale})`
-    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+    if (initial === undefined) def += ` DEFAULT 0`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type === 'float') {
     def += 'REAL'
-    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+    if (initial === undefined) def += ` DEFAULT 0`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type == 'double') {
     def += 'DOUBLE PRECISION'
-    def += ` DEFAULT ${initial === undefined ? 0 : initial }`
+    if (initial === undefined) def += ` DEFAULT 0`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type === 'char') {
     def += `VARCHAR(${length || 64}) `
-    def += ` DEFAULT '${initial === undefined ? '' : initial }'`
+    if (initial === undefined) def += ` DEFAULT ''`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type === 'string') {
-    def += `VARCHAR(${length || 255}) DEFAULT ''`
-    def += ` DEFAULT '${initial === undefined ? '' : initial }'`
+    def += `VARCHAR(${length || 255})`
+    if (initial === undefined) def += ` DEFAULT ''`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type === 'text') {
-    def += `VARCHAR(${length || 65535}) DEFAULT ''`
-    def += ` DEFAULT '${initial === undefined ? '' : initial }'`
+    def += `VARCHAR(${length || 65535})`
+    if (initial === undefined) def += ` DEFAULT ''`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type === 'boolean') {
     def += 'BOOLEAN'
-    def += ` DEFAULT ${initial === undefined ? null : initial }`
+    if (initial) def += ` DEFAULT ${initial}`
   } else if (type === 'list') {
     def += 'TEXT[]'
-    // TODO
+    if (initial === undefined) def += ` DEFAULT {}`
+    else if (initial !== null) def += ` DEFAULT ${initial}`
   } else if (type === 'json') {
     def += 'JSON'
+    if (initial) def += ` DEFAULT ${initial}` // TODO
   } else if (type === 'date') {
-    def += 'DATE'
+    def += 'DATE' // TODO: default
   } else if (type === 'time') {
     def += 'TIME'
   } else if (type === 'timestamp') {
     def += 'TIMESTAMP'
-  }
-  switch (type) {
-    default: throw new Error(`unsupported type: ${type}`)
-  }
+  } else throw new Error(`unsupported type: ${type}`)
 }
 
 class PostgresBuilder extends Builder {
