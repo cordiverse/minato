@@ -47,58 +47,54 @@ interface FieldInfo {
 }
 
 function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
-  let { type, length, precision, scale, initial } = field
+  let { type, length, precision, scale, initial, primary } = field
   let def = ''
+  if (primary) initial = null
   if (['primary', 'unsigned', 'integer'].includes(type)) {
     length ||= 4
     if (precision) def += `NUMERIC(${precision}, ${scale ?? 0})`
     else if (field.autoInc) {
       if (length <= 2) def += 'SERIAL'
-      if (length <= 8) def += 'BIGSERIAL'
-      if (length <= 4) def += 'SMALLSERIAL'
-      throw new Error(`unsupported type: ${type}`)
+      else if (length <= 4) def += 'SMALLSERIAL'
+      else if (length <= 8) def += 'BIGSERIAL'
+      else throw new Error(`unsupported type: ${type}`)
     }
     else if (length <= 2) def += 'SMALLINT'
     else if (length <= 4) def += 'INTEGER'
     else if (length <= 8) def += 'BIGINT'
     else new Error(`unsupported type: ${type}`)
 
-    if (initial === undefined) def += ` DEFAULT 0`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
   } else if (type === 'decimal') {
     def += `DECIMAL(${precision}, ${scale})`
-    if (initial === undefined) def += ` DEFAULT 0`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
   } else if (type === 'float') {
     def += 'REAL'
-    if (initial === undefined) def += ` DEFAULT 0`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
   } else if (type == 'double') {
     def += 'DOUBLE PRECISION'
-    if (initial === undefined) def += ` DEFAULT 0`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
   } else if (type === 'char') {
     def += `VARCHAR(${length || 64}) `
-    if (initial === undefined) def += ` DEFAULT ''`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'string') {
     def += `VARCHAR(${length || 255})`
-    if (initial === undefined) def += ` DEFAULT ''`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'text') {
     def += `VARCHAR(${length || 65535})`
-    if (initial === undefined) def += ` DEFAULT ''`
-    else if (initial !== null) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'boolean') {
     def += 'BOOLEAN'
-    if (initial) def += ` DEFAULT ${initial}`
+    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
   } else if (type === 'list') {
     def += 'TEXT[]'
-    if (initial === undefined) def += ` DEFAULT {}`
-    else if (Array.isArray(initial)) def += ` DEFAULT {"${initial.map(s => s.replace(/"/g, '""')).join('", "')}"}`
+    if (Array.isArray(initial)) {
+      const arr = initial.map(v => `'${v.replace(/'/g, "''")}'`).join(',')
+      def += ` DEFAULT ARRAY[${arr}]::TEXT[]`
+    }
   } else if (type === 'json') {
     def += 'JSON'
-    if (initial) def += ` DEFAULT ${initial}` // TODO
+    if (initial) def += ` DEFAULT '${JSON.stringify(initial)}'::JSONB` // TODO
   } else if (type === 'date') {
     def += 'DATE' // TODO: default
   } else if (type === 'time') {
@@ -107,7 +103,7 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
     def += 'TIMESTAMP'
   } else throw new Error(`unsupported type: ${type}`)
 
-  if (field.primary) def += 'PRIMARY KEY'
+  if (primary) def += ' PRIMARY KEY'
 
   return def
 }
@@ -135,8 +131,11 @@ export class PostgresDriver extends Driver {
   }
 
   async start() {
+    const { schema, username } = this.config
+
     this.sql = postgres(this.config)
-    await this.sql`SET search_path = ${this.config.schema}`
+    await this.sql.unsafe(`CREATE SCHEMA IF NOT EXISTS ${schema} AUTHORIZATION ${username}`)
+    await this.sql.unsafe(`SET search_path = ${schema}`)
   }
 
   async stop() {
@@ -150,8 +149,9 @@ export class PostgresDriver extends Driver {
       WHERE table_schema = ${this.config.schema}
       AND table_name = ${name}`
 
-    const table = this.model('name')
+    const table = this.model(name)
     const { fields } = table
+    const { schema } = this.config
     const operations: postgres.PendingQuery<any>[] = []
 
     const o: FieldInfo[] = Object.entries(fields).map(([key, field]) => {
@@ -172,7 +172,7 @@ export class PostgresDriver extends Driver {
     })
 
     if (!columns?.length) {
-      this.sql`CREATE TABLE ${this.sql(name)} ${this.sql(o.map(f => `"${f.key}" ${f.def}`))}`
+      await this.sql.unsafe(`CREATE TABLE "${name}" (${o.map(f => `"${f.key}" ${f.def}`).join(',')})`)
       return
     }
   }
@@ -191,13 +191,13 @@ export class PostgresDriver extends Driver {
   }
 
   async drop(table?: string) {
-    if (table) return void await this.sql`DROP TABLE ${table}`
+    if (table) return void await this.sql`DROP TABLE IF EXISTS "${this.sql(table)}" CASCADE`
     const tables: TableInfo[] = await this.sql
       `SELECT *
       FROM information_schema.tables
       WHERE table_schema = ${this.config.schema}`
     if (!tables.length) return
-    await this.sql`DROP TABLE ${this.sql(tables.map(t => t.table_name))};`
+    await this.sql`DROP TABLE IF EXISTS ${this.sql(tables.map(t => t.table_name))} CASCADE`
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>) {
@@ -253,3 +253,5 @@ export class PostgresDriver extends Driver {
       WHERE ${this.sql(query)}`
   }
 }
+
+export default PostgresDriver
