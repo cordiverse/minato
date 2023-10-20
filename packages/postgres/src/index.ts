@@ -35,21 +35,24 @@ interface TableInfo {
   commit_action: null;
 }
 
-interface FieldOperation {
+type FieldOperation = 'create' | 'rename' | undefined
+
+interface FieldInfo {
   key: string
   names: string[]
   field?: Field
   column?: ColumnInfo | undefined
-  operations?: 'create' | 'rename'
+  operations?: FieldOperation
+  def?: string
 }
 
 function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
-  let { type, length, precision, scale, autoInc, initial } = field
+  let { type, length, precision, scale, initial } = field
   let def = ''
   if (['primary', 'unsigned', 'integer'].includes(type)) {
     length ||= 4
     if (precision) def += `NUMERIC(${precision}, ${scale ?? 0})`
-    else if (autoInc) {
+    else if (field.autoInc) {
       if (length <= 2) def += 'SERIAL'
       if (length <= 8) def += 'BIGSERIAL'
       if (length <= 4) def += 'SMALLSERIAL'
@@ -103,6 +106,10 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
   } else if (type === 'timestamp') {
     def += 'TIMESTAMP'
   } else throw new Error(`unsupported type: ${type}`)
+
+  if (field.primary) def += 'PRIMARY KEY'
+
+  return def
 }
 
 class PostgresBuilder extends Builder {
@@ -147,19 +154,25 @@ export class PostgresDriver extends Driver {
     const { fields } = table
     const operations: postgres.PendingQuery<any>[] = []
 
-    const a: FieldOperation[] = Object.entries(fields).map(([key, field]) => {
+    const o: FieldInfo[] = Object.entries(fields).map(([key, field]) => {
       const names = [key].concat(field?.legacy ?? [])
-      const column = columns.find(c => names.includes(c.column_name))
-      const operation: FieldOperation['operations'] = (() => {
-        if (!column) return 'create'
-        if (name !== column.column_name) return 'rename'
-      })()
-      const def = this.sql(`${name}`)
-      return { key, field, names, column, operation }
+      const column = columns?.find(c => names.includes(c.column_name))
+      const primary = key === table.primary
+
+      let operation: FieldOperation | undefined
+      if (!column) operation = 'create'
+      else if (name !== column.column_name) operation = 'rename'
+
+      let def: string | undefined
+      if (operation === 'create') def = type(Object.assign({
+        primary,
+        autoInc: primary && table.autoInc
+      }, field))
+      return { key, field, names, column, operation, def }
     })
 
     if (!columns?.length) {
-      this.sql`CREATE TABLE ${this.sql(name)} (${1})`
+      this.sql`CREATE TABLE ${this.sql(name)} ${this.sql(o.map(f => `"${f.key}" ${f.def}`))}`
       return
     }
   }
