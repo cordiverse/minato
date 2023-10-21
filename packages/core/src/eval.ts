@@ -109,6 +109,8 @@ export namespace Eval {
     max(value: Number<false>): Expr<number, true>
     min(value: Number<false>): Expr<number, true>
     count(value: Any<false>): Expr<number, true>
+
+    aggr<T, A extends boolean>(value: Expr<T>, aggr?: A): Expr<T, A>
   }
 }
 
@@ -194,6 +196,8 @@ Eval.avg = unary('avg', (expr, table) => table.reduce((prev, curr) => prev + exe
 Eval.max = unary('max', (expr, table) => Math.max(...table.map(data => executeAggr(expr, data))), RuntimeType.create('number'))
 Eval.min = unary('min', (expr, table) => Math.min(...table.map(data => executeAggr(expr, data))), RuntimeType.create('number'))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size, RuntimeType.create('number'))
+
+Eval.aggr = (value, aggr) => Eval('aggr', [value, aggr ?? true], getExprRuntimeType(value))
 
 export { Eval as $ }
 

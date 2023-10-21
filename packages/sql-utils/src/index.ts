@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
+import { createRow, Eval, Field, getExprRuntimeType, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -111,6 +111,8 @@ export class Builder {
       $min: (expr) => `min(${this.parseAggr(expr)})`,
       $max: (expr) => `max(${this.parseAggr(expr)})`,
       $count: (expr) => `count(distinct ${this.parseAggr(expr)})`,
+
+      $aggr: ([value, aggr]) => aggr ? this.groupJson(this.parseEvalExpr(value)) : this.parseEvalExpr(value),
     }
   }
 
@@ -157,6 +159,10 @@ export class Builder {
 
   protected logicalNot(condition: string) {
     return `NOT(${condition})`
+  }
+
+  protected groupJson(key: string) {
+    return `concat('[', group_concat(${key}), ']')`
   }
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
@@ -219,11 +225,15 @@ export class Builder {
     return this.parseEvalExpr(expr)
   }
 
+  protected transformJsonField(obj: string, path: string) {
+    return `json_unquote(json_extract(${obj}, '$${path}'))`
+  }
+
   private transformKey(key: string, fields: {}, prefix: string) {
     if (key in fields || !key.includes('.')) return prefix + escapeId(key)
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
-    return `json_unquote(json_extract(${prefix} ${escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
+    return this.transformJsonField(`${prefix} ${escapeId(field)}`, rest.map(key => `."${key}"`).join(''))
   }
 
   private getRecursive(args: string | string[]) {
@@ -232,8 +242,16 @@ export class Builder {
     }
     const [table, key] = args
     const fields = this.tables?.[table]?.fields || {}
-    if (fields[key]?.expr) {
-      return this.parseEvalExpr(fields[key]?.expr)
+    const fkey = Object.keys(fields).find(field => key === field || key.startsWith(field + '.'))
+    if (fkey && fields[fkey]?.expr) {
+      if (key === fkey) {
+        return this.parseEvalExpr(fields[fkey]?.expr!(createRow(table)))
+      } else {
+        const field = this.parseEvalExpr(fields[fkey]?.expr!(createRow(table)))
+        const rest = key.slice(fkey.length + 1).split('.')
+        console.log(getExprRuntimeType(field))
+        return this.transformJsonField(`${field}`, rest.map(key => `."${key}"`).join(''))
+      }
     }
     const prefix = !this.tables || table === '_' || key in fields
     // the only table must be the main table

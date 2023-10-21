@@ -30,7 +30,7 @@ namespace Executable {
   }
 }
 
-const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Proxy(expr, {
+export const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Proxy(expr, {
   get(target, key) {
     if (typeof key === 'symbol' || key in target || key === 'toJSON' || key.startsWith('$')) return Reflect.get(target, key)
     const fullKey = `${prefix}${key}`

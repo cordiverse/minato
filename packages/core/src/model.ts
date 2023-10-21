@@ -1,6 +1,6 @@
 import { clone, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './driver'
-import { Eval, getExprRuntimeType, isEvalExpr } from './eval'
+import { getExprRuntimeType, isEvalExpr } from './eval'
 import { RuntimeType } from './runtime'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
@@ -15,7 +15,7 @@ export interface Field<T = any> {
   initial?: T
   precision?: number
   scale?: number
-  expr?: Eval.Expr
+  expr?: Selection.Callback<any, T>
   legacy?: string[]
   deprecated?: boolean
   runtimeType?: RuntimeType

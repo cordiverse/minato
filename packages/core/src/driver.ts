@@ -241,7 +241,7 @@ export abstract class Driver {
         if (submodel.fields[field]!.deprecated) continue
         model.fields[`${key}.${field}`] = {
           type: 'expr',
-          expr: Eval('', [key, field], Field.getRuntimeType(submodel.fields[field]!)),
+          expr: () => Eval('', [key, field], Field.getRuntimeType(submodel.fields[field]!)),
           runtimeType: Field.getRuntimeType(submodel.fields[field]!),
         }
       }

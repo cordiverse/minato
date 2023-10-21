@@ -85,6 +85,14 @@ class SQLiteBuilder extends Builder {
   protected createElementQuery(key: string, value: any) {
     return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
   }
+
+  protected groupJson(key: string) {
+    return `('[' || group_concat(${key}) || ']')`
+  }
+
+  protected transformJsonField(obj: string, path: string) {
+    return `json_extract(${obj}, '$${path}')`
+  }
 }
 
 export class SQLiteDriver extends Driver {
@@ -118,7 +126,8 @@ export class SQLiteDriver extends Driver {
 
       const legacy = [key, ...model.fields[key]!.legacy || []]
       const column = columns.find(({ name }) => legacy.includes(name))
-      const { initial, nullable = true } = model.fields[key]!
+      const { expr, initial, nullable = true } = model.fields[key]!
+      if (expr) continue
       const typedef = getTypeDef(model.fields[key]!)
       let def = `${escapeId(key)} ${typedef}`
       if (key === model.primary && model.autoInc) {
