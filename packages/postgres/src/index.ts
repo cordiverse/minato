@@ -119,23 +119,30 @@ export namespace PostgresDriver {
     username: string
     password: string
     database: string
-    schema: string
   }
 }
 
 export class PostgresDriver extends Driver {
   public sql!: postgres.Sql
+  public config: PostgresDriver.Config
 
-  constructor(database: Database, public config: PostgresDriver.Config) {
+  constructor(database: Database, config: PostgresDriver.Config) {
     super(database)
+
+    this.config = {
+      onnotice: () => {},
+
+      ...config
+    }
   }
 
   async start() {
-    const { schema, username } = this.config
+    // const { schema, username } = this.config
 
     this.sql = postgres(this.config)
-    await this.sql.unsafe(`CREATE SCHEMA IF NOT EXISTS ${schema} AUTHORIZATION ${username}`)
-    await this.sql.unsafe(`SET search_path = ${schema}`)
+
+    // await this.sql.unsafe(`CREATE SCHEMA IF NOT EXISTS ${schema} AUTHORIZATION ${username}`)
+    // await this.sql.unsafe(`SET search_path = ${schema}`)
   }
 
   async stop() {
@@ -146,15 +153,13 @@ export class PostgresDriver extends Driver {
     const columns: ColumnInfo[] = await this.sql
       `SELECT *
       FROM information_schema.columns
-      WHERE table_schema = ${this.config.schema}
+      WHERE table_schema = 'public'
       AND table_name = ${name}`
 
     const table = this.model(name)
     const { fields } = table
-    const { schema } = this.config
-    const operations: postgres.PendingQuery<any>[] = []
 
-    const o: FieldInfo[] = Object.entries(fields).map(([key, field]) => {
+    const operations: FieldInfo[] = Object.entries(fields).map(([key, field]) => {
       const names = [key].concat(field?.legacy ?? [])
       const column = columns?.find(c => names.includes(c.column_name))
       const primary = key === table.primary
@@ -172,7 +177,7 @@ export class PostgresDriver extends Driver {
     })
 
     if (!columns?.length) {
-      await this.sql.unsafe(`CREATE TABLE "${name}" (${o.map(f => `"${f.key}" ${f.def}`).join(',')})`)
+      await this.sql.unsafe(`CREATE TABLE "${name}" (${operations.map(f => `"${f.key}" ${f.def}`).join(',')})`)
       return
     }
   }
@@ -195,7 +200,7 @@ export class PostgresDriver extends Driver {
     const tables: TableInfo[] = await this.sql
       `SELECT *
       FROM information_schema.tables
-      WHERE table_schema = ${this.config.schema}`
+      WHERE table_schema = 'public'`
     if (!tables.length) return
     await this.sql`DROP TABLE IF EXISTS ${this.sql(tables.map(t => t.table_name))} CASCADE`
   }
@@ -221,7 +226,7 @@ export class PostgresDriver extends Driver {
     const tables = await this.sql
       `SELECT *
       FROM information_schema.tables
-      WHERE table_schema = ${this.config.schema}`
+      WHERE table_schema = 'public'`
     const tableStats = await this.sql.unsafe(
       tables.map(({ table_name: name }) => {
         return `SELECT '${name}' AS name,
