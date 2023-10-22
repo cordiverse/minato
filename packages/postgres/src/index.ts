@@ -1,10 +1,11 @@
 import postgres from 'postgres'
-import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
+import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, Modifier, RuntimeError, Selection } from '@minatojs/core'
-import { Builder, escapeId } from '@minatojs/sql-utils'
+import { Builder } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
 const logger = new Logger('postgres')
+const timeRegex = /(\d+):(\d+):(\d+)/
 
 interface ColumnInfo {
   table_catalog: string;
@@ -88,7 +89,7 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
     if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
   } else if (type === 'list') {
     def += 'TEXT[]'
-    if (Array.isArray(initial)) {
+    if (initial) {
       const arr = initial.map(v => `'${v.replace(/'/g, "''")}'`).join(',')
       def += ` DEFAULT ARRAY[${arr}]::TEXT[]`
     }
@@ -97,10 +98,13 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
     if (initial) def += ` DEFAULT '${JSON.stringify(initial)}'::JSONB` // TODO
   } else if (type === 'date') {
     def += 'DATE' // TODO: default
+    if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else if (type === 'time') {
-    def += 'TIME'
+    def += 'TIME WITH TIME ZONE'
+    if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else if (type === 'timestamp') {
-    def += 'TIMESTAMP'
+    def += 'TIMESTAMP WITH TIME ZONE'
+    if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else throw new Error(`unsupported type: ${type}`)
 
   if (primary) def += ' PRIMARY KEY'
@@ -108,8 +112,143 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
   return def
 }
 
-class PostgresBuilder extends Builder {
+function formatTime(time: Date) {
+  const year = time.getFullYear().toString()
+  const month = Time.toDigits(time.getMonth() + 1)
+  const date = Time.toDigits(time.getDate())
+  const hour = Time.toDigits(time.getHours())
+  const min = Time.toDigits(time.getMinutes())
+  const sec = Time.toDigits(time.getSeconds())
+  const ms = Time.toDigits(time.getMilliseconds(), 3)
+  let timezone = Time.toDigits(time.getTimezoneOffset() / -60)
+  if (!timezone.startsWith('-')) timezone = `+${timezone}`
+  return `${year}-${month}-${date} ${hour}:${min}:${sec}.${ms}${timezone}`
+}
 
+class PostgresBuilder extends Builder {
+  constructor(public tables?: Dict<Model>) {
+    super(tables)
+
+    this.define<Date, string>({
+      types: ['time'],
+      dump: date => formatTime(date),
+      load: str => {
+        if (isNullable(str)) return str
+        const date = new Date(0)
+        const parsed = timeRegex.exec(str)
+        if (!parsed) throw Error(`unexpected time value: ${str}`)
+        date.setHours(+parsed[1], +parsed[2], +parsed[3])
+        return date
+      }
+    })
+
+    this.queryOperators = {
+      ...this.queryOperators,
+      $regex: (key, value) => this.createRegExpQuery(key, value),
+      $regexFor: (key, value) => `${this.escape(value)} ~ ${key}`,
+      $size: (key, value) => {
+        if (!value) return this.logicalNot(key)
+        return `${key} IS NOT NULL AND ARRAY_LENGTH(${key}, 1) = ${value}`
+      },
+    }
+  }
+
+  protected createRegExpQuery(key: string, value: string | RegExp) {
+    return `${key} ~ ${this.escape(typeof value === 'string' ? value : value.source)}`
+  }
+
+  protected createMemberQuery(key: string, value: any[], notStr = '') {
+    if (!value.length) return notStr ? 'TRUE' : 'FALSE'
+    return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+  }
+
+  protected logicalAnd(conditions: string[]) {
+    if (!conditions.length) return 'TRUE'
+    if (conditions.includes('FALSE')) return 'FALSE'
+    return conditions.join(' AND ')
+  }
+
+  protected logicalOr(conditions: string[]) {
+    if (!conditions.length) return 'FALSE'
+    if (conditions.includes('TRUE')) return 'TRUE'
+    return `(${conditions.join(' OR ')})`
+  }
+
+  suffix(modifier: Modifier) {
+    const { limit, offset, sort, group, having } = modifier
+    let sql = ''
+    if (group.length) {
+      sql += ` GROUP BY ${group.map(this.escapeId).join(', ')}`
+      const filter = this.parseEval(having)
+      if (filter !== 'TRUE') sql += ` HAVING ${filter}`
+    }
+    if (sort.length) {
+      sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
+        return `${this.parseEval(expr)} ${dir.toUpperCase()}`
+      }).join(', ')
+    }
+    if (limit < Infinity) sql += ' LIMIT ' + limit
+    if (offset > 0) sql += ' OFFSET ' + offset
+    return sql
+  }
+
+  get(sel: Selection.Immutable, inline = false) {
+    const { args, table, query, ref, model } = sel
+    const filter = this.parseQuery(query)
+    if (filter === 'FALSE') return
+
+    const fields = args[0].fields ?? Object.fromEntries(Object
+      .entries(model.fields)
+      .filter(([, field]) => !field!.deprecated)
+      .map(([key]) => [key, { $: [ref, key] }]))
+    const keys = Object.entries(fields).map(([key, value]) => {
+      key = this.escapeId(key)
+      value = this.parseEval(value)
+      return key === value ? key : `${value} AS ${key}`
+    }).join(', ')
+    let prefix: string | undefined
+    if (typeof table === 'string') {
+      prefix = this.escapeId(table)
+    } else if (table instanceof Selection) {
+      prefix = this.get(table, true)
+      if (!prefix) return
+    } else {
+      prefix = Object.entries(table).map(([key, table]) => {
+        if (typeof table !== 'string') {
+          return `${this.get(table, true)} AS ${this.escapeId(key)}`
+        } else {
+          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
+        }
+      }).join(' JOIN ')
+      const filter = this.parseEval(args[0].having)
+      if (filter !== 'TRUE') prefix += ` ON ${filter}`
+    }
+
+    let suffix = this.suffix(args[0])
+    if (filter !== 'TRUE') {
+      suffix = ` WHERE ${filter}` + suffix
+    }
+    if (!prefix.includes(' ') || prefix.startsWith('(')) {
+      suffix = ` ${ref}` + suffix
+    }
+
+    if (inline && !args[0].fields && !suffix) return prefix
+    const result = `SELECT ${keys} FROM ${prefix}${suffix}`
+    return inline ? `(${result})` : result
+  }
+
+  escapeId(value: string) {
+    return '"' + value.replace(/"/g, '""') + '"'
+  }
+
+  escape(value: any, field?: Field<any>) {
+    if (value instanceof Date) {
+      value = formatTime(value)
+    } else if (!field && !!value && typeof value === 'object') {
+      return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
+    }
+    return super.escape(value, field)
+  }
 }
 
 export namespace PostgresDriver {
@@ -131,7 +270,6 @@ export class PostgresDriver extends Driver {
 
     this.config = {
       onnotice: () => {},
-
       ...config
     }
   }
@@ -183,7 +321,17 @@ export class PostgresDriver extends Driver {
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<void> {
-    // TODO
+    if (!data.length) return
+    const builder = new PostgresBuilder(sel.tables)
+
+    await Promise.all(data.map(d => {
+      const query = builder.parseQuery(pick(d, keys))
+      return this.sql
+        `INSERT INTO ${this.sql(sel.table)} ${this.sql(d, keys)}
+        ON CONFLICT (${this.sql(keys)})
+        DO UPDATE SET ${this.sql(sel.table)} ${this.sql(d)}
+        WHERE ${query}`
+    }))
   }
 
   async get(sel: Selection.Immutable) {
@@ -217,9 +365,9 @@ export class PostgresDriver extends Driver {
 
   async remove(sel: Selection.Mutable) {
     const builder = new PostgresBuilder(sel.tables)
-    const query = builder.parseQuery(sel.query)
+    let query = builder.parseQuery(sel.query)
     if (query === '0') return
-    await this.sql`DELETE FROM ${this.sql(sel.table)} WHERE ${this.sql(query)}`
+    await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
@@ -242,15 +390,16 @@ export class PostgresDriver extends Driver {
   }
 
   async create(sel: Selection.Mutable, data: any) {
-    const [row] = await this.sql
+    let [row] = await this.sql
       `INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
       RETURNING *`
+    row = Object.fromEntries(Object.entries(row).filter(([_, v]) => v !== null))
     return row
   }
 
   async set(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
-    const query = builder.parseQuery(sel.query)
+    let query = builder.parseQuery(sel.query)
     if (query === '0') return
     await this.sql
       `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}

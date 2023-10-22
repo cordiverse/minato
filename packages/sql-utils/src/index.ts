@@ -196,7 +196,7 @@ export class Builder {
       } else if (key === '$expr') {
         conditions.push(this.parseEval(query.$expr))
       } else {
-        conditions.push(this.parseFieldQuery(escapeId(key), query[key]))
+        conditions.push(this.parseFieldQuery(this.escapeId(key), query[key]))
       }
     }
 
@@ -220,10 +220,10 @@ export class Builder {
   }
 
   private transformKey(key: string, fields: {}, prefix: string) {
-    if (key in fields || !key.includes('.')) return prefix + escapeId(key)
+    if (key in fields || !key.includes('.')) return prefix + this.escapeId(key)
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
-    return `json_unquote(json_extract(${prefix} ${escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
+    return `json_unquote(json_extract(${prefix} ${this.escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
   }
 
   private getRecursive(args: string | string[]) {
@@ -237,8 +237,12 @@ export class Builder {
     }
     const prefix = !this.tables || table === '_' || key in fields
     // the only table must be the main table
-    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${escapeId(table)}.`
+    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`
     return this.transformKey(key, fields, prefix)
+  }
+
+  escapeId(value: string) {
+    return escapeId(value)
   }
 
   parseEval(expr: any): string {
@@ -252,7 +256,7 @@ export class Builder {
     const { limit, offset, sort, group, having } = modifier
     let sql = ''
     if (group.length) {
-      sql += ` GROUP BY ${group.map(escapeId).join(', ')}`
+      sql += ` GROUP BY ${group.map(this.escapeId).join(', ')}`
       const filter = this.parseEval(having)
       if (filter !== '1') sql += ` HAVING ${filter}`
     }
@@ -277,22 +281,22 @@ export class Builder {
       .filter(([, field]) => !field!.deprecated)
       .map(([key]) => [key, { $: [ref, key] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
-      key = escapeId(key)
+      key = this.escapeId(key)
       value = this.parseEval(value)
       return key === value ? key : `${value} AS ${key}`
     }).join(', ')
     let prefix: string | undefined
     if (typeof table === 'string') {
-      prefix = escapeId(table)
+      prefix = this.escapeId(table)
     } else if (table instanceof Selection) {
       prefix = this.get(table, true)
       if (!prefix) return
     } else {
       prefix = Object.entries(table).map(([key, table]) => {
         if (typeof table !== 'string') {
-          return `${this.get(table, true)} AS ${escapeId(key)}`
+          return `${this.get(table, true)} AS ${this.escapeId(key)}`
         } else {
-          return key === table ? escapeId(table) : `${escapeId(table)} AS ${escapeId(key)}`
+          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
         }
       }).join(' JOIN ')
       const filter = this.parseEval(args[0].having)
