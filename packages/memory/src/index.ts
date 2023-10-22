@@ -47,10 +47,11 @@ export class MemoryDriver extends Driver {
     const { ref, query, table, args, model } = sel
     const { fields, group, having } = sel.args[0]
     const data = this.table(table, having).filter(row => executeQuery(row, query, ref))
-    const branches: { index: Dict; table: any[] }[] = []
     if (!group.length && fields && Object.values(args[0].fields ?? {}).some(x => isAggrExpr(x))) {
       return [valueMap(fields!, (expr) => executeEval(data.map(row => ({ [ref]: row })), expr))]
     }
+
+    const branches: { index: Dict; table: any[] }[] = []
     const groupFields = group.length ? pick(fields!, group) : fields
     for (let row of executeSort(data, args[0], ref)) {
       row = model.format(row, false)
