@@ -172,7 +172,8 @@ export class Builder {
 
   protected groupArray(expr: any) {
     this.jsonQuoteMode = true
-    const ret = `json_arrayagg(${this.parseAggr(expr)})`
+    const ret = `json_arrayagg(json_unquote(${this.parseAggr(expr)}))`
+    // const ret = `concat('[', group_concat(${this.parseAggr(expr)}), ']')`
     this.jsonQuoteMode = false
     return ret
   }

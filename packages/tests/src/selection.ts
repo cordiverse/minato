@@ -1,7 +1,6 @@
 import { $, Database } from '@minatojs/core'
 import { expect } from 'chai'
 import { setup } from './utils'
-import MongoDriver from '@minatojs/driver-mongo'
 
 interface Foo {
   id: number
