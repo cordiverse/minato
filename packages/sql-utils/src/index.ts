@@ -171,9 +171,6 @@ export class Builder {
   }
 
   protected groupArray(expr: any) {
-    // this.jsonQuoteMode = true
-    // const ret = `cast(concat('[', group_concat(${this.parseAggr(expr)}), ']') as json)`
-    // this.jsonQuoteMode = false
     this.jsonQuoteMode = true
     const ret = `json_arrayagg(${this.parseAggr(expr)})`
     this.jsonQuoteMode = false
@@ -369,7 +366,6 @@ export class Builder {
       if (!(key in model.fields)) continue
       const { type, initial, runtimeType } = model.fields[key]!
       const converter = runtimeType?.json ? this.types['json'] : this.types[type]
-      // const converter = this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)

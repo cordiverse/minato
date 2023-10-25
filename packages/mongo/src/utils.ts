@@ -118,10 +118,6 @@ export class Transformer {
       return this.transformEvalExpr(expr.$object)
     }
 
-    // if (expr.$array) {
-    //   return {}
-    // }
-
     return valueMap(expr as any, (value) => {
       if (Array.isArray(value)) {
         return value.map(val => this.eval(val, group))

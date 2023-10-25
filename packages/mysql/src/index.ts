@@ -534,11 +534,7 @@ export class MySQLDriver extends Driver {
       }
       return `${escaped} = ${value}`
     }).join(', ')
-    console.log([
-      `INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})`,
-      `VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})`,
-      `ON DUPLICATE KEY UPDATE ${update}`,
-    ].join(' '))
+
     await this.query([
       `INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})`,
       `VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})`,

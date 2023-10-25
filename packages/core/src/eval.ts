@@ -93,7 +93,6 @@ export namespace Eval {
     // element
     in<T extends Comparable, A extends boolean>(x: T | Expr<T, A>, array: (T | Expr<T, A>)[] | Expr<T[], A>): Expr<boolean, A>
     nin<T extends Comparable, A extends boolean>(x: T | Expr<T, A>, array: (T | Expr<T, A>)[] | Expr<T[], A>): Expr<boolean, A>
-    at<T extends Comparable, A extends boolean>(array: (T | Expr<T, A>)[] | Expr<T[], A>, index: Number): Expr<T, A>
 
     // string
     concat: Multi<string, string>
