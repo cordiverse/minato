@@ -72,7 +72,7 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   return result
 }
 
-const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
+const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count', '$array']
 
 export class Transformer {
   private counter = 0
@@ -114,6 +114,14 @@ export class Transformer {
       return { $cond: expr.$if.map(val => this.eval(val, group)) }
     }
 
+    if (expr.$object) {
+      return this.transformEvalExpr(expr.$object)
+    }
+
+    // if (expr.$array) {
+    //   return {}
+    // }
+
     return valueMap(expr as any, (value) => {
       if (Array.isArray(value)) {
         return value.map(val => this.eval(val, group))
@@ -145,12 +153,15 @@ export class Transformer {
       if (!expr[type]) continue
       const key = this.createKey()
       const value = this.transformAggr(expr[type])
-      if (type !== '$count') {
-        group![key] = { [type]: value }
-        return '$' + key
-      } else {
+      if (type === '$count') {
         group![key] = { $addToSet: value }
         return { $size: '$' + key }
+      } else if (type === '$array') {
+        group![key] = { $push: value }
+        return '$' + key
+      } else {
+        group![key] = { [type]: value }
+        return '$' + key
       }
     }
 

@@ -112,6 +112,12 @@ class MySQLBuilder extends Builder {
       dump: value => value.join(','),
       load: value => value ? value.split(',') : [],
     })
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => JSON.stringify(value),
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
   }
 
   escape(value: any, field?: Field<any>) {

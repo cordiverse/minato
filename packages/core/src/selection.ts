@@ -52,7 +52,7 @@ class Executable<S = any, T = any> {
     const expr = {}
     if (typeof payload.table !== 'string' && !(payload.table instanceof Selection)) {
       for (const key in payload.table) {
-        expr[key] = createRow(key, {}, '', this.model)
+        expr[key] = createRow(key, { $ref: this.ref }, '', this.model)
       }
     }
     defineProperty(this, 'row', createRow(this.ref, expr, '', this.model))

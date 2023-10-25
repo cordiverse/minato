@@ -5,7 +5,6 @@ import { setup } from './utils'
 interface Foo {
   id: number
   value: number
-  bars: Bar[]
 }
 
 interface Bar {
@@ -13,9 +12,15 @@ interface Bar {
   uid: number
   pid: number
   value: number
+  s: string
   obj: {
-    x: string
+    x: number
     y: string
+    z: string
+    o: {
+      a: number
+      b: string
+    }
   }
   l: string[]
 }
@@ -37,6 +42,7 @@ function ExperimentalTests(database: Database<Tables>) {
     pid: 'unsigned',
     value: 'integer',
     obj: 'json',
+    s: 'string',
     l: 'list',
   }, {
     autoInc: true,
@@ -47,7 +53,6 @@ function ExperimentalTests(database: Database<Tables>) {
     database.extend('foo', {
       id: 'unsigned',
       value: 'integer',
-      // bars: row => database.select('bar').where(r => $.eq(r.pid, row.id)).evaluate(r => r.id)
     })
 
     await setup(database, 'foo', [
@@ -57,64 +62,136 @@ function ExperimentalTests(database: Database<Tables>) {
     ])
 
     await setup(database, 'bar', [
-      { uid: 1, pid: 1, value: 0, obj: { x: '1', y: 'a' }, l: ['a,b', 'c'] },
-      { uid: 1, pid: 1, value: 1, obj: { x: '2', y: 'b' }, },
-      { uid: 1, pid: 2, value: 0, obj: { x: '3', y: 'c' }, },
+      { uid: 1, pid: 1, value: 0, obj: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } }, s: '1', l: ['1', '2'] },
+      { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2' },
+      { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3' },
     ])
   })
 }
 
 namespace ExperimentalTests {
   export function computed(database: Database<Tables>) {
-    // it('strlist', async () => {
-    //   const res = await database.get('bar', {})
+    // it('project', async () => {
+    //   const res = await database.select('bar')
+    //     .project({
+    //       obj: row => (row.obj),
+    //       objX: row => row.obj.x,
+    //       objX2: row => $.add(row.obj.x, 2),
+    //       objY: row => (row.obj.y),
+    //     })
+    //     // .orderBy(row => row.foo.id)
+    //     .execute()
     //   console.log('res', res)
     // })
 
-    // it('get', async () => {
-    //   await expect(database.get('foo', {})).to.eventually.deep.equal([
-    //     { id: 2, pid: 1, uid: 1, value: 1, id2: 2 },
-    //   ])
-    // })
+    it('$.object', async () => {
+      const res = await database.select('foo')
+        .project({
+          obj: row => $.object({
+            id: row.id,
+            value: row.value,
+          })
+        })
+        .orderBy(row => row.obj.id)
+        .execute()
 
-    it('project', async () => {
+      expect(res).to.deep.equal([
+        { obj: { id: 1, value: 0 } },
+        { obj: { id: 2, value: 2 } },
+        { obj: { id: 3, value: 2 } }
+      ])
+    })
+
+    it('$.object in json', async () => {
+
       const res = await database.select('bar')
         .project({
-          count: row => (row.obj),
-          count2: row => (row.obj.x)
+          obj: row => $.object({
+            num: row.obj.x,
+            str: row.obj.y,
+            str2: row.obj.z,
+            obj: row.obj.o,
+            a: row.obj.o.a,
+          })
         })
-        // .orderBy(row => row.foo.id)
         .execute()
-      console.log('res', res)
+
+      expect(res).to.deep.equal([
+        { obj: { a: 1, num: 1, obj: { a: 1, b: "1" }, str: 'a', str2: '1' } },
+        { obj: { a: 2, num: 2, obj: { a: 2, b: "2" }, str: 'b', str2: '2' } },
+        { obj: { a: 3, num: 3, obj: { a: 3, b: "3" }, str: 'c', str2: '3' } }
+      ])
     })
 
-    it('group', async () => {
+    it('$.array groupBy', async () => {
+      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy(['foo'], {
+          x: row => $.array(row.bar.obj.x),
+          y: row => $.array(row.bar.obj.y),
+        })
+        .orderBy(row => row.foo.id)
+        .execute()
+
+      expect(res).to.deep.equal([
+        { foo: { id: 1, value: 0 }, x: [1, 2], y: ['a', 'b'] },
+        { foo: { id: 2, value: 2 }, x: [3], y: ['c'] }
+      ])
+      // console.log('res', res)
+    })
+
+    it('$.array groupFull', async () => {
+      const res = await database.select('bar')
+        .project({
+          // count: row => $.aggr(row.bar.obj),
+          count2: row => $.array(row.s),
+          countnumber: row => $.array(row.value),
+          x: row => $.array(row.obj.x),
+          y: row => $.array(row.obj.y),
+        })
+        .execute()
+
+      expect(res).to.deep.equal([
+        {
+          count2: ["1", "2", "3"],
+          countnumber: [0, 1, 0],
+          x: [1, 2, 3],
+          y: ['a', 'b', 'c']
+        }
+      ])
+    })
+
+    it('$.array groupBy in json', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
-          // count: row => $.aggr(row.bar.obj),
-          count2: row => $.aggr(row.bar.obj.y)
+          bars: row => $.array($.object({
+            value: row.bar.value
+          })),
+          x: row => $.array(row.bar.obj.x),
+          y: row => $.array(row.bar.obj.y),
+          z: row => $.array(row.bar.obj.z),
+          o: row => $.array(row.bar.obj.o),
         })
-        // .orderBy(row => row.foo.id)
+        .orderBy(row => row.foo.id)
         .execute()
-      console.log('res', res)
+
+      expect(res).to.deep.equal([{
+        foo: { id: 1, value: 0 },
+        bars: [{ value: 0 }, { value: 1 }],
+        x: [1, 2],
+        y: ['a', 'b'],
+        z: ['1', '2'],
+        o: [{ a: 1, b: '1' }, { a: 2, b: '2' }]
+      },
+      {
+        foo: { id: 2, value: 2 },
+        bars: [{ value: 0 }],
+        x: [3],
+        y: ['c'],
+        z: ['3'],
+        o: [{ a: 3, b: '3' }]
+      }
+      ])
     })
-
-    // it('raw', async () => {
-    //   const driver = Object.values(database.drivers)[0]
-    //   const res = await driver.query(
-    //     "SELECT `foo.id`, `foo.value`, `count` FROM (SELECT `foo`.`id` AS `foo.id`, `foo`.`value` AS `foo.value`, concat('[', group_concat(json_unquote(json_extract(`niormjql`. `bar.obj`, '$.x'))), ']') AS `count` FROM `foo` JOIN `bar` ON (`foo`.`id` = `bar`.`pid`) GROUP BY `foo.id`, `foo.value`) wvmceoou"
-    //     )
-
-
-    //   console.log('res', res)
-    // })
-
-    // it('raw2', async () => {
-    //   const driver = Object.values(database.drivers)[0]
-    //   const res = await driver.query("SELECT `foo.id`, `foo.value`, `count` FROM (SELECT `foo`.`id` AS `foo.id`, `foo`.`value` AS `foo.value`, group_concat(distinct `bar`.`id`) AS `count` FROM `foo` JOIN `bar` ON (`foo`.`id` = `bar`.`pid`) GROUP BY `foo.id`, `foo.value`) xlziynlx")
-
-    //   console.log('res', res)
-    // })
   }
 }
 

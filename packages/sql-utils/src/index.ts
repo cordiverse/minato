@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { createRow, Eval, Field, getExprRuntimeType, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
+import { createRow, Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -28,6 +28,7 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
+  protected jsonQuoteMode = false
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -112,7 +113,8 @@ export class Builder {
       $max: (expr) => `max(${this.parseAggr(expr)})`,
       $count: (expr) => `count(distinct ${this.parseAggr(expr)})`,
 
-      $aggr: ([value, aggr]) => aggr ? this.groupJson(this.parseEvalExpr(value)) : this.parseEvalExpr(value),
+      $object: (fields) => this.groupObject(fields),
+      $array: (expr) => this.groupArray(expr),
     }
   }
 
@@ -161,8 +163,21 @@ export class Builder {
     return `NOT(${condition})`
   }
 
-  protected groupJson(key: string) {
-    return `concat('[', group_concat(${key}), ']')`
+  protected groupObject(fields: any) {
+    this.jsonQuoteMode = true
+    const ret = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${this.parseAggr(expr)}`).join(',') + `)`
+    this.jsonQuoteMode = false
+    return ret
+  }
+
+  protected groupArray(expr: any) {
+    // this.jsonQuoteMode = true
+    // const ret = `cast(concat('[', group_concat(${this.parseAggr(expr)}), ']') as json)`
+    // this.jsonQuoteMode = false
+    this.jsonQuoteMode = true
+    const ret = `json_arrayagg(${this.parseAggr(expr)})`
+    this.jsonQuoteMode = false
+    return ret
   }
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
@@ -218,7 +233,7 @@ export class Builder {
     return this.escape(expr)
   }
 
-  private parseAggr(expr: any) {
+  protected parseAggr(expr: any) {
     if (typeof expr === 'string') {
       return this.getRecursive(expr)
     }
@@ -226,7 +241,8 @@ export class Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return `json_unquote(json_extract(${obj}, '$${path}'))`
+    if (this.jsonQuoteMode) return `json_extract(${obj}, '$${path}')`
+    else return `json_unquote(json_extract(${obj}, '$${path}'))`
   }
 
   private transformKey(key: string, fields: {}, prefix: string) {
@@ -249,7 +265,6 @@ export class Builder {
       } else {
         const field = this.parseEvalExpr(fields[fkey]?.expr!(createRow(table)))
         const rest = key.slice(fkey.length + 1).split('.')
-        console.log(getExprRuntimeType(field))
         return this.transformJsonField(`${field}`, rest.map(key => `."${key}"`).join(''))
       }
     }
@@ -352,8 +367,9 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial } = model.fields[key]!
-      const converter = this.types[type]
+      const { type, initial, runtimeType } = model.fields[key]!
+      const converter = runtimeType?.json ? this.types['json'] : this.types[type]
+      // const converter = this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)

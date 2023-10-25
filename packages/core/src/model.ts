@@ -83,11 +83,11 @@ export namespace Field {
   }
 
   export function getRuntimeType(field: Field): RuntimeType {
-    if (number.includes(field.type)) return RuntimeType.create('number')
-    else if (string.includes(field.type)) return RuntimeType.create('string')
-    else if (boolean.includes(field.type)) return RuntimeType.create('boolean')
-    else if (date.includes(field.type)) return RuntimeType.create('date')
-    else if (field.type === 'list') return RuntimeType.create('string', true)
+    if (number.includes(field.type)) return RuntimeType.number
+    else if (string.includes(field.type)) return RuntimeType.string
+    else if (boolean.includes(field.type)) return RuntimeType.boolean
+    else if (date.includes(field.type)) return RuntimeType.date
+    else if (field.type === 'list') return RuntimeType.list(RuntimeType.string)
     else if (field.type === 'json' || field.type === 'primary') return RuntimeType.any
     else if (field.type === 'expr') return getExprRuntimeType(field.expr)
     else throw new Error(`No runtime type for ${field}`)
@@ -202,7 +202,7 @@ export class Model<S = any> {
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
           node[segments[0]] = this.resolveValue(key, value)
-        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || Object.keys(value).length === 0) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {
