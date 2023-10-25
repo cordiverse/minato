@@ -136,13 +136,11 @@ namespace ExperimentalTests {
         { foo: { id: 1, value: 0 }, x: [1, 2], y: ['a', 'b'] },
         { foo: { id: 2, value: 2 }, x: [3], y: ['c'] }
       ])
-      // console.log('res', res)
     })
 
     it('$.array groupFull', async () => {
       const res = await database.select('bar')
         .project({
-          // count: row => $.aggr(row.bar.obj),
           count2: row => $.array(row.s),
           countnumber: row => $.array(row.value),
           x: row => $.array(row.obj.x),
@@ -174,22 +172,23 @@ namespace ExperimentalTests {
         .orderBy(row => row.foo.id)
         .execute()
 
-      expect(res).to.deep.equal([{
-        foo: { id: 1, value: 0 },
-        bars: [{ value: 0 }, { value: 1 }],
-        x: [1, 2],
-        y: ['a', 'b'],
-        z: ['1', '2'],
-        o: [{ a: 1, b: '1' }, { a: 2, b: '2' }]
-      },
-      {
-        foo: { id: 2, value: 2 },
-        bars: [{ value: 0 }],
-        x: [3],
-        y: ['c'],
-        z: ['3'],
-        o: [{ a: 3, b: '3' }]
-      }
+      expect(res).to.deep.equal([
+        {
+          foo: { id: 1, value: 0 },
+          bars: [{ value: 0 }, { value: 1 }],
+          x: [1, 2],
+          y: ['a', 'b'],
+          z: ['1', '2'],
+          o: [{ a: 1, b: '1' }, { a: 2, b: '2' }]
+        },
+        {
+          foo: { id: 2, value: 2 },
+          bars: [{ value: 0 }],
+          x: [3],
+          y: ['c'],
+          z: ['3'],
+          o: [{ a: 3, b: '3' }]
+        }
       ])
     })
   }
