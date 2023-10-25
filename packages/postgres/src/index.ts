@@ -47,14 +47,13 @@ interface FieldInfo {
   def?: string
 }
 
-function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
-  let { type, length, precision, scale, initial, primary } = field
+function type(field: Field & { autoInc?: boolean }) {
+  let { type, length, precision, scale, initial, autoInc } = field
   let def = ''
-  if (primary) initial = null
   if (['primary', 'unsigned', 'integer'].includes(type)) {
     length ||= 4
     if (precision) def += `NUMERIC(${precision}, ${scale ?? 0})`
-    else if (field.autoInc) {
+    else if (autoInc) {
       if (length <= 2) def += 'SERIAL'
       else if (length <= 4) def += 'SMALLSERIAL'
       else if (length <= 8) def += 'BIGSERIAL'
@@ -65,33 +64,32 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
     else if (length <= 8) def += 'BIGINT'
     else new Error(`unsupported type: ${type}`)
 
-    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
+    if (!isNullable(initial) && !autoInc) def += ` DEFAULT ${initial}`
   } else if (type === 'decimal') {
     def += `DECIMAL(${precision}, ${scale})`
-    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
+    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'float') {
     def += 'REAL'
-    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
+    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type == 'double') {
     def += 'DOUBLE PRECISION'
-    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
+    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'char') {
     def += `VARCHAR(${length || 64}) `
-    if (initial !== null && initial !== undefined) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
+    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'string') {
     def += `VARCHAR(${length || 255})`
-    if (initial !== null && initial !== undefined) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
+    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'text') {
     def += `VARCHAR(${length || 65535})`
-    if (initial !== null && initial !== undefined) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
+    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'boolean') {
     def += 'BOOLEAN'
-    if (initial !== null && initial !== undefined) def += ` DEFAULT ${initial}`
+    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'list') {
     def += 'TEXT[]'
     if (initial) {
-      const arr = initial.map(v => `'${v.replace(/'/g, "''")}'`).join(',')
-      def += ` DEFAULT ARRAY[${arr}]::TEXT[]`
+      def += ` DEFAULT ${transformArray(initial)}`
     }
   } else if (type === 'json') {
     def += 'JSON'
@@ -107,8 +105,6 @@ function type(field: Field & { autoInc?: boolean, primary?: boolean}) {
     if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else throw new Error(`unsupported type: ${type}`)
 
-  if (primary) def += ' PRIMARY KEY'
-
   return def
 }
 
@@ -123,6 +119,10 @@ function formatTime(time: Date) {
   let timezone = Time.toDigits(time.getTimezoneOffset() / -60)
   if (!timezone.startsWith('-')) timezone = `+${timezone}`
   return `${year}-${month}-${date} ${hour}:${min}:${sec}.${ms}${timezone}`
+}
+
+function transformArray(arr: any[]) {
+  return `ARRAY[${arr.map(v => `'${v.replace(/'/g, "''")}'`).join(',')}]::TEXT[]`
 }
 
 class PostgresBuilder extends Builder {
@@ -142,6 +142,12 @@ class PostgresBuilder extends Builder {
       }
     })
 
+    // this.define<any[], string>({
+    //   types: ['list'],
+    //   dump: value => transformArray(value),
+    //   load: (value: any) => value
+    // })
+
     this.queryOperators = {
       ...this.queryOperators,
       $regex: (key, value) => this.createRegExpQuery(key, value),
@@ -149,6 +155,15 @@ class PostgresBuilder extends Builder {
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
         return `${key} IS NOT NULL AND ARRAY_LENGTH(${key}, 1) = ${value}`
+      },
+      $el: (key, value) => {
+        if (Array.isArray(value)) {
+          return `${key} && ARRAY['${value.map(v => v.replace(/'/g, "''")).join("','")}']::TEXT[]`
+        } else if (typeof value !== 'number' && typeof value !== 'string') {
+          throw new TypeError('query expr under $el is not supported')
+        } else {
+          return `${key} && ARRAY['${value}']::TEXT[]`
+        }
       },
     }
   }
@@ -270,17 +285,12 @@ export class PostgresDriver extends Driver {
 
     this.config = {
       onnotice: () => {},
-      ...config
+      ...config,
     }
   }
 
   async start() {
-    // const { schema, username } = this.config
-
     this.sql = postgres(this.config)
-
-    // await this.sql.unsafe(`CREATE SCHEMA IF NOT EXISTS ${schema} AUTHORIZATION ${username}`)
-    // await this.sql.unsafe(`SET search_path = ${schema}`)
   }
 
   async stop() {
@@ -296,11 +306,12 @@ export class PostgresDriver extends Driver {
 
     const table = this.model(name)
     const { fields } = table
+    const primary = makeArray(table.primary)
 
     const operations: FieldInfo[] = Object.entries(fields).map(([key, field]) => {
       const names = [key].concat(field?.legacy ?? [])
       const column = columns?.find(c => names.includes(c.column_name))
-      const primary = key === table.primary
+      const isPrimary = primary.includes(key)
 
       let operation: FieldOperation | undefined
       if (!column) operation = 'create'
@@ -308,14 +319,17 @@ export class PostgresDriver extends Driver {
 
       let def: string | undefined
       if (operation === 'create') def = type(Object.assign({
-        primary,
-        autoInc: primary && table.autoInc
+        primary: isPrimary,
+        autoInc: isPrimary && table.autoInc
       }, field))
       return { key, field, names, column, operation, def }
     })
 
     if (!columns?.length) {
-      await this.sql.unsafe(`CREATE TABLE "${name}" (${operations.map(f => `"${f.key}" ${f.def}`).join(',')})`)
+      const s = `CREATE TABLE "${name}"
+        (${operations.map(f => `"${f.key}" ${f.def}`).join(',')},
+        PRIMARY KEY("${primary.join('","')}"))`
+      await this.sql.unsafe(s)
       return
     }
   }
@@ -366,7 +380,7 @@ export class PostgresDriver extends Driver {
   async remove(sel: Selection.Mutable) {
     const builder = new PostgresBuilder(sel.tables)
     let query = builder.parseQuery(sel.query)
-    if (query === '0') return
+    if (query === 'FALSE') return
     await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
   }
 
@@ -393,18 +407,18 @@ export class PostgresDriver extends Driver {
     let [row] = await this.sql
       `INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
       RETURNING *`
-    row = Object.fromEntries(Object.entries(row).filter(([_, v]) => v !== null))
     return row
   }
 
   async set(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
-    let query = builder.parseQuery(sel.query)
-    if (query === '0') return
+    const query = builder.parseQuery(sel.query)
+    const value = builder.dump(sel.model, data)
+    if (query === 'FALSE') return
     await this.sql
       `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
-      SET ${this.sql(data)}
-      WHERE ${this.sql(query)}`
+      SET ${this.sql(value)}
+      WHERE ${this.sql.unsafe(query)}`
   }
 }
 
