@@ -143,7 +143,7 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
     if (isNullable(left) || isNullable(right)) return true
     return callback(left.valueOf(), right.valueOf())
   }
-  return (...args: any) => Eval(key, args, RuntimeType.create('boolean')) as any
+  return (...args: any) => Eval(key, args, RuntimeType.boolean) as any
 }
 
 Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault }, getExprRuntimeType(vDefault))

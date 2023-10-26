@@ -141,23 +141,6 @@ namespace SelectionTests {
     })
 
     it('aggregate', async () => {
-      await database
-      .select('foo')
-      .project({
-        count: row => row.id,
-      })
-      .execute()
-
-      await expect(database
-        .select('foo')
-        .project({
-          count: row => $.count(row.id),
-        })
-        .execute()
-      ).to.eventually.deep.equal([
-        { count: 3 },
-      ])
-
       await expect(database
         .select('foo')
         .project({

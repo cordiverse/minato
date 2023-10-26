@@ -126,8 +126,7 @@ export class SQLiteDriver extends Driver {
 
       const legacy = [key, ...model.fields[key]!.legacy || []]
       const column = columns.find(({ name }) => legacy.includes(name))
-      const { expr, initial, nullable = true } = model.fields[key]!
-      if (expr) continue
+      const { initial, nullable = true } = model.fields[key]!
       const typedef = getTypeDef(model.fields[key]!)
       let def = `${escapeId(key)} ${typedef}`
       if (key === model.primary && model.autoInc) {

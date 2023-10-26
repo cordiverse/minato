@@ -89,7 +89,8 @@ export namespace Field {
     else if (boolean.includes(field.type)) return RuntimeType.boolean
     else if (date.includes(field.type)) return RuntimeType.date
     else if (field.type === 'list') return RuntimeType.list(RuntimeType.string)
-    else if (field.type === 'json' || field.type === 'primary') return RuntimeType.any
+    else if (field.type === 'json') return RuntimeType.json(RuntimeType.any)
+    else if (field.type === 'primary') return RuntimeType.any
     else if (field.type === 'expr') return getExprRuntimeType(field.expr)
     else throw new Error(`No runtime type for ${field}`)
   }

@@ -259,8 +259,8 @@ export class MySQLDriver extends Driver {
 
     // field definitions
     for (const key in fields) {
-      const { deprecated, expr, initial, nullable = true } = fields[key]!
-      if (deprecated || expr) continue
+      const { deprecated, initial, nullable = true } = fields[key]!
+      if (deprecated) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.COLUMN_NAME))
       let shouldUpdate = column?.COLUMN_NAME !== key
