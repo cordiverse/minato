@@ -1,6 +1,6 @@
 import { clone, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './driver'
-import { getExprRuntimeType, isEvalExpr } from './eval'
+import { Eval, getExprRuntimeType, isEvalExpr } from './eval'
 import { RuntimeType } from './runtime'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
@@ -15,7 +15,7 @@ export interface Field<T = any> {
   initial?: T
   precision?: number
   scale?: number
-  expr?: Selection.Callback<any, T>
+  expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
   runtimeType?: RuntimeType
@@ -83,6 +83,7 @@ export namespace Field {
   }
 
   export function getRuntimeType(field: Field): RuntimeType {
+    if (field.runtimeType) return field.runtimeType
     if (number.includes(field.type)) return RuntimeType.number
     else if (string.includes(field.type)) return RuntimeType.string
     else if (boolean.includes(field.type)) return RuntimeType.boolean

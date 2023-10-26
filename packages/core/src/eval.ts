@@ -132,7 +132,7 @@ type MultivariateCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S
 function multary<K extends keyof Eval.Static>(
   key: K, callback: MultivariateCallback<Eval.Static[K]>, type: RuntimeType | ((...args) => RuntimeType)): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return (...args: any[]) => Eval(key, args, typeof type === 'function' ? type(...args) : type) as any
+  return (...args: any) => Eval(key, args, typeof type === 'function' ? type(...args) : type) as any
 }
 
 type BinaryCallback<T> = T extends (...args: any[]) => Eval.Expr<infer S> ? (...args: any[]) => S : never
@@ -143,7 +143,7 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
     if (isNullable(left) || isNullable(right)) return true
     return callback(left.valueOf(), right.valueOf())
   }
-  return (...args: any[]) => Eval(key, args, RuntimeType.create('boolean')) as any
+  return (...args: any) => Eval(key, args, RuntimeType.create('boolean')) as any
 }
 
 Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault }, getExprRuntimeType(vDefault))

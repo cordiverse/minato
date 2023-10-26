@@ -49,12 +49,6 @@ function ExperimentalTests(database: Database<Tables>) {
   })
 
   before(async () => {
-
-    database.extend('foo', {
-      id: 'unsigned',
-      value: 'integer',
-    })
-
     await setup(database, 'foo', [
       { id: 1, value: 0 },
       { id: 2, value: 2 },
@@ -71,19 +65,6 @@ function ExperimentalTests(database: Database<Tables>) {
 
 namespace ExperimentalTests {
   export function computed(database: Database<Tables>) {
-    // it('project', async () => {
-    //   const res = await database.select('bar')
-    //     .project({
-    //       obj: row => (row.obj),
-    //       objX: row => row.obj.x,
-    //       objX2: row => $.add(row.obj.x, 2),
-    //       objY: row => (row.obj.y),
-    //     })
-    //     // .orderBy(row => row.foo.id)
-    //     .execute()
-    //   console.log('res', res)
-    // })
-
     it('$.object', async () => {
       const res = await database.select('foo')
         .project({
@@ -103,7 +84,6 @@ namespace ExperimentalTests {
     })
 
     it('$.object in json', async () => {
-
       const res = await database.select('bar')
         .project({
           obj: row => $.object({

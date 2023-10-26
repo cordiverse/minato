@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { createRow, Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
+import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -258,9 +258,9 @@ export class Builder {
     const fkey = Object.keys(fields).find(field => key === field || key.startsWith(field + '.'))
     if (fkey && fields[fkey]?.expr) {
       if (key === fkey) {
-        return this.parseEvalExpr(fields[fkey]?.expr!(createRow(table)))
+        return this.parseEvalExpr(fields[fkey]?.expr)
       } else {
-        const field = this.parseEvalExpr(fields[fkey]?.expr!(createRow(table)))
+        const field = this.parseEvalExpr(fields[fkey]?.expr)
         const rest = key.slice(fkey.length + 1).split('.')
         return this.transformJsonField(`${field}`, rest.map(key => `."${key}"`).join(''))
       }
