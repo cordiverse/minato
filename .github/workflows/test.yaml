@@ -15,7 +15,7 @@ jobs:
         mysql-image:
           - mysql:5.7
           - mysql:8.0
-          - mariadb:10.5
+          - mariadb:10.6
         node-version: [16, 18, 20]
 
     services:

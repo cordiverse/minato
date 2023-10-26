@@ -172,7 +172,7 @@ export class Builder {
 
   protected groupArray(expr: any) {
     this.jsonQuoteMode = true
-    const ret = `json_merge('[]', json_arrayagg(${this.parseAggr(expr)}))`
+    const ret = `json_arrayagg(${this.parseAggr(expr)})`
     this.jsonQuoteMode = false
     return ret
   }
