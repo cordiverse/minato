@@ -308,11 +308,15 @@ export class Builder {
     if (filter !== '1') {
       suffix = ` WHERE ${filter}` + suffix
     }
+
+    if (inline && !args[0].fields && !suffix) {
+      return (prefix.startsWith('(') && prefix.endsWith(')')) ? `${prefix} ${ref}` : prefix
+    }
+
     if (!prefix.includes(' ') || prefix.startsWith('(')) {
       suffix = ` ${ref}` + suffix
     }
 
-    if (inline && !args[0].fields && !suffix) return prefix
     const result = `SELECT ${keys} FROM ${prefix}${suffix}`
     return inline ? `(${result})` : result
   }
