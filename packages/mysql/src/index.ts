@@ -440,7 +440,7 @@ export class MySQLDriver extends Driver {
     const builder = new MySQLBuilder(sel.tables)
     const output = builder.parseEval(expr)
     const inner = builder.get(sel.table as Selection, true)
-    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${sel.ref}`)
+    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner}`)
     return data.value
   }
 

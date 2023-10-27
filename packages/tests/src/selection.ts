@@ -26,7 +26,7 @@ function SelectionTests(database: Database<Tables>) {
     value: 'integer',
   })
 
-  database.migrate('foo', { deprecated: 'unsigned' }, async () => {})
+  database.migrate('foo', { deprecated: 'unsigned' }, async () => { })
 
   database.extend('bar', {
     id: 'unsigned',
@@ -137,6 +137,33 @@ namespace SelectionTests {
         { id: 2 },
         { id: 5 },
         { id: 10 },
+      ])
+    })
+
+    it('aggregate', async () => {
+      await expect(database
+        .select('foo')
+        .project({
+          count: row => $.count(row.id),
+          max: row => $.max(row.id),
+          min: row => $.min(row.id),
+          avg: row => $.avg(row.id),
+        })
+        .execute()
+      ).to.eventually.deep.equal([
+        { avg: 2, count: 3, max: 3, min: 1 },
+      ])
+
+      await expect(database.select('foo')
+        .groupBy({}, {
+          count: row => $.count(row.id),
+          max: row => $.max(row.id),
+          min: row => $.min(row.id),
+          avg: row => $.avg(row.id),
+        })
+        .execute()
+      ).to.eventually.deep.equal([
+        { avg: 2, count: 3, max: 3, min: 1 },
       ])
     })
   }
@@ -257,6 +284,24 @@ namespace SelectionTests {
         .join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.value, bar.value))
         .execute()
       ).to.eventually.have.length(2)
+    })
+
+    it('group', async () => {
+      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy('foo', { count: row => $.sum(row.bar.uid) })
+        .orderBy(row => row.foo.id)
+        .execute()).to.eventually.deep.equal([
+          { foo: { id: 1, value: 0 }, count: 6 },
+          { foo: { id: 2, value: 2 }, count: 1 },
+          { foo: { id: 3, value: 2 }, count: 1 },
+        ])
+    })
+
+    it('aggregate', async () => {
+      await expect(database
+        .join(['foo', 'bar'] as const)
+        .execute(row => $.count(row.bar.id))
+      ).to.eventually.equal(6)
     })
   }
 }

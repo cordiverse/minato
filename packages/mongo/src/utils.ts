@@ -240,10 +240,12 @@ export class Transformer {
         stages.push({ $match: { $expr } })
       }
       stages.push({ $project })
+      $group['_id'] = model.parse($group['_id'], false)
     } else if (fields) {
-      const $project = valueMap(fields, (expr) => this.eval(expr))
+      const $group: Dict = { _id: null }
+      const $project = valueMap(fields, (expr) => this.eval(expr, $group))
       $project._id = 0
-      stages.push({ $project })
+      stages.push(...Object.keys($group).length === 1 ? [] : [{ $group }], { $project })
     } else {
       const $project: Dict = { _id: 0 }
       for (const key in model.fields) {

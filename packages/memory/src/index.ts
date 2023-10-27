@@ -1,5 +1,5 @@
 import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, isEvalExpr, RuntimeError, Selection } from '@minatojs/core'
 
 export namespace MemoryDriver {
   export interface Config {}
@@ -47,6 +47,10 @@ export class MemoryDriver extends Driver {
     const { ref, query, table, args, model } = sel
     const { fields, group, having } = sel.args[0]
     const data = this.table(table, having).filter(row => executeQuery(row, query, ref))
+    if (!group.length && fields && Object.values(args[0].fields ?? {}).some(x => isAggrExpr(x))) {
+      return [valueMap(fields!, (expr) => executeEval(data.map(row => ({ [ref]: row })), expr))]
+    }
+
     const branches: { index: Dict; table: any[] }[] = []
     const groupFields = group.length ? pick(fields!, group) : fields
     for (let row of executeSort(data, args[0], ref)) {
@@ -162,6 +166,19 @@ export class MemoryDriver extends Driver {
     }
     this.$save(table)
   }
+}
+
+const nonAggrKeys = ['$']
+const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
+
+function isAggrExpr(value: any) {
+  if (!isEvalExpr(value)) return false
+  for (const [key, args] of Object.entries(value)) {
+    if (!key.startsWith('$')) continue
+    if (nonAggrKeys.includes(key)) return false
+    if (aggrKeys.includes(key) || ((Array.isArray(args) ? args : [args]).some(x => isAggrExpr(x)))) return true
+  }
+  return false
 }
 
 export default MemoryDriver
