@@ -368,7 +368,8 @@ export class SQLiteDriver extends Driver {
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
-    const updateFields = difference(dataFields, keys)
+    let updateFields = difference(dataFields, keys)
+    if (!updateFields.length) updateFields = [dataFields[0]]
     // Error: Expression tree is too large (maximum depth 1000)
     const step = Math.floor(960 / keys.length)
     for (let i = 0; i < data.length; i += step) {
