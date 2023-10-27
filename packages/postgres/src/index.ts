@@ -413,11 +413,19 @@ export class PostgresDriver extends Driver {
   async set(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseQuery(sel.query)
-    const value = builder.dump(sel.model, data)
+    let expr: any = {}
+    for (const [key, value] of Object.entries(data)) {
+      if (isEvalExpr(data[key])) {
+        expr[key] = builder.parseEval(value)
+      } else {
+        expr[key] = value
+      }
+    }
+    expr = builder.dump(sel.model, expr)
     if (query === 'FALSE') return
     await this.sql
       `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
-      SET ${this.sql(value)}
+      SET ${this.sql(expr)}
       WHERE ${this.sql.unsafe(query)}`
   }
 }
