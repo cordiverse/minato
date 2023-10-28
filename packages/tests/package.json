@@ -1,11 +1,12 @@
 {
   "name": "@minatojs/tests",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Test Cases for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
-    "lib"
+    "lib",
+    "src"
   ],
   "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
@@ -29,12 +30,12 @@
     "@types/chai-as-promised": "^7.1.5"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.4.2"
+    "@minatojs/core": "^2.4.3"
   },
   "dependencies": {
     "chai": "^4.3.7",
     "chai-as-promised": "^7.1.1",
     "chai-shape": "^1.0.0",
-    "cosmokit": "^1.4.5"
+    "cosmokit": "^1.5.1"
   }
 }

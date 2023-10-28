@@ -502,7 +502,8 @@ export class MySQLDriver extends Driver {
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
-    const updateFields = difference(dataFields, keys)
+    let updateFields = difference(dataFields, keys)
+    if (!updateFields.length) updateFields = [dataFields[0]]
 
     const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
     const createMultiFilter = (items: any[]) => {
