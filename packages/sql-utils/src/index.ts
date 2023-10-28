@@ -28,7 +28,7 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
-  protected jsonQuoteMode = false
+  protected jsonQuoted = false
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -163,17 +163,20 @@ export class Builder {
     return `NOT(${condition})`
   }
 
+  protected unquoteJson(value: string) {
+    return this.jsonQuoted ? `json_unquote(${value})` : value
+  }
+
   protected groupObject(fields: any) {
-    this.jsonQuoteMode = true
     const ret = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${this.parseAggr(expr)}`).join(',') + `)`
-    this.jsonQuoteMode = false
+    this.jsonQuoted = true
     return ret
   }
 
   protected groupArray(expr: any) {
-    this.jsonQuoteMode = true
-    const ret = `json_arrayagg(${this.parseAggr(expr)})`
-    this.jsonQuoteMode = false
+    const aggr = this.parseAggr(expr)
+    const ret = this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')` : `json_arrayagg(${aggr})`
+    this.jsonQuoted = true
     return ret
   }
 
@@ -222,6 +225,7 @@ export class Builder {
   }
 
   private parseEvalExpr(expr: any) {
+    // this.jsonQuoted = false
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
@@ -230,16 +234,20 @@ export class Builder {
     return this.escape(expr)
   }
 
-  protected parseAggr(expr: any) {
-    if (typeof expr === 'string') {
-      return this.getRecursive(expr)
+  protected parseAggr(expr: any, unquote: boolean = true) {
+    const ret = typeof expr === 'string' ? this.getRecursive(expr) : this.parseEvalExpr(expr)
+    if (unquote) {
+      this.jsonQuoted = false
+      return this.unquoteJson(ret)
+    } else {
+      this.jsonQuoted = true
+      return ret
     }
-    return this.parseEvalExpr(expr)
   }
 
   protected transformJsonField(obj: string, path: string) {
-    if (this.jsonQuoteMode) return `json_extract(${obj}, '$${path}')`
-    else return `json_unquote(json_extract(${obj}, '$${path}'))`
+    this.jsonQuoted = true
+    return `json_extract(${obj}, '$${path}')`
   }
 
   private transformKey(key: string, fields: {}, prefix: string) {
@@ -271,11 +279,16 @@ export class Builder {
     return this.transformKey(key, fields, prefix)
   }
 
-  parseEval(expr: any): string {
+  parseEval(expr: any, unquote: boolean = true): string {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return this.escape(expr)
+    } else if (unquote) {
+      this.jsonQuoted = false
+      return this.unquoteJson(this.parseEvalExpr(expr))
+    } else {
+      this.jsonQuoted = true
+      return this.parseEvalExpr(expr)
     }
-    return this.parseEvalExpr(expr)
   }
 
   suffix(modifier: Modifier) {

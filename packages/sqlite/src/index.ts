@@ -86,6 +86,10 @@ class SQLiteBuilder extends Builder {
     return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
   }
 
+  protected unquoteJson(value: string) {
+    return value
+  }
+
   protected groupArray(expr: any) {
     return `('[' || group_concat(json_quote(${this.parseAggr(expr)})) || ']')`
   }
