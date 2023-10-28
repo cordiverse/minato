@@ -260,7 +260,7 @@ class PostgresBuilder extends Builder {
     if (value instanceof Date) {
       value = formatTime(value)
     } else if (!field && !!value && typeof value === 'object') {
-      return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
+      return `json_extract_path(${this.quote(JSON.stringify(value))}, '$')`
     }
     return super.escape(value, field)
   }
@@ -284,7 +284,7 @@ export class PostgresDriver extends Driver {
     super(database)
 
     this.config = {
-      onnotice: () => {},
+      onnotice: () => { },
       ...config,
     }
   }
@@ -334,18 +334,26 @@ export class PostgresDriver extends Driver {
     }
   }
 
-  async upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<void> {
+  async upsert(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<void> {
     if (!data.length) return
     const builder = new PostgresBuilder(sel.tables)
 
-    await Promise.all(data.map(d => {
-      const query = builder.parseQuery(pick(d, keys))
-      return this.sql
-        `INSERT INTO ${this.sql(sel.table)} ${this.sql(d, keys)}
-        ON CONFLICT (${this.sql(keys)})
-        DO UPDATE SET ${this.sql(sel.table)} ${this.sql(d)}
-        WHERE ${query}`
-    }))
+    const sqls: {
+      expr: postgres.PendingQuery<any>[][],
+      value: Dict<any>[],
+    } = {
+      expr: [],
+      value: [],
+    }
+    for (const row of data) {
+      const expr: postgres.PendingQuery<any>[] = []
+      const value: Dict<any> = {}
+      for (const [key, value] of Object.entries(row)) {
+        if (!isEvalExpr(value)) {
+          expr.push()
+        }
+      }
+    }
   }
 
   async get(sel: Selection.Immutable) {
@@ -413,19 +421,20 @@ export class PostgresDriver extends Driver {
   async set(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseQuery(sel.query)
-    let expr: any = {}
-    for (const [key, value] of Object.entries(data)) {
-      if (isEvalExpr(data[key])) {
-        expr[key] = builder.parseEval(value)
+    if (query === 'FALSE') return
+
+    let expr: postgres.PendingQuery<any>[] = []
+    for (const [key, value] of Object.entries(builder.dump(sel.model, data) as Dict<any>)) {
+      if (isEvalExpr(value)) {
+        expr.push(this.sql.unsafe(`"${key}"=${builder.parseEval(value)}`))
       } else {
-        expr[key] = value
+        expr.push(this.sql`${this.sql(key)}=${value}`)
       }
     }
-    expr = builder.dump(sel.model, expr)
-    if (query === 'FALSE') return
+
     await this.sql
       `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
-      SET ${this.sql(expr)}
+      SET ${expr}
       WHERE ${this.sql.unsafe(query)}`
   }
 }
