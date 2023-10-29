@@ -107,6 +107,8 @@ class MySQLBuilder extends Builder {
   constructor(tables?: Dict<Model>, issueUnquote = false) {
     super(tables)
 
+    this.workaroundArrayagg = issueUnquote
+
     this.define<string[], string>({
       types: ['list'],
       dump: value => value.join(','),
@@ -116,13 +118,7 @@ class MySQLBuilder extends Builder {
     this.define<object, string>({
       types: ['json'],
       dump: value => JSON.stringify(value),
-      load: value => {
-        const obj = typeof value === 'string' ? JSON.parse(value) : value
-        if (Array.isArray(obj) && issueUnquote) {
-          logger.debug('unquote: ', obj)
-          return obj.map(x => JSON.parse(x))
-        } else return obj
-      },
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
     })
   }
 

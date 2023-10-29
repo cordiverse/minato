@@ -191,7 +191,12 @@ export class Builder {
     const aggr = this.parseAggr(expr)
     // const ret = this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')`
     //   : this.workaroundArrayagg ? `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')` : `json_arrayagg(${aggr})`
-    const ret = this.workaroundArrayagg ? `concat('[', group_concat(json_extract(json_object('v', ${aggr}), '$.v')), ']')` : `json_arrayagg(${aggr})`
+    // console.log(this.jsonQuoted, aggr)
+
+    const ret = this.workaroundArrayagg
+      ? (this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')` : `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')`)
+      : `json_arrayagg(${aggr})`
+    // const ret = this.workaroundArrayagg ? `concat('[', group_concat(json_extract(json_object('v', ${aggr}), '$.v')), ']')` : `json_arrayagg(${aggr})`
     this.jsonQuoted = true
     return ret
   }

@@ -220,11 +220,11 @@ namespace ExperimentalTests {
       ])
     })
 
-    // it('raw', async () => {
-    //   const driver = Object.values(database.drivers)[0]
-    //   const ret = await driver.query("SELECT `x` FROM (SELECT json_unquote(json_arrayagg(`x`)) AS `x` FROM (SELECT `foo`.`id` AS `foo.id`, `foo`.`value` AS `foo.value`, (json_arrayagg(json_extract(`bar`.`obj`, '$.x'))) AS `x` FROM `foo` JOIN `bar` ON (`foo`.`id` = `bar`.`pid`) GROUP BY `foo.id`, `foo.value`) hjwlkwov) ydqtdvlu")
-    //   console.log(ret)
-    // })
+    it('raw', async () => {
+      const driver = Object.values(database.drivers)[0]
+      const ret = await driver.query("SELECT `z` FROM (SELECT concat('[', group_concat(json_extract(json_object('v', `y`), '$.v')), ']') AS `z` FROM (SELECT `foo`.`id` AS `foo.id`, `foo`.`value` AS `foo.value`, concat('[', group_concat(json_extract(json_object('v', json_extract(`bar`.`obj`, '$.x')), '$.v')), ']') AS `y` FROM `foo` JOIN `bar` ON (`foo`.`id` = `bar`.`pid`) GROUP BY `foo.id`, `foo.value`) opgaymzt ORDER BY `foo.id` ASC) iebqysix")
+      console.log(ret)
+    })
   }
 }
 
