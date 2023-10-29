@@ -175,7 +175,7 @@ export class Builder {
 
   protected groupArray(expr: any) {
     const aggr = this.parseAggr(expr)
-    const ret = this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')` : `json_arrayagg(${aggr})`
+    const ret = this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')` : `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')`
     this.jsonQuoted = true
     return ret
   }
