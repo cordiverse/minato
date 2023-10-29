@@ -176,29 +176,24 @@ export class Builder {
   }
 
   protected unquoteJson(value: string) {
-    const ret = this.jsonQuoted ? `json_unquote(${value})` : value
+    const res = this.jsonQuoted ? `json_unquote(${value})` : value
     this.jsonQuoted = false
-    return ret
+    return res
   }
 
   protected groupObject(fields: any) {
-    const ret = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${this.parseAggr(expr)}`).join(',') + `)`
+    const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${this.parseEval(expr, false)}`).join(',') + `)`
     this.jsonQuoted = true
-    return ret
+    return res
   }
 
   protected groupArray(expr: any) {
     const aggr = this.parseAggr(expr)
-    // const ret = this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')`
-    //   : this.workaroundArrayagg ? `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')` : `json_arrayagg(${aggr})`
-    // console.log(this.jsonQuoted, aggr)
-
-    const ret = this.workaroundArrayagg
+    const res = this.workaroundArrayagg
       ? (this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')` : `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')`)
       : `json_arrayagg(${aggr})`
-    // const ret = this.workaroundArrayagg ? `concat('[', group_concat(json_extract(json_object('v', ${aggr}), '$.v')), ']')` : `json_arrayagg(${aggr})`
     this.jsonQuoted = true
-    return ret
+    return res
   }
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
@@ -257,8 +252,8 @@ export class Builder {
 
   protected parseAggr(expr: any) {
     this.jsonQuoted = false
-    const ret = typeof expr === 'string' ? this.getRecursive(expr) : this.parseEvalExpr(expr)
-    return ret
+    const res = typeof expr === 'string' ? this.getRecursive(expr) : this.parseEvalExpr(expr)
+    return res
   }
 
   protected transformJsonField(obj: string, path: string) {
@@ -269,8 +264,6 @@ export class Builder {
   private transformKey(key: string, fields: {}, prefix: string) {
     if (key in fields || !key.includes('.')) {
       if (this.sqlTypes[key]) this.jsonQuoted = this.sqlTypes[key] === 'json'
-      // this.jsonQuoted = fields[key]?.runtimeType?.json ?? true
-      // console.log(key, this.jsonQuoted, this.sqlTypes)
       return prefix + escapeId(key)
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
@@ -301,6 +294,7 @@ export class Builder {
   }
 
   parseEval(expr: any, unquote: boolean = true): string {
+    this.jsonQuoted = false
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return this.escape(expr)
     }
@@ -353,20 +347,18 @@ export class Builder {
       if (filter !== '1') prefix += ` ON ${filter}`
     }
 
-    const sqlTypes = {}
     // get prefix
+    const sqlTypes = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
-      .map(([key, field]) => [key, Eval('', [ref, key], field!.runtimeType!)]))
+      .map(([key]) => [key, { $: [ref, key] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
       sqlTypes[key] = this.jsonQuoted ? 'json' : 'raw'
       return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
     }).join(', ')
-
     this.sqlTypes = sqlTypes
-    // console.log('field sqlTypes:', Object.keys(fields), sqlTypes)
 
     // get suffix
     let suffix = this.suffix(args[0])
@@ -401,7 +393,6 @@ export class Builder {
 
   load(model: Model, obj: any): any {
     const result = {}
-    // console.log('sql', this.sqlTypes, Object.keys(obj))
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial } = model.fields[key]!

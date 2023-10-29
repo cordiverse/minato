@@ -1,7 +1,6 @@
-import { clone, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { Database } from './driver'
-import { Eval, getExprRuntimeType, isEvalExpr } from './eval'
-import { RuntimeType } from './runtime'
+import { Eval, isEvalExpr } from './eval'
 import { Selection } from './selection'
 import { Flatten, Keys } from './utils'
 
@@ -18,7 +17,6 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
-  runtimeType?: RuntimeType
 }
 
 export namespace Field {
@@ -81,19 +79,6 @@ export namespace Field {
 
     return field
   }
-
-  export function getRuntimeType(field: Field): RuntimeType {
-    if (field.runtimeType) return field.runtimeType
-    if (number.includes(field.type)) return RuntimeType.number
-    else if (string.includes(field.type)) return RuntimeType.string
-    else if (boolean.includes(field.type)) return RuntimeType.boolean
-    else if (date.includes(field.type)) return RuntimeType.date
-    else if (field.type === 'list') return RuntimeType.list(RuntimeType.string)
-    else if (field.type === 'json') return RuntimeType.json(RuntimeType.any)
-    else if (field.type === 'primary') return RuntimeType.any
-    else if (field.type === 'expr') return getExprRuntimeType(field.expr)
-    else throw new Error(`No runtime type for ${field}`)
-  }
 }
 
 export namespace Model {
@@ -138,7 +123,6 @@ export class Model<S = any> {
     for (const key in fields) {
       this.fields[key] = Field.parse(fields[key])
       this.fields[key].deprecated = !!callback
-      this.fields[key].runtimeType = Field.getRuntimeType(this.fields[key])
     }
 
     if (typeof this.primary === 'string' && this.fields[this.primary]?.type === 'primary') {
@@ -229,9 +213,5 @@ export class Model<S = any> {
       }
     }
     return this.parse({ ...result, ...data })
-  }
-
-  getRuntimeType(): RuntimeType {
-    return RuntimeType.create(valueMap(this.fields, Field.getRuntimeType))
   }
 }

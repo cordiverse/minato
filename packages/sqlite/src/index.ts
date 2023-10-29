@@ -51,6 +51,7 @@ class SQLiteBuilder extends Builder {
     super(tables)
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
+    this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -61,10 +62,7 @@ class SQLiteBuilder extends Builder {
     this.define<object, string>({
       types: ['json'],
       dump: value => JSON.stringify(value),
-      load: (value, initial) => {
-        // console.log('load json', value)
-        return value ? JSON.parse(value) : initial
-      },
+      load: (value, initial) => value ? JSON.parse(value) : initial,
     })
 
     this.define<string[], string>({
@@ -94,17 +92,15 @@ class SQLiteBuilder extends Builder {
   }
 
   protected groupArray(expr: any) {
-    // console.log('1')
     const aggr = this.parseAggr(expr)
-    // console.log('2', expr, aggr, this.jsonQuoted)
-    const ret = this.jsonQuoted ? `('[' || group_concat(${aggr}) || ']')` : `('[' || group_concat(json_quote(${aggr})) || ']')`
+    const res = this.jsonQuoted ? `('[' || group_concat(${aggr}) || ']')` : `('[' || group_concat(json_quote(${aggr})) || ']')`
     this.jsonQuoted = true
-    return ret
+    return res
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.jsonQuoted = true
-    return `json_quote(json_extract(${obj}, '$${path}'))`
+    this.jsonQuoted = false
+    return `json_extract(${obj}, '$${path}')`
   }
 }
 

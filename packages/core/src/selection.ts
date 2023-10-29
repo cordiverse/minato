@@ -4,7 +4,6 @@ import { Eval, executeEval } from './eval'
 import { Model } from './model'
 import { Query } from './query'
 import { Keys, randomId, Row } from './utils'
-import { RuntimeType } from './runtime'
 
 export type Direction = 'asc' | 'desc'
 
@@ -30,11 +29,10 @@ namespace Executable {
   }
 }
 
-const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Proxy(expr, {
+const createRow = (ref: string, expr = {}, prefix = '') => new Proxy(expr, {
   get(target, key) {
-    if (typeof key === 'symbol' || key in target || key === 'toJSON' || key.startsWith('$')) return Reflect.get(target, key)
-    const fullKey = `${prefix}${key}`
-    return createRow(ref, Eval('', [ref, fullKey], model?.fields?.[fullKey]?.runtimeType ?? RuntimeType.any), `${fullKey}.`, model)
+    if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
+    return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`)
   },
 })
 
@@ -47,15 +45,15 @@ class Executable<S = any, T = any> {
 
   constructor(driver: Driver, payload: Executable.Payload) {
     Object.assign(this, payload)
-    defineProperty(this, 'driver', driver)
-    defineProperty(this, 'model', driver.model(this.table))
     const expr = {}
     if (typeof payload.table !== 'string' && !(payload.table instanceof Selection)) {
       for (const key in payload.table) {
-        expr[key] = createRow(key, {}, '', this.model)
+        expr[key] = createRow(key)
       }
     }
-    defineProperty(this, 'row', createRow(this.ref, expr, '', this.model))
+    defineProperty(this, 'driver', driver)
+    defineProperty(this, 'row', createRow(this.ref, expr))
+    defineProperty(this, 'model', driver.model(this.table))
   }
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>

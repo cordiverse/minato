@@ -104,10 +104,9 @@ class MySQLBuilder extends Builder {
     '\\': '\\\\',
   }
 
-  constructor(tables?: Dict<Model>, issueUnquote = false) {
+  constructor(tables?: Dict<Model>, workaroundArrayagg = false) {
     super(tables)
-
-    this.workaroundArrayagg = issueUnquote
+    this.workaroundArrayagg = workaroundArrayagg
 
     this.define<string[], string>({
       types: ['list'],
@@ -243,7 +242,7 @@ export class MySQLDriver extends Driver {
   async prepare(name: string) {
     const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
     if (version.match(/10.5.\d+-MariaDB/)) {
-      logger.warn('MariaDB 10.5 will be depracated in the future, better move to LTS version.')
+      // https://jira.mariadb.org/browse/MDEV-26506
       this._fixMariaIssue = true
     }
 
@@ -453,7 +452,7 @@ export class MySQLDriver extends Driver {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const builder = new MySQLBuilder(sel.tables)
+    const builder = new MySQLBuilder(sel.tables, this._fixMariaIssue)
     const output = builder.parseEval(expr)
     const inner = builder.get(sel.table as Selection, true)
     const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner}`)
@@ -462,7 +461,7 @@ export class MySQLDriver extends Driver {
 
   async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
     const filter = builder.parseQuery(query)
     const { fields } = model
     if (filter === '0') return
@@ -479,7 +478,7 @@ export class MySQLDriver extends Driver {
 
   async remove(sel: Selection.Mutable) {
     const { query, table, tables } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
     const filter = builder.parseQuery(query)
     if (filter === '0') return
     await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
@@ -501,7 +500,7 @@ export class MySQLDriver extends Driver {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return
     const { model, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
 
     const merged = {}
     const insertion = data.map((item) => {
