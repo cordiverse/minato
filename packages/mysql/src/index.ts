@@ -118,7 +118,10 @@ class MySQLBuilder extends Builder {
       dump: value => JSON.stringify(value),
       load: value => {
         const obj = typeof value === 'string' ? JSON.parse(value) : value
-        return Array.isArray(obj) && issueUnquote ? obj.map(x => JSON.parse(x)) : obj
+        if (Array.isArray(obj) && issueUnquote) {
+          logger.debug('unquote: ', obj)
+          return obj.map(x => JSON.parse(x))
+        } else return obj
       },
     })
   }
