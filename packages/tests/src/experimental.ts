@@ -171,6 +171,35 @@ namespace ExperimentalTests {
         }
       ])
     })
+
+    it('$.array groupBy with expressions', async () => {
+      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy('foo', {
+          bars: row => $.array($.object({
+            value: row.bar.value,
+            value2: $.add(row.bar.value, row.foo.value),
+          })),
+          x: row => $.array($.add(1, row.bar.obj.x)),
+          y: row => $.array(row.bar.obj.y),
+        })
+        .orderBy(row => row.foo.id)
+        .execute()
+
+      expect(res).to.deep.equal([
+        {
+          foo: { id: 1, value: 0 },
+          bars: [{ value: 0, value2: 0 }, { value: 1, value2: 1 }],
+          x: [2, 3],
+          y: ['a', 'b'],
+        },
+        {
+          foo: { id: 2, value: 2 },
+          bars: [{ value: 0, value2: 2 }],
+          x: [4],
+          y: ['c'],
+        }
+      ])
+    })
   }
 }
 

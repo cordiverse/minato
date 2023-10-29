@@ -104,7 +104,7 @@ class MySQLBuilder extends Builder {
     '\\': '\\\\',
   }
 
-  constructor(tables?: Dict<Model>) {
+  constructor(tables?: Dict<Model>, issueUnquote = false) {
     super(tables)
 
     this.define<string[], string>({
@@ -116,7 +116,10 @@ class MySQLBuilder extends Builder {
     this.define<object, string>({
       types: ['json'],
       dump: value => JSON.stringify(value),
-      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+      load: value => {
+        const obj = typeof value === 'string' ? JSON.parse(value) : value
+        return Array.isArray(obj) && issueUnquote ? obj.map(x => JSON.parse(x)) : obj
+      },
     })
   }
 
@@ -187,6 +190,8 @@ export class MySQLDriver extends Driver {
 
   private _queryTasks: QueryTask[] = []
 
+  private _fixMariaIssue: boolean = false
+
   constructor(database: Database, config?: MySQLDriver.Config) {
     super(database)
 
@@ -237,6 +242,12 @@ export class MySQLDriver extends Driver {
 
   /** synchronize table schema */
   async prepare(name: string) {
+    const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
+    if (version.match(/10.5.\d+-MariaDB/)) {
+      logger.warn('MariaDB 10.5 will be depracated in the future, better move to LTS version.')
+      this._fixMariaIssue = true
+    }
+
     const [columns, indexes] = await Promise.all([
       this.queue<ColumnInfo[]>([
         `SELECT *`,
@@ -434,7 +445,7 @@ export class MySQLDriver extends Driver {
 
   async get(sel: Selection.Immutable) {
     const { model, tables } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
     const sql = builder.get(sel)
     if (!sql) return []
     return this.queue(sql).then((data) => {
