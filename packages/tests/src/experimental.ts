@@ -200,6 +200,31 @@ namespace ExperimentalTests {
         }
       ])
     })
+
+
+    it('$.array groupBy with expressions 2', async () => {
+      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy('foo', {
+          y: row => $.array(row.bar.obj.x),
+        })
+        .orderBy(row => row.foo.id)
+        .project({
+          z: row => $.array(row.y)
+        })
+        .execute()
+
+      expect(res).to.deep.equal([
+        {
+          z: [[1, 2], [3]],
+        },
+      ])
+    })
+
+    // it('raw', async () => {
+    //   const driver = Object.values(database.drivers)[0]
+    //   const ret = await driver.query("SELECT `x` FROM (SELECT json_unquote(json_arrayagg(`x`)) AS `x` FROM (SELECT `foo`.`id` AS `foo.id`, `foo`.`value` AS `foo.value`, (json_arrayagg(json_extract(`bar`.`obj`, '$.x'))) AS `x` FROM `foo` JOIN `bar` ON (`foo`.`id` = `bar`.`pid`) GROUP BY `foo.id`, `foo.value`) hjwlkwov) ydqtdvlu")
+    //   console.log(ret)
+    // })
   }
 }
 

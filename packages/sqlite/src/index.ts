@@ -61,7 +61,10 @@ class SQLiteBuilder extends Builder {
     this.define<object, string>({
       types: ['json'],
       dump: value => JSON.stringify(value),
-      load: (value, initial) => value ? JSON.parse(value) : initial,
+      load: (value, initial) => {
+        // console.log('load json', value)
+        return value ? JSON.parse(value) : initial
+      },
     })
 
     this.define<string[], string>({
@@ -91,11 +94,17 @@ class SQLiteBuilder extends Builder {
   }
 
   protected groupArray(expr: any) {
-    return `('[' || group_concat(json_quote(${this.parseAggr(expr)})) || ']')`
+    // console.log('1')
+    const aggr = this.parseAggr(expr)
+    // console.log('2', expr, aggr, this.jsonQuoted)
+    const ret = this.jsonQuoted ? `('[' || group_concat(${aggr}) || ']')` : `('[' || group_concat(json_quote(${aggr})) || ']')`
+    this.jsonQuoted = true
+    return ret
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return `json_extract(${obj}, '$${path}')`
+    this.jsonQuoted = true
+    return `json_quote(json_extract(${obj}, '$${path}'))`
   }
 }
 

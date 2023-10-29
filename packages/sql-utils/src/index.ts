@@ -1,6 +1,16 @@
 import { Dict, isNullable } from 'cosmokit'
 import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
 
+export type SQLType = 'raw' | 'json' | 'list'
+
+// declare module '@minatojs/core' {
+//   namespace Selection {
+//     interface Immutable {
+
+//     }
+//   }
+// }
+
 export function escapeId(value: string) {
   return '`' + value + '`'
 }
@@ -29,6 +39,8 @@ export class Builder {
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
   protected jsonQuoted = false
+  protected workaroundArrayagg = false
+  protected sqlTypes: Dict<SQLType> = {}
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -164,7 +176,9 @@ export class Builder {
   }
 
   protected unquoteJson(value: string) {
-    return this.jsonQuoted ? `json_unquote(${value})` : value
+    const ret = this.jsonQuoted ? `json_unquote(${value})` : value
+    this.jsonQuoted = false
+    return ret
   }
 
   protected groupObject(fields: any) {
@@ -175,7 +189,9 @@ export class Builder {
 
   protected groupArray(expr: any) {
     const aggr = this.parseAggr(expr)
-    const ret = this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')` : `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')`
+    // const ret = this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')`
+    //   : this.workaroundArrayagg ? `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')` : `json_arrayagg(${aggr})`
+    const ret = this.workaroundArrayagg ? `concat('[', group_concat(json_extract(json_object('v', ${aggr}), '$.v')), ']')` : `json_arrayagg(${aggr})`
     this.jsonQuoted = true
     return ret
   }
@@ -225,7 +241,7 @@ export class Builder {
   }
 
   private parseEvalExpr(expr: any) {
-    // this.jsonQuoted = false
+    this.jsonQuoted = false
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
@@ -234,15 +250,10 @@ export class Builder {
     return this.escape(expr)
   }
 
-  protected parseAggr(expr: any, unquote: boolean = true) {
+  protected parseAggr(expr: any) {
+    this.jsonQuoted = false
     const ret = typeof expr === 'string' ? this.getRecursive(expr) : this.parseEvalExpr(expr)
-    if (unquote) {
-      this.jsonQuoted = false
-      return this.unquoteJson(ret)
-    } else {
-      this.jsonQuoted = true
-      return ret
-    }
+    return ret
   }
 
   protected transformJsonField(obj: string, path: string) {
@@ -251,7 +262,12 @@ export class Builder {
   }
 
   private transformKey(key: string, fields: {}, prefix: string) {
-    if (key in fields || !key.includes('.')) return prefix + escapeId(key)
+    if (key in fields || !key.includes('.')) {
+      if (this.sqlTypes[key]) this.jsonQuoted = this.sqlTypes[key] === 'json'
+      // this.jsonQuoted = fields[key]?.runtimeType?.json ?? true
+      // console.log(key, this.jsonQuoted, this.sqlTypes)
+      return prefix + escapeId(key)
+    }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
     return this.transformJsonField(`${prefix} ${escapeId(field)}`, rest.map(key => `."${key}"`).join(''))
@@ -282,12 +298,12 @@ export class Builder {
   parseEval(expr: any, unquote: boolean = true): string {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return this.escape(expr)
-    } else if (unquote) {
-      this.jsonQuoted = false
-      return this.unquoteJson(this.parseEvalExpr(expr))
+    }
+    const res = this.parseEvalExpr(expr)
+    if (unquote && this.jsonQuoted) {
+      return this.unquoteJson(res)
     } else {
-      this.jsonQuoted = true
-      return this.parseEvalExpr(expr)
+      return res
     }
   }
 
@@ -314,16 +330,6 @@ export class Builder {
     const filter = this.parseQuery(query)
     if (filter === '0') return
 
-    // get prefix
-    const fields = args[0].fields ?? Object.fromEntries(Object
-      .entries(model.fields)
-      .filter(([, field]) => !field!.deprecated)
-      .map(([key, field]) => [key, Eval('', [ref, key], field!.runtimeType!)]))
-    const keys = Object.entries(fields).map(([key, value]) => {
-      key = escapeId(key)
-      value = this.parseEval(value)
-      return key === value ? key : `${value} AS ${key}`
-    }).join(', ')
     let prefix: string | undefined
     if (typeof table === 'string') {
       prefix = escapeId(table)
@@ -341,6 +347,21 @@ export class Builder {
       const filter = this.parseEval(args[0].having)
       if (filter !== '1') prefix += ` ON ${filter}`
     }
+
+    const sqlTypes = {}
+    // get prefix
+    const fields = args[0].fields ?? Object.fromEntries(Object
+      .entries(model.fields)
+      .filter(([, field]) => !field!.deprecated)
+      .map(([key, field]) => [key, Eval('', [ref, key], field!.runtimeType!)]))
+    const keys = Object.entries(fields).map(([key, value]) => {
+      value = this.parseEval(value, false)
+      sqlTypes[key] = this.jsonQuoted ? 'json' : 'raw'
+      return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
+    }).join(', ')
+
+    this.sqlTypes = sqlTypes
+    // console.log('field sqlTypes:', Object.keys(fields), sqlTypes)
 
     // get suffix
     let suffix = this.suffix(args[0])
@@ -375,10 +396,11 @@ export class Builder {
 
   load(model: Model, obj: any): any {
     const result = {}
+    // console.log('sql', this.sqlTypes, Object.keys(obj))
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial, runtimeType } = model.fields[key]!
-      const converter = runtimeType?.json ? this.types['json'] : this.types[type]
+      const { type, initial } = model.fields[key]!
+      const converter = this.sqlTypes[key] === 'json' ? this.types['json'] : this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)
