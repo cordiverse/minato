@@ -244,7 +244,7 @@ export class MySQLDriver extends Driver {
     const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
     if (version.match(/10.5.\d+-MariaDB/)) {
       logger.warn('MariaDB 10.5 will be depracated in the future, better move to LTS version.')
-      // this._fixMariaIssue = true
+      this._fixMariaIssue = true
     }
 
     const [columns, indexes] = await Promise.all([
