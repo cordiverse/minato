@@ -1,16 +1,6 @@
 import { Dict, isNullable } from 'cosmokit'
 import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
 
-export type SQLType = 'raw' | 'json' | 'list'
-
-// declare module '@minatojs/core' {
-//   namespace Selection {
-//     interface Immutable {
-
-//     }
-//   }
-// }
-
 export function escapeId(value: string) {
   return '`' + value + '`'
 }
@@ -31,6 +21,8 @@ export interface Transformer<S = any, T = any> {
   load: (value: T, initial?: S) => S | null
 }
 
+export type SQLType = 'raw' | 'json'
+
 export class Builder {
   protected escapeMap = {}
   protected escapeRegExp?: RegExp
@@ -38,9 +30,9 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
-  protected jsonQuoted = false
-  protected workaroundArrayagg = false
+  protected currentSQLType: SQLType = 'raw'
   protected sqlTypes: Dict<SQLType> = {}
+  protected workaroundArrayagg = false
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -176,23 +168,23 @@ export class Builder {
   }
 
   protected unquoteJson(value: string) {
-    const res = this.jsonQuoted ? `json_unquote(${value})` : value
-    this.jsonQuoted = false
+    const res = this.currentSQLType === 'json' ? `json_unquote(${value})` : value
+    this.currentSQLType = 'raw'
     return res
   }
 
   protected groupObject(fields: any) {
     const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${this.parseEval(expr, false)}`).join(',') + `)`
-    this.jsonQuoted = true
+    this.currentSQLType = 'json'
     return res
   }
 
   protected groupArray(expr: any) {
     const aggr = this.parseAggr(expr)
-    const res = this.workaroundArrayagg
-      ? (this.jsonQuoted ? `concat('[', group_concat(${aggr}), ']')` : `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')`)
+    const res = this.workaroundArrayagg ? (this.currentSQLType === 'json' ? `concat('[', group_concat(${aggr}), ']')`
+      : `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')`)
       : `json_arrayagg(${aggr})`
-    this.jsonQuoted = true
+    this.currentSQLType = 'json'
     return res
   }
 
@@ -241,7 +233,7 @@ export class Builder {
   }
 
   private parseEvalExpr(expr: any) {
-    this.jsonQuoted = false
+    this.currentSQLType = 'raw'
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
@@ -251,19 +243,23 @@ export class Builder {
   }
 
   protected parseAggr(expr: any) {
-    this.jsonQuoted = false
-    const res = typeof expr === 'string' ? this.getRecursive(expr) : this.parseEvalExpr(expr)
-    return res
+    this.currentSQLType = 'raw'
+    if (typeof expr === 'string') {
+      return this.getRecursive(expr)
+    }
+    return this.parseEvalExpr(expr)
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.jsonQuoted = true
+    this.currentSQLType = 'json'
     return `json_extract(${obj}, '$${path}')`
   }
 
   private transformKey(key: string, fields: {}, prefix: string) {
     if (key in fields || !key.includes('.')) {
-      if (this.sqlTypes[key]) this.jsonQuoted = this.sqlTypes[key] === 'json'
+      if (this.sqlTypes[key]) {
+        this.currentSQLType = this.sqlTypes[key]
+      }
       return prefix + escapeId(key)
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
@@ -294,16 +290,11 @@ export class Builder {
   }
 
   parseEval(expr: any, unquote: boolean = true): string {
-    this.jsonQuoted = false
+    this.currentSQLType = 'raw'
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return this.escape(expr)
     }
-    const res = this.parseEvalExpr(expr)
-    if (unquote && this.jsonQuoted) {
-      return this.unquoteJson(res)
-    } else {
-      return res
-    }
+    return unquote ? this.unquoteJson(this.parseEvalExpr(expr)) : this.parseEvalExpr(expr)
   }
 
   suffix(modifier: Modifier) {
@@ -348,14 +339,14 @@ export class Builder {
     }
 
     // get prefix
-    const sqlTypes = {}
+    const sqlTypes: Dict<SQLType> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
       .map(([key]) => [key, { $: [ref, key] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
-      sqlTypes[key] = this.jsonQuoted ? 'json' : 'raw'
+      sqlTypes[key] = this.currentSQLType
       return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
     }).join(', ')
     this.sqlTypes = sqlTypes
@@ -396,7 +387,7 @@ export class Builder {
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial } = model.fields[key]!
-      const converter = this.sqlTypes[key] === 'json' ? this.types['json'] : this.types[type]
+      const converter = this.sqlTypes[key] === 'raw' ? this.types[type] : this.types[this.sqlTypes[key]]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)

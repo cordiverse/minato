@@ -93,13 +93,13 @@ class SQLiteBuilder extends Builder {
 
   protected groupArray(expr: any) {
     const aggr = this.parseAggr(expr)
-    const res = this.jsonQuoted ? `('[' || group_concat(${aggr}) || ']')` : `('[' || group_concat(json_quote(${aggr})) || ']')`
-    this.jsonQuoted = true
+    const res = this.currentSQLType === 'json' ? `('[' || group_concat(${aggr}) || ']')` : `('[' || group_concat(json_quote(${aggr})) || ']')`
+    this.currentSQLType = 'json'
     return res
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.jsonQuoted = false
+    this.currentSQLType = 'raw'
     return `json_extract(${obj}, '$${path}')`
   }
 }

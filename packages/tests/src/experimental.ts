@@ -64,7 +64,7 @@ function ExperimentalTests(database: Database<Tables>) {
 }
 
 namespace ExperimentalTests {
-  export function computed(database: Database<Tables>) {
+  export function jsontype(database: Database<Tables>) {
     it('$.object', async () => {
       const res = await database.select('foo')
         .project({
@@ -138,7 +138,7 @@ namespace ExperimentalTests {
       ])
     })
 
-    it('$.array groupBy in json', async () => {
+    it('$.array in json', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
           bars: row => $.array($.object({
@@ -172,7 +172,7 @@ namespace ExperimentalTests {
       ])
     })
 
-    it('$.array groupBy with expressions', async () => {
+    it('$.array with expressions', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
           bars: row => $.array($.object({
@@ -202,7 +202,7 @@ namespace ExperimentalTests {
     })
 
 
-    it('$.array groupBy with expressions 2', async () => {
+    it('$.array nested', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
           y: row => $.array(row.bar.obj.x),
