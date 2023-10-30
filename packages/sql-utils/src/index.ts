@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
+import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -21,7 +21,13 @@ export interface Transformer<S = any, T = any> {
   load: (value: T, initial?: S) => S | null
 }
 
-export type SQLType = 'raw' | 'json'
+type SQLType = 'raw' | 'json'
+
+interface State {
+  sqlType?: SQLType
+  sqlTypes?: Dict<SQLType>
+  group?: boolean
+}
 
 export class Builder {
   protected escapeMap = {}
@@ -30,9 +36,8 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
-  protected currentSQLType: SQLType = 'raw'
-  protected sqlTypes: Dict<SQLType> = {}
   protected workaroundArrayagg = false
+  state: State = {}
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -111,14 +116,14 @@ export class Builder {
       $lte: this.binary('<='),
 
       // aggregation
-      $sum: (expr) => `ifnull(sum(${this.parseAggr(expr)}), 0)`,
-      $avg: (expr) => `avg(${this.parseAggr(expr)})`,
-      $min: (expr) => `min(${this.parseAggr(expr)})`,
-      $max: (expr) => `max(${this.parseAggr(expr)})`,
-      $count: (expr) => `count(distinct ${this.parseAggr(expr)})`,
+      $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
+      $avg: (expr) => this.createAggr(expr, value => `avg(${value})`),
+      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
+      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
+      $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
 
       $object: (fields) => this.groupObject(fields),
-      $array: (expr) => this.groupArray(expr),
+      $array: (expr) => this.createAggr(expr, value => this.groupArray(value)),
     }
   }
 
@@ -168,23 +173,33 @@ export class Builder {
   }
 
   protected unquoteJson(value: string) {
-    const res = this.currentSQLType === 'json' ? `json_unquote(${value})` : value
-    this.currentSQLType = 'raw'
+    const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
+    this.state.sqlType = 'raw'
     return res
+  }
+
+  protected createAggr(expr: any, aggrfunc: (value: string) => string) {
+    if (this.state.group) {
+      return aggrfunc(this.parseAggr(expr))
+    } else {
+      this.state.group = true
+      const aggr = this.parseAggr(expr)
+      this.state.group = false
+      return `(select ${aggrfunc(`json_unquote(${escapeId('value')})`)} from json_table(${aggr}, '$[*]' columns (value json path '$')) ${randomId()})`
+    }
   }
 
   protected groupObject(fields: any) {
     const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${this.parseEval(expr, false)}`).join(',') + `)`
-    this.currentSQLType = 'json'
+    this.state.sqlType = 'json'
     return res
   }
 
-  protected groupArray(expr: any) {
-    const aggr = this.parseAggr(expr)
-    const res = this.workaroundArrayagg ? (this.currentSQLType === 'json' ? `concat('[', group_concat(${aggr}), ']')`
-      : `concat('[', group_concat(json_extract(json_object('f', ${aggr}), '$.f')), ']')`)
-      : `json_arrayagg(${aggr})`
-    this.currentSQLType = 'json'
+  protected groupArray(value: string) {
+    const res = this.workaroundArrayagg ? (this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
+      : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`)
+      : `json_arrayagg(${value})`
+    this.state.sqlType = 'json'
     return res
   }
 
@@ -233,7 +248,7 @@ export class Builder {
   }
 
   private parseEvalExpr(expr: any) {
-    this.currentSQLType = 'raw'
+    this.state.sqlType = 'raw'
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
@@ -243,22 +258,19 @@ export class Builder {
   }
 
   protected parseAggr(expr: any) {
-    this.currentSQLType = 'raw'
-    if (typeof expr === 'string') {
-      return this.getRecursive(expr)
-    }
-    return this.parseEvalExpr(expr)
+    this.state.sqlType = 'raw'
+    return typeof expr === 'string' ? this.getRecursive(expr) : this.parseEvalExpr(expr)
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.currentSQLType = 'json'
+    this.state.sqlType = 'json'
     return `json_extract(${obj}, '$${path}')`
   }
 
   private transformKey(key: string, fields: {}, prefix: string) {
     if (key in fields || !key.includes('.')) {
-      if (this.sqlTypes[key]) {
-        this.currentSQLType = this.sqlTypes[key]
+      if (this.state.sqlTypes?.[key]) {
+        this.state.sqlType = this.state.sqlTypes[key]
       }
       return prefix + escapeId(key)
     }
@@ -290,7 +302,7 @@ export class Builder {
   }
 
   parseEval(expr: any, unquote: boolean = true): string {
-    this.currentSQLType = 'raw'
+    this.state.sqlType = 'raw'
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return this.escape(expr)
     }
@@ -300,7 +312,7 @@ export class Builder {
   suffix(modifier: Modifier) {
     const { limit, offset, sort, group, having } = modifier
     let sql = ''
-    if (group.length) {
+    if (group?.length) {
       sql += ` GROUP BY ${group.map(escapeId).join(', ')}`
       const filter = this.parseEval(having)
       if (filter !== '1') sql += ` HAVING ${filter}`
@@ -320,6 +332,7 @@ export class Builder {
     const filter = this.parseQuery(query)
     if (filter === '0') return
 
+    // get prefix
     let prefix: string | undefined
     if (typeof table === 'string') {
       prefix = escapeId(table)
@@ -338,7 +351,7 @@ export class Builder {
       if (filter !== '1') prefix += ` ON ${filter}`
     }
 
-    // get prefix
+    this.state.group = !!args[0].group
     const sqlTypes: Dict<SQLType> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
@@ -346,10 +359,10 @@ export class Builder {
       .map(([key]) => [key, { $: [ref, key] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
-      sqlTypes[key] = this.currentSQLType
+      sqlTypes[key] = this.state.sqlType!
       return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
     }).join(', ')
-    this.sqlTypes = sqlTypes
+    this.state.sqlTypes = sqlTypes
 
     // get suffix
     let suffix = this.suffix(args[0])
@@ -387,7 +400,7 @@ export class Builder {
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial } = model.fields[key]!
-      const converter = this.sqlTypes[key] === 'raw' ? this.types[type] : this.types[this.sqlTypes[key]]
+      const converter = this.state.sqlTypes?.[key] === 'raw' ? this.types[type] : this.types[this.state.sqlTypes![key]]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)

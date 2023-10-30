@@ -1,5 +1,5 @@
 import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
@@ -91,15 +91,25 @@ class SQLiteBuilder extends Builder {
     return value
   }
 
-  protected groupArray(expr: any) {
-    const aggr = this.parseAggr(expr)
-    const res = this.currentSQLType === 'json' ? `('[' || group_concat(${aggr}) || ']')` : `('[' || group_concat(json_quote(${aggr})) || ']')`
-    this.currentSQLType = 'json'
+  protected createAggr(expr: any, aggrfunc: (value: string) => string) {
+    if (this.state.group) {
+      return aggrfunc(this.parseAggr(expr))
+    } else {
+      this.state.group = true
+      const aggr = this.parseAggr(expr)
+      this.state.group = false
+      return `(select ${aggrfunc(escapeId('value'))} from json_each(${aggr}) ${randomId()})`
+    }
+  }
+
+  protected groupArray(value: string) {
+    const res = this.state.sqlType === 'json' ? `('[' || group_concat(${value}) || ']')` : `('[' || group_concat(json_quote(${value})) || ']')`
+    this.state.sqlType = 'json'
     return res
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.currentSQLType = 'raw'
+    this.state.sqlType = 'raw'
     return `json_extract(${obj}, '$${path}')`
   }
 }
@@ -333,6 +343,7 @@ export class SQLiteDriver extends Driver {
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const builder = new SQLiteBuilder(sel.tables)
+    builder.state.group = true
     const output = builder.parseEval(expr)
     const inner = builder.get(sel.table as Selection, true)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)

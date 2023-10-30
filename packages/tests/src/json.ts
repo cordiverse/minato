@@ -22,7 +22,7 @@ interface Bar {
       b: string
     }
   }
-  l: string[]
+  l: number[]
 }
 
 interface Tables {
@@ -30,7 +30,7 @@ interface Tables {
   bar: Bar
 }
 
-function ExperimentalTests(database: Database<Tables>) {
+function JsonTests(database: Database<Tables>) {
   database.extend('foo', {
     id: 'unsigned',
     value: 'integer',
@@ -43,7 +43,7 @@ function ExperimentalTests(database: Database<Tables>) {
     value: 'integer',
     obj: 'json',
     s: 'string',
-    l: 'list',
+    l: { type: 'json', initial: [] }
   }, {
     autoInc: true,
   })
@@ -56,14 +56,14 @@ function ExperimentalTests(database: Database<Tables>) {
     ])
 
     await setup(database, 'bar', [
-      { uid: 1, pid: 1, value: 0, obj: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } }, s: '1', l: ['1', '2'] },
-      { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2' },
-      { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3' },
+      { uid: 1, pid: 1, value: 0, obj: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } }, s: '1', l: [1, 2] },
+      { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2', l: [5, 3, 4] },
+      { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3', l: [2] },
     ])
   })
 }
 
-namespace ExperimentalTests {
+namespace JsonTests {
   export function jsontype(database: Database<Tables>) {
     it('$.object', async () => {
       const res = await database.select('foo')
@@ -120,7 +120,7 @@ namespace ExperimentalTests {
 
     it('$.array groupFull', async () => {
       const res = await database.select('bar')
-        .project({
+        .groupBy({}, {
           count2: row => $.array(row.s),
           countnumber: row => $.array(row.value),
           x: row => $.array(row.obj.x),
@@ -208,7 +208,7 @@ namespace ExperimentalTests {
           y: row => $.array(row.bar.obj.x),
         })
         .orderBy(row => row.foo.id)
-        .project({
+        .groupBy({}, {
           z: row => $.array(row.y)
         })
         .execute()
@@ -219,7 +219,25 @@ namespace ExperimentalTests {
         },
       ])
     })
+
+    it('non-aggr functions', async () => {
+      const res = await database.select('bar')
+        .project({
+          sum: row => $.sum(row.l),
+          avg: row => $.avg(row.l),
+          max: row => $.max(row.l),
+          min: row => $.min(row.l),
+          count: row => $.count(row.l),
+        })
+        .execute()
+
+      expect(res).to.deep.equal([
+        { sum: 3, avg: 1.5, max: 2, min: 1, count: 2 },
+        { sum: 12, avg: 4, max: 5, min: 3, count: 3 },
+        { sum: 2, avg: 2, max: 2, min: 2, count: 1 },
+      ])
+    })
   }
 }
 
-export default ExperimentalTests
+export default JsonTests

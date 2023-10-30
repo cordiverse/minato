@@ -11,7 +11,7 @@ export interface Modifier {
   limit: number
   offset: number
   sort: [Eval.Expr, Direction][]
-  group: string[]
+  group?: string[]
   having: Eval.Expr<boolean>
   fields?: Dict<Eval.Expr>
   optional: Dict<boolean>
@@ -136,7 +136,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
       ref: randomId(),
       table,
       query: null as never,
-      args: [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and(), optional: {} }],
+      args: [{ sort: [], limit: Infinity, offset: 0, group: undefined, having: Eval.and(), optional: {} }],
     })
     this.tables[this.ref] = this.model
     this.query = this.resolveQuery(query)

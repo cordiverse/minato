@@ -114,8 +114,12 @@ export class Transformer {
       return { $cond: expr.$if.map(val => this.eval(val, group)) }
     }
 
-    if (expr.$object) {
-      return this.transformEvalExpr(expr.$object)
+    if (expr.$object || expr.$array) {
+      return this.transformEvalExpr(expr.$object || expr.$array)
+    }
+
+    if (expr.$count) {
+      return { $size: this.transformEvalExpr(expr.$count) }
     }
 
     return valueMap(expr as any, (value) => {
@@ -145,19 +149,21 @@ export class Transformer {
       return expr
     }
 
-    for (const type of aggrKeys) {
-      if (!expr[type]) continue
-      const key = this.createKey()
-      const value = this.transformAggr(expr[type])
-      if (type === '$count') {
-        group![key] = { $addToSet: value }
-        return { $size: '$' + key }
-      } else if (type === '$array') {
-        group![key] = { $push: value }
-        return '$' + key
-      } else {
-        group![key] = { [type]: value }
-        return '$' + key
+    if (group) {
+      for (const type of aggrKeys) {
+        if (!expr[type]) continue
+        const key = this.createKey()
+        const value = this.transformAggr(expr[type])
+        if (type === '$count') {
+          group![key] = { $addToSet: value }
+          return { $size: '$' + key }
+        } else if (type === '$array') {
+          group![key] = { $push: value }
+          return '$' + key
+        } else {
+          group![key] = { [type]: value }
+          return '$' + key
+        }
       }
     }
 
@@ -229,7 +235,7 @@ export class Transformer {
     }
 
     // groupBy, having, fields
-    if (group.length) {
+    if (group) {
       const $group: Dict = { _id: {} }
       const $project: Dict = { _id: 0 }
       stages.push({ $group })
@@ -249,10 +255,9 @@ export class Transformer {
       stages.push({ $project })
       $group['_id'] = model.parse($group['_id'], false)
     } else if (fields) {
-      const $group: Dict = { _id: null }
-      const $project = valueMap(fields, (expr) => this.eval(expr, $group))
+      const $project = valueMap(fields, (expr) => this.eval(expr))
       $project._id = 0
-      stages.push(...Object.keys($group).length === 1 ? [] : [{ $group }], { $project })
+      stages.push({ $project })
     } else {
       const $project: Dict = { _id: 0 }
       for (const key in model.fields) {

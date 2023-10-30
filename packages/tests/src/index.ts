@@ -4,7 +4,7 @@ import UpdateOperators from './update'
 import ObjectOperations from './object'
 import Migration from './migration'
 import Selection from './selection'
-import Experimental from './experimental'
+import Json from './json'
 import './setup'
 
 const Keywords = ['name']
@@ -53,7 +53,7 @@ namespace Tests {
   export const object = ObjectOperations
   export const selection = Selection
   export const migration = Migration
-  export const experimental = Experimental
+  export const json = Json
 }
 
 export default createUnit(Tests, true)

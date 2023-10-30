@@ -453,6 +453,7 @@ export class MySQLDriver extends Driver {
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const builder = new MySQLBuilder(sel.tables, this._fixMariaIssue)
+    builder.state.group = true
     const output = builder.parseEval(expr)
     const inner = builder.get(sel.table as Selection, true)
     const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner}`)
