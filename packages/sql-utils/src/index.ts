@@ -256,10 +256,10 @@ export class Builder {
     return `json_extract(${obj}, '$${path}')`
   }
 
-  private transformKey(key: string, fields: {}, prefix: string) {
+  private transformKey(key: string, fields: {}, prefix: string, fullKey: string) {
     if (key in fields || !key.includes('.')) {
-      if (this.state.sqlTypes?.[key]) {
-        this.state.sqlType = this.state.sqlTypes[key]
+      if (this.state.sqlTypes?.[key] || this.state.sqlTypes?.[fullKey]) {
+        this.state.sqlType = this.state.sqlTypes[key] || this.state.sqlTypes[fullKey]
       }
       return prefix + escapeId(key)
     }
@@ -287,7 +287,7 @@ export class Builder {
     const prefix = !this.tables || table === '_' || key in fields
     // the only table must be the main table
     || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${escapeId(table)}.`
-    return this.transformKey(key, fields, prefix)
+    return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
   parseEval(expr: any, unquote: boolean = true): string {
@@ -332,13 +332,19 @@ export class Builder {
       prefix = this.get(table, true)
       if (!prefix) return
     } else {
+      const sqlTypes: Dict<SQLType> = {}
       prefix = Object.entries(table).map(([key, table]) => {
         if (typeof table !== 'string') {
-          return `${this.get(table, true)} AS ${escapeId(key)}`
+          const t = `${this.get(table, true)} AS ${escapeId(key)}`
+          for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
+            sqlTypes[`${key}.${fieldKey}`] = fieldType
+          }
+          return t
         } else {
           return key === table ? escapeId(table) : `${escapeId(table)} AS ${escapeId(key)}`
         }
       }).join(' JOIN ')
+      this.state.sqlTypes = sqlTypes
       const filter = this.parseEval(args[0].having)
       if (filter !== '1') prefix += ` ON ${filter}`
     }

@@ -234,6 +234,24 @@ namespace JsonTests {
         { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } }
       ])
     })
+
+    it('pass sqlType in join', async () => {
+      const res = await database.join({
+        foo: 'foo',
+        bar: 'bar',
+      }, ({foo, bar}) => $.eq(foo.id, bar.pid))
+        .project({
+          x: row => row.bar.l,
+          y: row => row.bar.obj,
+        })
+        .execute()
+
+      expect(res).to.deep.equal([
+        { x: ['1', '2'], y: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } } },
+        { x: ['5', '3', '4'], y: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } } },
+        { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } }
+      ])
+    })
   }
 }
 

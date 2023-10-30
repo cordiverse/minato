@@ -114,14 +114,14 @@ export class Database<S = any> {
   join<U extends Dict<TableLike<S>>>(tables: U, callback?: JoinCallback2<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<TableMap2<S, U>>
   join(tables: any, query?: any, optional?: any) {
     if (Array.isArray(tables)) {
-      const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, name])))
+      const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, this.select(name)])))
       if (typeof query === 'function') {
         sel.args[0].having = Eval.and(query(...tables.map(name => sel.row[name])))
       }
       sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
       return new Selection(this.getDriver(sel), sel)
     } else {
-      const sel = new Selection(this.getDriver(tables[0]), tables)
+      const sel = new Selection(this.getDriver(Object.values(tables)[0]), valueMap(tables, (t: TableLike<S>) => typeof t === 'string' ? this.select(t) : t))
       if (typeof query === 'function') {
         sel.args[0].having = Eval.and(query(sel.row))
       }
