@@ -1,5 +1,5 @@
 import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
@@ -89,17 +89,6 @@ class SQLiteBuilder extends Builder {
 
   protected unquoteJson(value: string) {
     return value
-  }
-
-  protected createAggr(expr: any, aggrfunc: (value: string) => string) {
-    if (this.state.group) {
-      return aggrfunc(this.parseAggr(expr))
-    } else {
-      this.state.group = true
-      const aggr = this.parseAggr(expr)
-      this.state.group = false
-      return `(select ${aggrfunc(escapeId('value'))} from json_each(${aggr}) ${randomId()})`
-    }
   }
 
   protected groupArray(value: string) {

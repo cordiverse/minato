@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from '@minatojs/core'
+import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -21,7 +21,7 @@ export interface Transformer<S = any, T = any> {
   load: (value: T, initial?: S) => S | null
 }
 
-type SQLType = 'raw' | 'json'
+type SQLType = 'raw' | 'json' | 'list'
 
 interface State {
   sqlType?: SQLType
@@ -116,14 +116,14 @@ export class Builder {
       $lte: this.binary('<='),
 
       // aggregation
-      $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
-      $avg: (expr) => this.createAggr(expr, value => `avg(${value})`),
-      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
-      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
-      $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
+      $sum: (expr) => `ifnull(sum(${this.parseAggr(expr)}), 0)`,
+      $avg: (expr) => `avg(${this.parseAggr(expr)})`,
+      $min: (expr) => `min(${this.parseAggr(expr)})`,
+      $max: (expr) => `max(${this.parseAggr(expr)})`,
+      $count: (expr) => `count(distinct ${this.parseAggr(expr)})`,
 
       $object: (fields) => this.groupObject(fields),
-      $array: (expr) => this.createAggr(expr, value => this.groupArray(value)),
+      $array: (expr) => this.groupArray(this.parseAggr(expr)),
     }
   }
 
@@ -176,17 +176,6 @@ export class Builder {
     const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
     this.state.sqlType = 'raw'
     return res
-  }
-
-  protected createAggr(expr: any, aggrfunc: (value: string) => string) {
-    if (this.state.group) {
-      return aggrfunc(this.parseAggr(expr))
-    } else {
-      this.state.group = true
-      const aggr = this.parseAggr(expr)
-      this.state.group = false
-      return `(select ${aggrfunc(`json_unquote(${escapeId('value')})`)} from json_table(${aggr}, '$[*]' columns (value json path '$')) ${randomId()})`
-    }
   }
 
   protected groupObject(fields: any) {
@@ -336,6 +325,9 @@ export class Builder {
     let prefix: string | undefined
     if (typeof table === 'string') {
       prefix = escapeId(table)
+      this.state.sqlTypes = Object.fromEntries(Object.entries(model.fields).map(([key, field]) => {
+        return [key, field!.type === 'json' ? 'json' : field!.type === 'list' ? 'list' : 'raw']
+      }))
     } else if (table instanceof Selection) {
       prefix = this.get(table, true)
       if (!prefix) return

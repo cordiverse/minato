@@ -22,7 +22,7 @@ interface Bar {
       b: string
     }
   }
-  l: number[]
+  l: string[]
 }
 
 interface Tables {
@@ -43,7 +43,7 @@ function JsonTests(database: Database<Tables>) {
     value: 'integer',
     obj: 'json',
     s: 'string',
-    l: { type: 'json', initial: [] }
+    l: { type: 'list', initial: [] }
   }, {
     autoInc: true,
   })
@@ -56,9 +56,9 @@ function JsonTests(database: Database<Tables>) {
     ])
 
     await setup(database, 'bar', [
-      { uid: 1, pid: 1, value: 0, obj: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } }, s: '1', l: [1, 2] },
-      { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2', l: [5, 3, 4] },
-      { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3', l: [2] },
+      { uid: 1, pid: 1, value: 0, obj: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } }, s: '1', l: ['1', '2'] },
+      { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2', l: ['5', '3', '4'] },
+      { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3', l: ['2'] },
     ])
   })
 }
@@ -97,9 +97,9 @@ namespace JsonTests {
         .execute()
 
       expect(res).to.deep.equal([
-        { obj: { a: 1, num: 1, obj: { a: 1, b: "1" }, str: 'a', str2: '1' } },
-        { obj: { a: 2, num: 2, obj: { a: 2, b: "2" }, str: 'b', str2: '2' } },
-        { obj: { a: 3, num: 3, obj: { a: 3, b: "3" }, str: 'c', str2: '3' } }
+        { obj: { a: 1, num: 1, obj: { a: 1, b: '1' }, str: 'a', str2: '1' } },
+        { obj: { a: 2, num: 2, obj: { a: 2, b: '2' }, str: 'b', str2: '2' } },
+        { obj: { a: 3, num: 3, obj: { a: 3, b: '3' }, str: 'c', str2: '3' } }
       ])
     })
 
@@ -130,7 +130,7 @@ namespace JsonTests {
 
       expect(res).to.deep.equal([
         {
-          count2: ["1", "2", "3"],
+          count2: ['1', '2', '3'],
           countnumber: [0, 1, 0],
           x: [1, 2, 3],
           y: ['a', 'b', 'c']
@@ -220,21 +220,18 @@ namespace JsonTests {
       ])
     })
 
-    it('non-aggr functions', async () => {
+    it('pass sqlType', async () => {
       const res = await database.select('bar')
         .project({
-          sum: row => $.sum(row.l),
-          avg: row => $.avg(row.l),
-          max: row => $.max(row.l),
-          min: row => $.min(row.l),
-          count: row => $.count(row.l),
+          x: row => row.l,
+          y: row => row.obj,
         })
         .execute()
 
       expect(res).to.deep.equal([
-        { sum: 3, avg: 1.5, max: 2, min: 1, count: 2 },
-        { sum: 12, avg: 4, max: 5, min: 3, count: 3 },
-        { sum: 2, avg: 2, max: 2, min: 2, count: 1 },
+        { x: ['1', '2'], y: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } } },
+        { x: ['5', '3', '4'], y: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } } },
+        { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } }
       ])
     })
   }

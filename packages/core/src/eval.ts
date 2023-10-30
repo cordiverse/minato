@@ -175,30 +175,14 @@ Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg))
 Eval.not = unary('not', (value, data) => !executeEval(data, value))
 
 // aggregation
-Eval.sum = unary('sum', (expr, table) => Array.isArray(table)
-  ? table.reduce<number>((prev, curr) => prev + executeAggr(expr, curr), 0)
-  : Array.from<number>(executeEval(table, expr)).reduce((prev, curr) => prev + curr, 0))
-Eval.avg = unary('avg', (expr, table) => {
-  if (Array.isArray(table)) return table.reduce((prev, curr) => prev + executeAggr(expr, curr), 0) / table.length
-  else {
-    const array = Array.from<number>(executeEval(table, expr))
-    return array.reduce((prev, curr) => prev + curr, 0) / array.length
-  }
-})
-Eval.max = unary('max', (expr, table) => Array.isArray(table)
-  ? Math.max(...table.map(data => executeAggr(expr, data)))
-  : Math.max(...Array.from<number>(executeEval(table, expr))))
-Eval.min = unary('min', (expr, table) => Array.isArray(table)
-  ? Math.min(...table.map(data => executeAggr(expr, data)))
-  : Math.min(...Array.from<number>(executeEval(table, expr))))
-Eval.count = unary('count', (expr, table) => Array.isArray(table)
-  ? new Set(table.map(data => executeAggr(expr, data))).size
-  : new Set(Array.from(executeEval(table, expr))).size)
+Eval.sum = unary('sum', (expr, table) => table.reduce<number>((prev, curr) => prev + executeAggr(expr, curr), 0))
+Eval.avg = unary('avg', (expr, table) => table.reduce((prev, curr) => prev + executeAggr(expr, curr), 0) / table.length)
+Eval.max = unary('max', (expr, table) => Math.max(...table.map(data => executeAggr(expr, data))))
+Eval.min = unary('min', (expr, table) => Math.min(...table.map(data => executeAggr(expr, data))))
+Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size)
 
 Eval.object = unary('object', (field, table) => valueMap(field, value => executeAggr(value, table)))
-Eval.array = unary('array', (expr, table) => Array.isArray(table)
-  ? table.map(data => executeAggr(expr, data))
-  : Array.from(executeEval(table, expr)))
+Eval.array = unary('array', (expr, table) => table.map(data => executeAggr(expr, data)))
 
 export { Eval as $ }
 
