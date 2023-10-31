@@ -246,6 +246,46 @@ export class MySQLDriver extends Driver {
       this._fixMariaIssue = true
     }
 
+    try {
+      await this.query(`
+    CREATE FUNCTION mj_sum (j JSON)
+    RETURNS NUMERIC DETERMINISTIC
+    BEGIN
+    DECLARE n int;
+    DECLARE i int;
+    DECLARE r NUMERIC;
+    DROP TEMPORARY TABLE IF EXISTS mtt;
+    CREATE TEMPORARY TABLE mtt (value JSON);
+    SELECT json_length(j) into n;
+    set i = 0;
+    WHILE i<n DO
+    INSERT INTO mtt(value) VALUES(json_extract(j, concat('$[', i, ']')));
+    SET i = i+1;
+    END WHILE;
+    SELECT sum(value) INTO r FROM mtt;
+    RETURN r;
+    END`)
+    } catch {}
+    //   console.log(await this.query(`DROP FUNCTION IF EXISTS mj_sum//
+    // CREATE FUNCTION mj_sum (j JSON)
+    // RETURNS NUMERIC DETERMINISTIC
+    // BEGIN
+    // DECLARE n int;
+    // DECLARE i int;
+    // DECLARE r NUMERIC;
+    // DROP TEMPORARY TABLE IF EXISTS mtt;
+    // CREATE TEMPORARY TABLE mtt (value JSON);
+    // SELECT json_length(j) into n;
+    // set i = 0;
+    // WHILE i<n DO
+    // INSERT INTO mtt(value) VALUES(json_extract(j, concat('$[', i, ']')));
+    // SET i = i+1;
+    // END WHILE;
+    // SELECT sum(value) INTO r FROM mtt;
+    // RETURN r;
+    // END //`))
+    //   console.log(await this.query(`DELIMITER ;`))
+
     const [columns, indexes] = await Promise.all([
       this.queue<ColumnInfo[]>([
         `SELECT *`,

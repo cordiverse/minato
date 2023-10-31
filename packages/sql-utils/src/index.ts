@@ -116,7 +116,7 @@ export class Builder {
       $lte: this.binary('<='),
 
       // aggregation
-      $sum: (expr) => `ifnull(sum(${this.parseAggr(expr)}), 0)`,
+      $sum: (expr) => this.state.group ? `ifnull(sum(${this.parseAggr(expr)}), 0)` : `ifnull(mj_sum(${this.parseAggr(expr)}), 0)`,
       $avg: (expr) => `avg(${this.parseAggr(expr)})`,
       $min: (expr) => `min(${this.parseAggr(expr)})`,
       $max: (expr) => `max(${this.parseAggr(expr)})`,

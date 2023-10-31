@@ -220,6 +220,23 @@ namespace JsonTests {
       ])
     })
 
+    it('non-aggr func', async () => {
+      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy('foo', {
+          y: row => $.array(row.bar.obj.x),
+        })
+        .orderBy(row => row.foo.id)
+        .project({
+          sum: row => $.sum(row.y)
+        })
+        .execute()
+
+      expect(res).to.deep.equal([
+        { sum: 3 },
+        { sum: 3 },
+      ])
+    })
+
     it('pass sqlType', async () => {
       const res = await database.select('bar')
         .project({
