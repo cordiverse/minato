@@ -36,7 +36,6 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
-  protected workaroundArrayagg = false
   state: State = {}
 
   constructor(public tables?: Dict<Model>) {
