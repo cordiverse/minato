@@ -82,7 +82,11 @@ export class Builder {
       },
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
+        if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+          return `json_length(${key}) = ${this.escape(value)}`
+        } else {
+          return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
+        }
       },
     }
 
@@ -126,6 +130,10 @@ export class Builder {
     }
   }
 
+  protected unescapeId(value: string) {
+    return value.slice(1, value.length - 1)
+  }
+
   protected createNullQuery(key: string, value: boolean) {
     return `${key} is ${value ? 'not ' : ''}null`
   }
@@ -140,7 +148,11 @@ export class Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    return `find_in_set(${this.escape(value)}, ${key})`
+    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+      return `json_contains(${key}, ${this.quote(JSON.stringify(value))})`
+    } else {
+      return `find_in_set(${this.escape(value)}, ${key})`
+    }
   }
 
   protected comparator(operator: string) {
@@ -332,8 +344,6 @@ export class Builder {
 
   get(sel: Selection.Immutable, inline = false) {
     const { args, table, query, ref, model } = sel
-    const filter = this.parseQuery(query)
-    if (filter === '0') return
 
     // get prefix
     let prefix: string | undefined
@@ -375,6 +385,9 @@ export class Builder {
       return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
     }).join(', ')
     this.state.sqlTypes = sqlTypes
+
+    const filter = this.parseQuery(query)
+    if (filter === '0') return
 
     // get suffix
     let suffix = this.suffix(args[0])

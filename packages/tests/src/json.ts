@@ -25,9 +25,15 @@ interface Bar {
   l: string[]
 }
 
+interface Baz {
+  id: number
+  nums: number[]
+}
+
 interface Tables {
   foo: Foo
   bar: Bar
+  baz: Baz
 }
 
 function JsonTests(database: Database<Tables>) {
@@ -43,9 +49,14 @@ function JsonTests(database: Database<Tables>) {
     value: 'integer',
     obj: 'json',
     s: 'string',
-    l: { type: 'list', initial: [] }
+    l: 'list',
   }, {
     autoInc: true,
+  })
+
+  database.extend('baz', {
+    id: 'unsigned',
+    nums: { type: 'json', initial: [] },
   })
 
   before(async () => {
@@ -60,11 +71,37 @@ function JsonTests(database: Database<Tables>) {
       { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2', l: ['5', '3', '4'] },
       { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3', l: ['2'] },
     ])
+
+    await setup(database, 'baz', [
+      { id: 1, nums: [4, 5, 6] },
+      { id: 2, nums: [5, 6, 7] },
+      { id: 3, nums: [6, 8] },
+    ])
   })
 }
 
 namespace JsonTests {
-  export function jsontype(database: Database<Tables>) {
+  export function query(database: Database<Tables>) {
+    it('$size', async () => {
+      await expect(database.get('baz', {
+        nums: { $size: 3 },
+      })).to.eventually.deep.equal([
+        { id: 1, nums: [4, 5, 6] },
+        { id: 2, nums: [5, 6, 7] },
+      ])
+    })
+
+    it('$el', async () => {
+      await expect(database.get('baz', {
+        nums: { $el: 5 },
+      })).to.eventually.deep.equal([
+        { id: 1, nums: [4, 5, 6] },
+        { id: 2, nums: [5, 6, 7] },
+      ])
+    })
+  }
+
+  export function selection(database: Database<Tables>) {
     it('$.object', async () => {
       const res = await database.select('foo')
         .project({
@@ -233,7 +270,7 @@ namespace JsonTests {
         })
         .orderBy(row => row.foo.id)
         .groupBy({}, {
-          z: row => $.array(row.y)
+          z: row => $.array(row.y),
         })
         .execute()
 
@@ -295,7 +332,7 @@ namespace JsonTests {
       expect(res).to.deep.equal([
         { x: ['1', '2'], y: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } } },
         { x: ['5', '3', '4'], y: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } } },
-        { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } }
+        { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } },
       ])
     })
 
@@ -313,7 +350,7 @@ namespace JsonTests {
       expect(res).to.deep.equal([
         { x: ['1', '2'], y: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } } },
         { x: ['5', '3', '4'], y: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } } },
-        { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } }
+        { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } },
       ])
     })
   }

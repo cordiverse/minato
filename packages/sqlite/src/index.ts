@@ -52,6 +52,14 @@ class SQLiteBuilder extends Builder {
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
+    this.queryOperators.$size = (key, value) => {
+      if (!value) return this.logicalNot(key)
+      if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+        return `json_array_length(${key}) = ${this.escape(value)}`
+      } else {
+        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
+      }
+    }
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -84,7 +92,11 @@ class SQLiteBuilder extends Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
+    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+      return `json_array_contains(${key}, ${this.quote(JSON.stringify(value))})`
+    } else {
+      return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
+    }
   }
 
   protected unquoteJson(value: string) {
@@ -230,6 +242,7 @@ export class SQLiteDriver extends Driver {
   init(buffer: ArrayLike<number> | null) {
     this.db = new this.sqlite.Database(buffer)
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
   }
 
   async load() {
