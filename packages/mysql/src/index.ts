@@ -149,6 +149,14 @@ class MySQLBuilder extends Builder {
     }
   }
 
+  protected groupArray(value: string) {
+    const res = this.compat.maria105 ? (this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
+      : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`)
+      : super.groupArray(value)
+    this.state.sqlType = 'json'
+    return res
+  }
+
   toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
     const escaped = escapeId(key)
 
@@ -410,6 +418,13 @@ WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET 
     } catch {}
 
     try {
+      await this.query(`DROP FUNCTION IF EXISTS mj_min`)
+      await this.query(`CREATE FUNCTION mj_min (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0;
+WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT min(value) INTO r FROM mtt; RETURN r; END`)
+    } catch {}
+
+    try {
       await this.query(`DROP FUNCTION IF EXISTS mj_max`)
       await this.query(`CREATE FUNCTION mj_max (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0;
@@ -417,10 +432,10 @@ WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET 
     } catch {}
 
     try {
-      await this.query(`DROP FUNCTION IF EXISTS mj_min`)
-      await this.query(`CREATE FUNCTION mj_min (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+      await this.query(`DROP FUNCTION IF EXISTS mj_count`)
+      await this.query(`CREATE FUNCTION mj_count (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0;
-WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT min(value) INTO r FROM mtt; RETURN r; END`)
+WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT count(distinct value) INTO r FROM mtt; RETURN r; END`)
     } catch {}
   }
 

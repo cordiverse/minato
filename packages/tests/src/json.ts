@@ -259,7 +259,6 @@ namespace JsonTests {
       ])
     })
 
-
     it('pass sqlType', async () => {
       const res = await database.select('bar')
         .project({

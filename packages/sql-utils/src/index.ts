@@ -199,11 +199,8 @@ export class Builder {
   }
 
   protected groupArray(value: string) {
-    const res = this.workaroundArrayagg ? (this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
-      : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`)
-      : `json_arrayagg(${value})`
     this.state.sqlType = 'json'
-    return res
+    return `json_arrayagg(${value})`
   }
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
