@@ -208,7 +208,6 @@ Eval.object = (fields) => {
   }
   return Eval('object', fields) as any
 }
-// Eval.object = unary('object', (field, table) => valueMap(field, value => executeAggr(value, table)))
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data))
   : Array.from(executeEval(table, expr)))
