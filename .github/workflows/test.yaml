@@ -42,7 +42,7 @@ jobs:
       - name: Unit Test
         run: yarn test:json mysql
       - name: Report Coverage
-        if: ${{ matrix.node-version == 16 && matrix.mysql-image == 'mysql:5.7' }}
+        if: ${{ matrix.node-version == 16 }}
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
