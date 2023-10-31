@@ -103,6 +103,20 @@ namespace JsonTests {
       ])
     })
 
+    it('$.object on cell', async () => {
+      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy('bar', {
+          x: row => $.array($.object(row.foo))
+        })
+        .execute(['x'])
+
+        expect(res).to.have.deep.members([
+        { x: [{ id: 1, value: 0 }] },
+        { x: [{ id: 1, value: 0 }] },
+        { x: [{ id: 2, value: 2 }] },
+      ])
+    })
+
     it('$.array groupBy', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['foo'], {
@@ -142,7 +156,8 @@ namespace JsonTests {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
           bars: row => $.array($.object({
-            value: row.bar.value
+            value: row.bar.value,
+            obj: row.bar.obj,
           })),
           x: row => $.array(row.bar.obj.x),
           y: row => $.array(row.bar.obj.y),
@@ -155,19 +170,28 @@ namespace JsonTests {
       expect(res).to.deep.equal([
         {
           foo: { id: 1, value: 0 },
-          bars: [{ value: 0 }, { value: 1 }],
+          bars: [{
+            obj: { o: { a: 1, b: '1' }, x: 1, y: 'a', z: '1' },
+            value: 0,
+          }, {
+            obj: { o: { a: 2, b: '2' }, x: 2, y: 'b', z: '2' },
+            value: 1,
+          }],
           x: [1, 2],
           y: ['a', 'b'],
           z: ['1', '2'],
-          o: [{ a: 1, b: '1' }, { a: 2, b: '2' }]
+          o: [{ a: 1, b: '1' }, { a: 2, b: '2' }],
         },
         {
           foo: { id: 2, value: 2 },
-          bars: [{ value: 0 }],
+          bars: [{
+            obj: { o: { a: 3, b: '3' }, x: 3, y: 'c', z: '3' },
+            value: 0,
+          }],
           x: [3],
           y: ['c'],
           z: ['3'],
-          o: [{ a: 3, b: '3' }]
+          o: [{ a: 3, b: '3' }],
         }
       ])
     })
@@ -234,12 +258,12 @@ namespace JsonTests {
         })
         .orderBy(row => row.count)
         .execute()
+
       expect(res).to.deep.equal([
         { sum: 3, avg: 3, min: 3, max: 3, count: 1 },
         { sum: 3, avg: 1.5, min: 1, max: 2, count: 2 },
       ])
     })
-
 
     it('non-aggr func inside aggr', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
@@ -254,6 +278,7 @@ namespace JsonTests {
           max: row => $.max($.max(row.y)),
         })
         .execute()
+
       expect(res).to.deep.equal([
         { sum: 3, avg: 2.25, min: 1, max: 3 }
       ])
@@ -278,7 +303,7 @@ namespace JsonTests {
       const res = await database.join({
         foo: 'foo',
         bar: 'bar',
-      }, ({foo, bar}) => $.eq(foo.id, bar.pid))
+      }, ({ foo, bar }) => $.eq(foo.id, bar.pid))
         .project({
           x: row => row.bar.l,
           y: row => row.bar.obj,

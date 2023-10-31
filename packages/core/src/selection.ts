@@ -22,17 +22,19 @@ namespace Executable {
 
   export interface Payload {
     type: Action
-    table: string | Selection | Dict<string | Selection.Immutable>
+    table: string | Selection | Dict<Selection.Immutable>
     ref: string
     query: Query.Expr
     args: any[]
   }
 }
 
-const createRow = (ref: string, expr = {}, prefix = '') => new Proxy(expr, {
+const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Proxy(expr, {
   get(target, key) {
+    if (key === '$prefix') return prefix
+    if (key === '$model') return model
     if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
-    return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`)
+    return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`, model)
   },
 })
 
@@ -45,15 +47,15 @@ class Executable<S = any, T = any> {
 
   constructor(driver: Driver, payload: Executable.Payload) {
     Object.assign(this, payload)
-    const expr = {}
+    defineProperty(this, 'model', driver.model(this.table))
+    const expr = { $model: this.model }
     if (typeof payload.table !== 'string' && !(payload.table instanceof Selection)) {
       for (const key in payload.table) {
-        expr[key] = createRow(key)
+        expr[key] = createRow(key, {}, '', this.model)
       }
     }
     defineProperty(this, 'driver', driver)
-    defineProperty(this, 'row', createRow(this.ref, expr))
-    defineProperty(this, 'model', driver.model(this.table))
+    defineProperty(this, 'row', createRow(this.ref, expr, '', this.model))
   }
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>
@@ -130,7 +132,7 @@ export interface Selection extends Executable.Payload {
 export class Selection<S = any> extends Executable<S, S[]> {
   public tables: Dict<Model> = {}
 
-  constructor(driver: Driver, table: string | Selection | Dict<string | Selection.Immutable>, query?: Query) {
+  constructor(driver: Driver, table: string | Selection | Dict<Selection.Immutable>, query?: Query) {
     super(driver, {
       type: 'get',
       ref: randomId(),

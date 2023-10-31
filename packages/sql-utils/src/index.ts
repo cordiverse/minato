@@ -192,7 +192,11 @@ export class Builder {
   }
 
   protected groupObject(fields: any) {
-    const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${this.parseEval(expr, false)}`).join(',') + `)`
+    const parse = (expr) => {
+      const value = this.parseEval(expr, false)
+      return this.state.sqlType === 'json' ? `json_extract(${value}, '$')` : `${value}`
+    }
+    const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
     this.state.sqlType = 'json'
     return res
   }

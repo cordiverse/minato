@@ -1,5 +1,5 @@
 import { defineProperty, Dict, isNullable, valueMap } from 'cosmokit'
-import { Comparable, Flatten, isComparable, makeRegExp } from './utils'
+import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils'
 
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
@@ -102,6 +102,7 @@ export namespace Eval {
     count<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
 
     object<T extends Dict<Expr>>(fields: T): Expr<T, false>
+    object<T extends any>(row: Row.Cell<T>): Expr<T, false>
     array<T>(value: Expr<T, false>): Expr<T[], true>
   }
 }
@@ -195,7 +196,19 @@ Eval.count = unary('count', (expr, table) => Array.isArray(table)
   ? new Set(table.map(data => executeAggr(expr, data))).size
   : new Set(Array.from(executeEval(table, expr))).size)
 
-Eval.object = unary('object', (field, table) => valueMap(field, value => executeAggr(value, table)))
+operators.$object = (field, table) => valueMap(field, value => executeAggr(value, table))
+Eval.object = (fields) => {
+  if (fields.$model) {
+    const modelFields = Object.keys(fields.$model.fields)
+    const prefix: string = fields.$prefix
+    return Eval('object', Object.fromEntries(modelFields
+      .filter(path => path.startsWith(prefix))
+      .map(k => [k.slice(prefix.length), fields[k.slice(prefix.length)]]),
+    ))
+  }
+  return Eval('object', fields) as any
+}
+// Eval.object = unary('object', (field, table) => valueMap(field, value => executeAggr(value, table)))
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data))
   : Array.from(executeEval(table, expr)))
