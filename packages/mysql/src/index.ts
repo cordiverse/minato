@@ -68,6 +68,11 @@ function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
 
+interface Compat {
+  maria105?: boolean
+  mysql57?: boolean
+}
+
 interface ColumnInfo {
   COLUMN_NAME: string
   IS_NULLABLE: 'YES' | 'NO'
@@ -104,9 +109,13 @@ class MySQLBuilder extends Builder {
     '\\': '\\\\',
   }
 
-  constructor(tables?: Dict<Model>, workaroundArrayagg = false) {
+  constructor(tables?: Dict<Model>, private compat: Compat = {}) {
     super(tables)
-    this.workaroundArrayagg = workaroundArrayagg
+
+    this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, value => `ifnull(mj_sum(${value}), 0)`)
+    this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, value => `mj_avg(${value})`)
+    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, value => `(0+mj_min(${value}))`)
+    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, value => `(0+mj_max(${value}))`)
 
     this.define<string[], string>({
       types: ['list'],
@@ -128,6 +137,16 @@ class MySQLBuilder extends Builder {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
     return super.escape(value, field)
+  }
+
+  protected createAggr(expr: any, aggrfunc: (value: string) => string, compatfunc?: (value: string) => string) {
+    if (!this.state.group && compatfunc && (this.compat.mysql57 || this.compat.maria105)) {
+      const aggr = compatfunc(this.parseAggr(expr))
+      this.state.sqlType = 'raw'
+      return aggr
+    } else {
+      return super.createAggr(expr, aggrfunc)
+    }
   }
 
   toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
@@ -186,9 +205,8 @@ export class MySQLDriver extends Driver {
   public config: MySQLDriver.Config
   public sql: MySQLBuilder
 
+  private _compat: Compat = {}
   private _queryTasks: QueryTask[] = []
-
-  private _fixMariaIssue: boolean = false
 
   constructor(database: Database, config?: MySQLDriver.Config) {
     super(database)
@@ -241,50 +259,14 @@ export class MySQLDriver extends Driver {
   /** synchronize table schema */
   async prepare(name: string) {
     const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
-    if (version.match(/10.5.\d+-MariaDB/)) {
-      // https://jira.mariadb.org/browse/MDEV-26506
-      this._fixMariaIssue = true
-    }
+    // https://jira.mariadb.org/browse/MDEV-26506
+    this._compat.maria105 = !!version.match(/10.5.\d+-MariaDB/)
+    // For json_table
+    this._compat.mysql57 = !!version.match(/5.7.\d+/)
 
-    try {
-      await this.query(`
-    CREATE FUNCTION mj_sum (j JSON)
-    RETURNS NUMERIC DETERMINISTIC
-    BEGIN
-    DECLARE n int;
-    DECLARE i int;
-    DECLARE r NUMERIC;
-    DROP TEMPORARY TABLE IF EXISTS mtt;
-    CREATE TEMPORARY TABLE mtt (value JSON);
-    SELECT json_length(j) into n;
-    set i = 0;
-    WHILE i<n DO
-    INSERT INTO mtt(value) VALUES(json_extract(j, concat('$[', i, ']')));
-    SET i = i+1;
-    END WHILE;
-    SELECT sum(value) INTO r FROM mtt;
-    RETURN r;
-    END`)
-    } catch {}
-    //   console.log(await this.query(`DROP FUNCTION IF EXISTS mj_sum//
-    // CREATE FUNCTION mj_sum (j JSON)
-    // RETURNS NUMERIC DETERMINISTIC
-    // BEGIN
-    // DECLARE n int;
-    // DECLARE i int;
-    // DECLARE r NUMERIC;
-    // DROP TEMPORARY TABLE IF EXISTS mtt;
-    // CREATE TEMPORARY TABLE mtt (value JSON);
-    // SELECT json_length(j) into n;
-    // set i = 0;
-    // WHILE i<n DO
-    // INSERT INTO mtt(value) VALUES(json_extract(j, concat('$[', i, ']')));
-    // SET i = i+1;
-    // END WHILE;
-    // SELECT sum(value) INTO r FROM mtt;
-    // RETURN r;
-    // END //`))
-    //   console.log(await this.query(`DELIMITER ;`))
+    if (this._compat.mysql57 || this._compat.maria105) {
+      await this._setupCompatFunctions()
+    }
 
     const [columns, indexes] = await Promise.all([
       this.queue<ColumnInfo[]>([
@@ -412,6 +394,36 @@ export class MySQLDriver extends Driver {
     }).join(', ')
   }
 
+  async _setupCompatFunctions() {
+    try {
+      await this.query(`DROP FUNCTION IF EXISTS mj_sum`)
+      await this.query(`CREATE FUNCTION mj_sum (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0;
+WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT sum(value) INTO r FROM mtt; RETURN r; END`)
+    } catch {}
+
+    try {
+      await this.query(`DROP FUNCTION IF EXISTS mj_avg`)
+      await this.query(`CREATE FUNCTION mj_avg (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0;
+WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT avg(value) INTO r FROM mtt; RETURN r; END`)
+    } catch {}
+
+    try {
+      await this.query(`DROP FUNCTION IF EXISTS mj_max`)
+      await this.query(`CREATE FUNCTION mj_max (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0;
+WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT max(value) INTO r FROM mtt; RETURN r; END`)
+    } catch {}
+
+    try {
+      await this.query(`DROP FUNCTION IF EXISTS mj_min`)
+      await this.query(`CREATE FUNCTION mj_min (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0;
+WHILE i<n DO INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT min(value) INTO r FROM mtt; RETURN r; END`)
+    } catch {}
+  }
+
   query<T = any>(sql: string, debug = true): Promise<T> {
     const error = new Error()
     return new Promise((resolve, reject) => {
@@ -483,7 +495,7 @@ export class MySQLDriver extends Driver {
 
   async get(sel: Selection.Immutable) {
     const { model, tables } = sel
-    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
+    const builder = new MySQLBuilder(tables, this._compat)
     const sql = builder.get(sel)
     if (!sql) return []
     return this.queue(sql).then((data) => {
@@ -492,7 +504,7 @@ export class MySQLDriver extends Driver {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const builder = new MySQLBuilder(sel.tables, this._fixMariaIssue)
+    const builder = new MySQLBuilder(sel.tables, this._compat)
     builder.state.group = true
     const output = builder.parseEval(expr)
     const inner = builder.get(sel.table as Selection, true)
@@ -502,7 +514,7 @@ export class MySQLDriver extends Driver {
 
   async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
+    const builder = new MySQLBuilder(tables, this._compat)
     const filter = builder.parseQuery(query)
     const { fields } = model
     if (filter === '0') return
@@ -519,7 +531,7 @@ export class MySQLDriver extends Driver {
 
   async remove(sel: Selection.Mutable) {
     const { query, table, tables } = sel
-    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
+    const builder = new MySQLBuilder(tables, this._compat)
     const filter = builder.parseQuery(query)
     if (filter === '0') return
     await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
@@ -541,7 +553,7 @@ export class MySQLDriver extends Driver {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return
     const { model, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables, this._fixMariaIssue)
+    const builder = new MySQLBuilder(tables, this._compat)
 
     const merged = {}
     const insertion = data.map((item) => {

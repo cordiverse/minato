@@ -225,17 +225,40 @@ namespace JsonTests {
         .groupBy('foo', {
           y: row => $.array(row.bar.obj.x),
         })
-        .orderBy(row => row.foo.id)
         .project({
-          sum: row => $.sum(row.y)
+          sum: row => $.sum(row.y),
+          avg: row => $.avg(row.y),
+          min: row => $.min(row.y),
+          max: row => $.max(row.y),
+          count: row => $.count(row.y),
         })
+        .orderBy(row => row.count)
         .execute()
-
       expect(res).to.deep.equal([
-        { sum: 3 },
-        { sum: 3 },
+        { sum: 3, avg: 3, min: 3, max: 3, count: 1 },
+        { sum: 3, avg: 1.5, min: 1, max: 2, count: 2 },
       ])
     })
+
+
+    it('non-aggr func inside aggr', async () => {
+      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy('foo', {
+          y: row => $.array(row.bar.obj.x),
+        })
+        .orderBy(row => row.foo.id)
+        .groupBy({}, {
+          sum: row => $.avg($.sum(row.y)),
+          avg: row => $.avg($.avg(row.y)),
+          min: row => $.min($.min(row.y)),
+          max: row => $.max($.max(row.y)),
+        })
+        .execute()
+      expect(res).to.deep.equal([
+        { sum: 3, avg: 2.25, min: 1, max: 3 }
+      ])
+    })
+
 
     it('pass sqlType', async () => {
       const res = await database.select('bar')

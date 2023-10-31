@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
+import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -116,11 +116,11 @@ export class Builder {
       $lte: this.binary('<='),
 
       // aggregation
-      $sum: (expr) => this.state.group ? `ifnull(sum(${this.parseAggr(expr)}), 0)` : `ifnull(mj_sum(${this.parseAggr(expr)}), 0)`,
-      $avg: (expr) => `avg(${this.parseAggr(expr)})`,
-      $min: (expr) => `min(${this.parseAggr(expr)})`,
-      $max: (expr) => `max(${this.parseAggr(expr)})`,
-      $count: (expr) => `count(distinct ${this.parseAggr(expr)})`,
+      $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
+      $avg: (expr) => this.createAggr(expr, value => `avg(${value})`),
+      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
+      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
+      $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
 
       $object: (fields) => this.groupObject(fields),
       $array: (expr) => this.groupArray(this.parseAggr(expr)),
@@ -176,6 +176,20 @@ export class Builder {
     const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
     this.state.sqlType = 'raw'
     return res
+  }
+
+  protected createAggr(expr: any, aggrfunc: (value: string) => string) {
+    if (this.state.group) {
+      this.state.group = false
+      const aggr = aggrfunc(this.parseAggr(expr))
+      this.state.group = true
+      this.state.sqlType = 'raw'
+      return aggr
+    } else {
+      const aggr = this.parseAggr(expr)
+      this.state.sqlType = 'raw'
+      return `(select ${aggrfunc(`json_unquote(${escapeId('value')})`)} from json_table(${aggr}, '$[*]' columns (value json path '$')) ${randomId()})`
+    }
   }
 
   protected groupObject(fields: any) {
