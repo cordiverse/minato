@@ -116,7 +116,6 @@ class MySQLBuilder extends Builder {
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, value => `mj_avg(${value})`)
     this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, value => `(0+mj_min(${value}))`)
     this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, value => `(0+mj_max(${value}))`)
-    this.evalOperators.$count = (expr) => this.createAggr(expr, value => `count(distinct ${value})`, value => `mj_count(${value})`)
 
     this.define<string[], string>({
       types: ['list'],

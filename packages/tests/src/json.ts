@@ -89,6 +89,15 @@ namespace JsonTests {
         { id: 1, nums: [4, 5, 6] },
         { id: 2, nums: [5, 6, 7] },
       ])
+
+      await expect(database.select('baz', {
+        nums: { $size: 3 },
+      }).project({
+        size: row => $.size(row.nums),
+      }).execute()).to.eventually.deep.equal([
+        { size: 3 },
+        { size: 3 },
+      ])
     })
 
     it('$el', async () => {
@@ -291,7 +300,7 @@ namespace JsonTests {
           avg: row => $.avg(row.y),
           min: row => $.min(row.y),
           max: row => $.max(row.y),
-          count: row => $.count(row.y),
+          count: row => $.size(row.y),
         })
         .orderBy(row => row.count)
         .execute()

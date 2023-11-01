@@ -52,14 +52,6 @@ class SQLiteBuilder extends Builder {
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
-    this.queryOperators.$size = (key, value) => {
-      if (!value) return this.logicalNot(key)
-      if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
-        return `json_array_length(${key}) = ${this.escape(value)}`
-      } else {
-        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
-      }
-    }
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -97,6 +89,10 @@ class SQLiteBuilder extends Builder {
     } else {
       return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
     }
+  }
+
+  protected jsonLength(value: string) {
+    return `json_array_length(${value})`
   }
 
   protected unquoteJson(value: string) {

@@ -144,13 +144,14 @@ namespace SelectionTests {
       await expect(database.select('foo')
         .groupBy({}, {
           count: row => $.count(row.id),
+          size: row => $.size(row.id),
           max: row => $.max(row.id),
           min: row => $.min(row.id),
           avg: row => $.avg(row.id),
         })
         .execute()
       ).to.eventually.deep.equal([
-        { avg: 2, count: 3, max: 3, min: 1 },
+        { avg: 2, count: 3, max: 3, min: 1, size: 3 },
       ])
     })
   }

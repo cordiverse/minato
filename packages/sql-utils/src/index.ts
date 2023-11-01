@@ -83,7 +83,7 @@ export class Builder {
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
         if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
-          return `json_length(${key}) = ${this.escape(value)}`
+          return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
           return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
         }
@@ -124,6 +124,24 @@ export class Builder {
       $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
       $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
+      $size: (expr) => {
+        if (this.state.group) {
+          this.state.group = false
+          const aggr = (this.parseAggr(expr))
+          this.state.group = true
+          this.state.sqlType = 'raw'
+          return `count(distinct ${aggr})`
+        } else {
+          const aggr = this.parseAggr(expr)
+          if (this.state.sqlType === 'json') {
+            this.state.sqlType = 'raw'
+            return `${this.jsonLength(aggr)}`
+          } else {
+            this.state.sqlType = 'raw'
+            return `LENGTH(${aggr}) - LENGTH(REPLACE(${aggr}, ${this.escape(',')}, ${this.escape('')}))`
+          }
+        }
+      },
 
       $object: (fields) => this.groupObject(fields),
       $array: (expr) => this.groupArray(this.parseAggr(expr)),
@@ -181,6 +199,10 @@ export class Builder {
 
   protected logicalNot(condition: string) {
     return `NOT(${condition})`
+  }
+
+  protected jsonLength(value: string) {
+    return `json_length(${value})`
   }
 
   protected unquoteJson(value: string) {
@@ -373,6 +395,9 @@ export class Builder {
       if (filter !== '1') prefix += ` ON ${filter}`
     }
 
+    const filter = this.parseQuery(query)
+    if (filter === '0') return
+
     this.state.group = !!args[0].group
     const sqlTypes: Dict<SQLType> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
@@ -384,13 +409,11 @@ export class Builder {
       sqlTypes[key] = this.state.sqlType!
       return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
     }).join(', ')
-    this.state.sqlTypes = sqlTypes
-
-    const filter = this.parseQuery(query)
-    if (filter === '0') return
 
     // get suffix
     let suffix = this.suffix(args[0])
+    this.state.sqlTypes = sqlTypes
+
     if (filter !== '1') {
       suffix = ` WHERE ${filter}` + suffix
     }
