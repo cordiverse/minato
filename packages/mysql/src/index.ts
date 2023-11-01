@@ -112,10 +112,10 @@ class MySQLBuilder extends Builder {
   constructor(tables?: Dict<Model>, private compat: Compat = {}) {
     super(tables)
 
-    this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, value => `ifnull(mj_sum(${value}), 0)`)
-    this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, value => `mj_avg(${value})`)
-    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, value => `(0+mj_min(${value}))`)
-    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, value => `(0+mj_max(${value}))`)
+    this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(mj_sum(${value}), 0)`)
+    this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `mj_avg(${value})`)
+    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, value => `(0+mj_min(${value}))`)
+    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, value => `(0+mj_max(${value}))`)
 
     this.define<string[], string>({
       types: ['list'],
@@ -139,13 +139,13 @@ class MySQLBuilder extends Builder {
     return super.escape(value, field)
   }
 
-  protected createAggr(expr: any, aggrfunc: (value: string) => string, compatfunc?: (value: string) => string) {
-    if (!this.state.group && compatfunc && (this.compat.mysql57 || this.compat.maria105)) {
-      const aggr = compatfunc(this.parseAggr(expr))
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
+    if (!this.state.group && compat && (this.compat.mysql57 || this.compat.maria105)) {
+      const value = compat(this.parseEval(expr, false))
       this.state.sqlType = 'raw'
-      return aggr
+      return value
     } else {
-      return super.createAggr(expr, aggrfunc)
+      return super.createAggr(expr, aggr, nonaggr)
     }
   }
 
@@ -420,10 +420,6 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     await this.query(`CREATE FUNCTION mj_max (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
 INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT max(value) INTO r FROM mtt; RETURN r; END`).catch(log)
-    await this.query(`DROP FUNCTION IF EXISTS mj_count`).catch(log)
-    await this.query(`CREATE FUNCTION mj_count (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
-DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
-INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT count(distinct value) INTO r FROM mtt; RETURN r; END`).catch(log)
   }
 
   query<T = any>(sql: string, debug = true): Promise<T> {

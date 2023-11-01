@@ -124,27 +124,18 @@ export class Builder {
       $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
       $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
-      $size: (expr) => {
-        if (this.state.group) {
-          this.state.group = false
-          const aggr = (this.parseAggr(expr))
-          this.state.group = true
+      $size: (expr) => this.createAggr(expr, value => `count(${value})`, value => {
+        if (this.state.sqlType === 'json') {
           this.state.sqlType = 'raw'
-          return `count(distinct ${aggr})`
+          return `${this.jsonLength(value)}`
         } else {
-          const aggr = this.parseAggr(expr)
-          if (this.state.sqlType === 'json') {
-            this.state.sqlType = 'raw'
-            return `${this.jsonLength(aggr)}`
-          } else {
-            this.state.sqlType = 'raw'
-            return `LENGTH(${aggr}) - LENGTH(REPLACE(${aggr}, ${this.escape(',')}, ${this.escape('')}))`
-          }
+          this.state.sqlType = 'raw'
+          return `if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
         }
-      },
+      }),
 
       $object: (fields) => this.groupObject(fields),
-      $array: (expr) => this.groupArray(this.parseAggr(expr)),
+      $array: (expr) => this.groupArray(this.parseEval(expr, false)),
     }
   }
 
@@ -211,17 +202,19 @@ export class Builder {
     return res
   }
 
-  protected createAggr(expr: any, aggrfunc: (value: string) => string) {
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
     if (this.state.group) {
       this.state.group = false
-      const aggr = aggrfunc(this.parseAggr(expr))
+      const value = aggr(this.parseEval(expr, false))
       this.state.group = true
       this.state.sqlType = 'raw'
-      return aggr
+      return value
     } else {
-      const aggr = this.parseAggr(expr)
+      const value = this.parseEval(expr, false)
+      const res = nonaggr ? nonaggr(value)
+        : `(select ${aggr(`json_unquote(${escapeId('value')})`)} from json_table(${value}, '$[*]' columns (value json path '$')) ${randomId()})`
       this.state.sqlType = 'raw'
-      return `(select ${aggrfunc(`json_unquote(${escapeId('value')})`)} from json_table(${aggr}, '$[*]' columns (value json path '$')) ${randomId()})`
+      return res
     }
   }
 
@@ -292,11 +285,6 @@ export class Builder {
       }
     }
     return this.escape(expr)
-  }
-
-  protected parseAggr(expr: any) {
-    this.state.sqlType = 'raw'
-    return typeof expr === 'string' ? this.getRecursive(expr) : this.parseEvalExpr(expr)
   }
 
   protected transformJsonField(obj: string, path: string) {

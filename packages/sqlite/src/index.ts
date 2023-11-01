@@ -52,6 +52,15 @@ class SQLiteBuilder extends Builder {
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
+    this.evalOperators.$size = (expr) => this.createAggr(expr, value => `count(${value})`, value => {
+      if (this.state.sqlType === 'json') {
+        this.state.sqlType = 'raw'
+        return `${this.jsonLength(value)}`
+      } else {
+        this.state.sqlType = 'raw'
+        return `iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
+      }
+    })
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -99,15 +108,12 @@ class SQLiteBuilder extends Builder {
     return value
   }
 
-  protected createAggr(expr: any, aggrfunc: (value: string) => string) {
-    if (this.state.group) {
-      this.state.group = false
-      const ret = aggrfunc(this.parseAggr(expr))
-      this.state.group = true
-      return ret
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
+    if (!this.state.group && !nonaggr) {
+      const value = this.parseEval(expr, false)
+      return `(select ${aggr(escapeId('value'))} from json_each(${value}) ${randomId()})`
     } else {
-      const aggr = this.parseAggr(expr)
-      return `(select ${aggrfunc(escapeId('value'))} from json_each(${aggr}) ${randomId()})`
+      return super.createAggr(expr, aggr, nonaggr)
     }
   }
 
