@@ -50,6 +50,7 @@ jobs:
           name: codecov
 
   mongo:
+    name: ${{ matrix.mongo-image }} (${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
