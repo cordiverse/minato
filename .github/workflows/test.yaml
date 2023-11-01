@@ -55,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mysql-image:
+        mongo-image:
           - mongo:6.0
           - mongo:latest
         node-version: [16, 18, 20]
