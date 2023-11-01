@@ -118,6 +118,10 @@ export class Builder {
       $lt: this.binary('<'),
       $lte: this.binary('<='),
 
+      // membership
+      $in: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ''),
+      $nin: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ' NOT'),
+
       // aggregation
       $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})`),
@@ -147,9 +151,15 @@ export class Builder {
     return `${key} is ${value ? 'not ' : ''}null`
   }
 
-  protected createMemberQuery(key: string, value: any[], notStr = '') {
-    if (!value.length) return notStr ? '1' : '0'
-    return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+  protected createMemberQuery(key: string, value: any, notStr = '') {
+    if (Array.isArray(value)) {
+      if (!value.length) return notStr ? '1' : '0'
+      return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+    } else {
+      const res = this.jsonContains(this.parseEval(value, false), `json_extract(json_object('v', ${key}), '$.v')`)
+      this.state.sqlType = 'raw'
+      return notStr ? this.logicalNot(res) : res
+    }
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
@@ -158,7 +168,7 @@ export class Builder {
 
   protected createElementQuery(key: string, value: any) {
     if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
-      return `json_contains(${key}, ${this.quote(JSON.stringify(value))})`
+      return this.jsonContains(key, this.quote(JSON.stringify(value)))
     } else {
       return `find_in_set(${this.escape(value)}, ${key})`
     }
@@ -196,7 +206,11 @@ export class Builder {
     return `json_length(${value})`
   }
 
-  protected unquoteJson(value: string) {
+  protected jsonContains(obj: string, value: string) {
+    return `json_contains(${obj}, ${value})`
+  }
+
+  protected jsonUnquote(value: string) {
     const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
     this.state.sqlType = 'raw'
     return res
@@ -331,7 +345,7 @@ export class Builder {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return this.escape(expr)
     }
-    return unquote ? this.unquoteJson(this.parseEvalExpr(expr)) : this.parseEvalExpr(expr)
+    return unquote ? this.jsonUnquote(this.parseEvalExpr(expr)) : this.parseEvalExpr(expr)
   }
 
   suffix(modifier: Modifier) {

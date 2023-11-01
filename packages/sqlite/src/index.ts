@@ -104,7 +104,11 @@ class SQLiteBuilder extends Builder {
     return `json_array_length(${value})`
   }
 
-  protected unquoteJson(value: string) {
+  protected jsonContains(obj: string, value: string) {
+    return `json_array_contains(${obj}, ${value})`
+  }
+
+  protected jsonUnquote(value: string) {
     return value
   }
 

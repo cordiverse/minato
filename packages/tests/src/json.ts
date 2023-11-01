@@ -75,7 +75,7 @@ function JsonTests(database: Database<Tables>) {
     await setup(database, 'baz', [
       { id: 1, nums: [4, 5, 6] },
       { id: 2, nums: [5, 6, 7] },
-      { id: 3, nums: [6, 8] },
+      { id: 3, nums: [7, 8] },
     ])
   })
 }
@@ -106,6 +106,21 @@ namespace JsonTests {
       })).to.eventually.deep.equal([
         { id: 1, nums: [4, 5, 6] },
         { id: 2, nums: [5, 6, 7] },
+      ])
+    })
+
+    it('$in', async () => {
+      await expect(database.get('baz', row => $.in($.add(3, row.id), row.nums)))
+        .to.eventually.deep.equal([
+          { id: 1, nums: [4, 5, 6] },
+          { id: 2, nums: [5, 6, 7] },
+      ])
+    })
+
+    it('$nin', async () => {
+      await expect(database.get('baz', row => $.nin($.add(3, row.id), row.nums)))
+        .to.eventually.deep.equal([
+          { id: 3, nums: [7, 8] },
       ])
     })
   }

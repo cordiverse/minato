@@ -118,6 +118,10 @@ export class Transformer {
       return this.transformEvalExpr(expr.$object || expr.$array)
     }
 
+    if (expr.$nin) {
+      return { $not: { $in: expr.$nin.map(val => this.eval(val, group)) } }
+    }
+
     return valueMap(expr as any, (value) => {
       if (Array.isArray(value)) {
         return value.map(val => this.eval(val, group))
