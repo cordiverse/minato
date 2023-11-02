@@ -151,11 +151,11 @@ class MySQLBuilder extends Builder {
   }
 
   protected groupArray(value: string) {
-    const res = this.compat.maria105 ? (this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
-      : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`)
-      : super.groupArray(value)
+    if (!this.compat.maria105) return super.groupArray(value)
+    const res = this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
+      : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`
     this.state.sqlType = 'json'
-    return res
+    return `ifnull(${res}, json_array())`
   }
 
   toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {

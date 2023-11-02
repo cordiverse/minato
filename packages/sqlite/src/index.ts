@@ -124,7 +124,7 @@ class SQLiteBuilder extends Builder {
   protected groupArray(value: string) {
     const res = this.state.sqlType === 'json' ? `('[' || group_concat(${value}) || ']')` : `('[' || group_concat(json_quote(${value})) || ']')`
     this.state.sqlType = 'json'
-    return res
+    return `ifnull(${res}, json_array())`
   }
 
   protected transformJsonField(obj: string, path: string) {

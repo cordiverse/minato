@@ -244,7 +244,7 @@ export class Builder {
 
   protected groupArray(value: string) {
     this.state.sqlType = 'json'
-    return `json_arrayagg(${value})`
+    return `ifnull(json_arrayagg(${value}), json_array())`
   }
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
