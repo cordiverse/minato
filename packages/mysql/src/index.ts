@@ -69,6 +69,7 @@ function createIndex(keys: string | string[]) {
 }
 
 interface Compat {
+  maria?: boolean
   maria105?: boolean
   mysql57?: boolean
 }
@@ -112,10 +113,10 @@ class MySQLBuilder extends Builder {
   constructor(tables?: Dict<Model>, private compat: Compat = {}) {
     super(tables)
 
-    this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(mj_sum(${value}), 0)`)
-    this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `mj_avg(${value})`)
-    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, value => `(0+mj_min(${value}))`)
-    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, value => `(0+mj_max(${value}))`)
+    this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
+    this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
+    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, value => `(0+minato_cfunc_min(${value}))`)
+    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, value => `(0+minato_cfunc_max(${value}))`)
 
     this.define<string[], string>({
       types: ['list'],
@@ -140,7 +141,7 @@ class MySQLBuilder extends Builder {
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
-    if (!this.state.group && compat && (this.compat.mysql57 || this.compat.maria105)) {
+    if (!this.state.group && compat && (this.compat.mysql57 || this.compat.maria)) {
       const value = compat(this.parseEval(expr, false))
       this.state.sqlType = 'raw'
       return value
@@ -267,12 +268,14 @@ export class MySQLDriver extends Driver {
   /** synchronize table schema */
   async prepare(name: string) {
     const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
+    // https://jira.mariadb.org/browse/MDEV-30623
+    this._compat.maria = version.includes('MariaDB')
     // https://jira.mariadb.org/browse/MDEV-26506
     this._compat.maria105 = !!version.match(/10.5.\d+-MariaDB/)
     // For json_table
     this._compat.mysql57 = !!version.match(/5.7.\d+/)
 
-    if (this._compat.mysql57 || this._compat.maria105) {
+    if (this._compat.mysql57 || this._compat.maria) {
       await this._setupCompatFunctions()
     }
 
@@ -404,20 +407,20 @@ export class MySQLDriver extends Driver {
 
   async _setupCompatFunctions() {
     const log = () => logger.debug('Failed to setup compact functions')
-    await this.query(`DROP FUNCTION IF EXISTS mj_sum`).catch(log)
-    await this.query(`CREATE FUNCTION mj_sum (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+    await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_sum`).catch(log)
+    await this.query(`CREATE FUNCTION minato_cfunc_sum (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
 INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT sum(value) INTO r FROM mtt; RETURN r; END`).catch(log)
-    await this.query(`DROP FUNCTION IF EXISTS mj_avg`).catch(log)
-    await this.query(`CREATE FUNCTION mj_avg (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+    await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_avg`).catch(log)
+    await this.query(`CREATE FUNCTION minato_cfunc_avg (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
 INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT avg(value) INTO r FROM mtt; RETURN r; END`).catch(log)
-    await this.query(`DROP FUNCTION IF EXISTS mj_min`).catch(log)
-    await this.query(`CREATE FUNCTION mj_min (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+    await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_min`).catch(log)
+    await this.query(`CREATE FUNCTION minato_cfunc_min (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
 INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT min(value) INTO r FROM mtt; RETURN r; END`).catch(log)
-    await this.query(`DROP FUNCTION IF EXISTS mj_max`).catch(log)
-    await this.query(`CREATE FUNCTION mj_max (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+    await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_max`).catch(log)
+    await this.query(`CREATE FUNCTION minato_cfunc_max (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
 INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT max(value) INTO r FROM mtt; RETURN r; END`).catch(log)
   }
