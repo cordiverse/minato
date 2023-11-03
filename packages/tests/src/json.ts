@@ -100,6 +100,27 @@ namespace JsonTests {
       ])
     })
 
+    it('$.size on empty', async () => {
+      await expect(database.select('foo', { id: -1 })
+        .groupBy({}, {
+          y: row => $.array(row.id),
+        })
+        .execute()
+      ).eventually.to.deep.equal([
+        { y: [] },
+      ])
+
+      await expect(database.select('foo', { id: -1 })
+        .groupBy({}, {
+          y: row => $.array(row.id),
+        })
+        .orderBy(row => $.size(row.y))
+        .execute()
+      ).eventually.to.deep.equal([
+        { y: [] },
+      ])
+    })
+
     it('$el', async () => {
       await expect(database.get('baz', {
         nums: { $el: 5 },
@@ -114,14 +135,14 @@ namespace JsonTests {
         .to.eventually.deep.equal([
           { id: 1, nums: [4, 5, 6] },
           { id: 2, nums: [5, 6, 7] },
-      ])
+        ])
     })
 
     it('$nin', async () => {
       await expect(database.get('baz', row => $.nin($.add(3, row.id), row.nums)))
         .to.eventually.deep.equal([
           { id: 3, nums: [7, 8] },
-      ])
+        ])
     })
   }
 
@@ -171,7 +192,7 @@ namespace JsonTests {
         })
         .execute(['x'])
 
-        expect(res).to.have.deep.members([
+      expect(res).to.have.deep.members([
         { x: [{ id: 1, value: 0 }] },
         { x: [{ id: 1, value: 0 }] },
         { x: [{ id: 2, value: 2 }] },
