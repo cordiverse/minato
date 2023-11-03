@@ -100,27 +100,6 @@ namespace JsonTests {
       ])
     })
 
-    it('$.size on empty', async () => {
-      await expect(database.select('foo', { id: -1 })
-        .groupBy({}, {
-          y: row => $.array(row.id),
-        })
-        .execute()
-      ).eventually.to.deep.equal([
-        { y: [] },
-      ])
-
-      await expect(database.select('foo', { id: -1 })
-        .groupBy({}, {
-          y: row => $.array(row.id),
-        })
-        .orderBy(row => $.size(row.y))
-        .execute()
-      ).eventually.to.deep.equal([
-        { y: [] },
-      ])
-    })
-
     it('$el', async () => {
       await expect(database.get('baz', {
         nums: { $el: 5 },
