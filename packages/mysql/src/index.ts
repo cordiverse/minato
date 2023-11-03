@@ -140,6 +140,13 @@ class MySQLBuilder extends Builder {
     return super.escape(value, field)
   }
 
+  protected jsonQuote(value: string, pure: boolean = false) {
+    if (pure) return this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`
+    const res = this.state.sqlType === 'raw' ? (this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`) : value
+    this.state.sqlType = 'json'
+    return res
+  }
+
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
     if (!this.state.group && compat && (this.compat.mysql57 || this.compat.maria)) {
       const value = compat(this.parseEval(expr, false))

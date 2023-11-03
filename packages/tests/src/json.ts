@@ -140,7 +140,7 @@ namespace JsonTests {
       expect(res).to.deep.equal([
         { obj: { id: 1, value: 0 } },
         { obj: { id: 2, value: 2 } },
-        { obj: { id: 3, value: 2 } }
+        { obj: { id: 3, value: 2 } },
       ])
     })
 
@@ -153,21 +153,21 @@ namespace JsonTests {
             str2: row.obj.z,
             obj: row.obj.o,
             a: row.obj.o.a,
-          })
+          }),
         })
         .execute()
 
       expect(res).to.deep.equal([
         { obj: { a: 1, num: 1, obj: { a: 1, b: '1' }, str: 'a', str2: '1' } },
         { obj: { a: 2, num: 2, obj: { a: 2, b: '2' }, str: 'b', str2: '2' } },
-        { obj: { a: 3, num: 3, obj: { a: 3, b: '3' }, str: 'c', str2: '3' } }
+        { obj: { a: 3, num: 3, obj: { a: 3, b: '3' }, str: 'c', str2: '3' } },
       ])
     })
 
     it('$.object on cell', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('bar', {
-          x: row => $.array($.object(row.foo))
+          x: row => $.array($.object(row.foo)),
         })
         .execute(['x'])
 
@@ -189,7 +189,7 @@ namespace JsonTests {
 
       expect(res).to.deep.equal([
         { foo: { id: 1, value: 0 }, x: [1, 2], y: ['a', 'b'] },
-        { foo: { id: 2, value: 2 }, x: [3], y: ['c'] }
+        { foo: { id: 2, value: 2 }, x: [3], y: ['c'] },
       ])
     })
 
@@ -208,8 +208,8 @@ namespace JsonTests {
           count2: ['1', '2', '3'],
           countnumber: [0, 1, 0],
           x: [1, 2, 3],
-          y: ['a', 'b', 'c']
-        }
+          y: ['a', 'b', 'c'],
+        },
       ])
     })
 
@@ -253,7 +253,7 @@ namespace JsonTests {
           y: ['c'],
           z: ['3'],
           o: [{ a: 3, b: '3' }],
-        }
+        },
       ])
     })
 
@@ -282,7 +282,7 @@ namespace JsonTests {
           bars: [{ value: 0, value2: 2 }],
           x: [4],
           y: ['c'],
-        }
+        },
       ])
     })
 
@@ -341,7 +341,7 @@ namespace JsonTests {
         .execute()
 
       expect(res).to.deep.equal([
-        { sum: 3, avg: 2.25, min: 1, max: 3 }
+        { sum: 3, avg: 2.25, min: 1, max: 3 },
       ])
     })
 

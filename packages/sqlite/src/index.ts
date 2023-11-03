@@ -94,7 +94,7 @@ class SQLiteBuilder extends Builder {
 
   protected createElementQuery(key: string, value: any) {
     if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
-      return `json_array_contains(${key}, ${this.quote(JSON.stringify(value))})`
+      return this.jsonContains(key, this.quote(JSON.stringify(value)))
     } else {
       return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
     }
@@ -108,7 +108,7 @@ class SQLiteBuilder extends Builder {
     return `json_array_contains(${obj}, ${value})`
   }
 
-  protected jsonUnquote(value: string) {
+  protected jsonUnquote(value: string, pure: boolean = false) {
     return value
   }
 

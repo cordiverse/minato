@@ -36,7 +36,7 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
-  state: State = {}
+  public state: State = {}
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -156,7 +156,7 @@ export class Builder {
       if (!value.length) return notStr ? '1' : '0'
       return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
     } else {
-      const res = this.jsonContains(this.parseEval(value, false), `json_extract(json_object('v', ${key}), '$.v')`)
+      const res = this.jsonContains(this.parseEval(value, false), this.jsonQuote(key, true))
       this.state.sqlType = 'raw'
       return notStr ? this.logicalNot(res) : res
     }
@@ -210,9 +210,17 @@ export class Builder {
     return `json_contains(${obj}, ${value})`
   }
 
-  protected jsonUnquote(value: string) {
+  protected jsonUnquote(value: string, pure: boolean = false) {
+    if (pure) return `json_unquote(${value})`
     const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
     this.state.sqlType = 'raw'
+    return res
+  }
+
+  protected jsonQuote(value: string, pure: boolean = false) {
+    if (pure) return `cast(${value} as json)`
+    const res = this.state.sqlType === 'raw' ? `cast(${value} as json)` : value
+    this.state.sqlType = 'json'
     return res
   }
 
