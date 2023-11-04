@@ -513,11 +513,11 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const builder = new MySQLBuilder(sel.tables, this._compat)
-    builder.state.group = true
-    const output = builder.parseEval(expr)
-    const inner = builder.get(sel.table as Selection, true)
-    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner}`)
-    return data.value
+    const inner = builder.get(sel.table as Selection, true, true)
+    const output = builder.parseEval(expr, false)
+    const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
+    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${ref}`)
+    return builder.load(data.value)
   }
 
   async set(sel: Selection.Mutable, data: {}) {

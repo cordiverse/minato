@@ -179,18 +179,38 @@ namespace JsonTests {
     })
 
     it('$.array groupBy', async () => {
-      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['foo'], {
           x: row => $.array(row.bar.obj.x),
           y: row => $.array(row.bar.obj.y),
         })
         .orderBy(row => row.foo.id)
         .execute()
-
-      expect(res).to.deep.equal([
+      ).to.eventually.deep.equal([
         { foo: { id: 1, value: 0 }, x: [1, 2], y: ['a', 'b'] },
         { foo: { id: 2, value: 2 }, x: [3], y: ['c'] },
       ])
+
+      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy(['foo'], {
+          x: row => $.array(row.bar.obj.x),
+          y: row => $.array(row.bar.obj.y),
+        })
+        .orderBy(row => row.foo.id)
+        .execute(row => $.array(row.y))
+      ).to.eventually.deep.equal([
+        ['a', 'b'],
+        ['c'],
+      ])
+
+      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .groupBy(['foo'], {
+          x: row => $.array(row.bar.obj.x),
+          y: row => $.array(row.bar.obj.y),
+        })
+        .orderBy(row => row.foo.id)
+        .execute(row => $.count(row.y))
+      ).to.eventually.deep.equal(2)
     })
 
     it('$.array groupFull', async () => {

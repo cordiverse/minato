@@ -364,10 +364,10 @@ export class SQLiteDriver extends Driver {
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const builder = new SQLiteBuilder(sel.tables)
     builder.state.group = true
-    const output = builder.parseEval(expr)
-    const inner = builder.get(sel.table as Selection, true)
+    const inner = builder.get(sel.table as Selection, true, true)
+    const output = builder.parseEval(expr, false)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
-    return value
+    return builder.load(value)
   }
 
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {

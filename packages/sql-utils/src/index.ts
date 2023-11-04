@@ -374,7 +374,7 @@ export class Builder {
     return sql
   }
 
-  get(sel: Selection.Immutable, inline = false) {
+  get(sel: Selection.Immutable, inline = false, group = false) {
     const { args, table, query, ref, model } = sel
 
     // get prefix
@@ -408,7 +408,7 @@ export class Builder {
     const filter = this.parseQuery(query)
     if (filter === '0') return
 
-    this.state.group = !!args[0].group
+    this.state.group = group || !!args[0].group
     const sqlTypes: Dict<SQLType> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
@@ -453,7 +453,14 @@ export class Builder {
     return result
   }
 
-  load(model: Model, obj: any): any {
+  load(obj: any): any
+  load(model: Model, obj: any): any
+  load(model: any, obj?: any) {
+    if (!obj) {
+      const converter = this.types[this.state.sqlType!]
+      return converter ? converter.load(model) : model
+    }
+
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
