@@ -36,7 +36,7 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
-  public state: State = {}
+  protected state: State = {}
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
