@@ -107,6 +107,10 @@ namespace SelectionTests {
         { id: 2 },
         { id: 3 },
       ])
+
+      await expect(database.select('foo', row => $.eq(row.id, 1)).orderBy('id').execute(['id'])).to.eventually.deep.equal([
+        { id: 1 },
+      ])
     })
 
     it('callback', async () => {
