@@ -1,5 +1,5 @@
 import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
@@ -51,6 +51,16 @@ class SQLiteBuilder extends Builder {
     super(tables)
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
+    this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
+    this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => {
+      if (this.state.sqlType === 'json') {
+        this.state.sqlType = 'raw'
+        return `${this.jsonLength(value)}`
+      } else {
+        this.state.sqlType = 'raw'
+        return `iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
+      }
+    })
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -83,7 +93,43 @@ class SQLiteBuilder extends Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
+    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+    } else {
+      return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
+    }
+  }
+
+  protected jsonLength(value: string) {
+    return `json_array_length(${value})`
+  }
+
+  protected jsonContains(obj: string, value: string) {
+    return `json_array_contains(${obj}, ${value})`
+  }
+
+  protected jsonUnquote(value: string, pure: boolean = false) {
+    return value
+  }
+
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
+    if (!this.state.group && !nonaggr) {
+      const value = this.parseEval(expr, false)
+      return `(select ${aggr(escapeId('value'))} from json_each(${value}) ${randomId()})`
+    } else {
+      return super.createAggr(expr, aggr, nonaggr)
+    }
+  }
+
+  protected groupArray(value: string) {
+    const res = this.state.sqlType === 'json' ? `('[' || group_concat(${value}) || ']')` : `('[' || group_concat(json_quote(${value})) || ']')`
+    this.state.sqlType = 'json'
+    return `ifnull(${res}, json_array())`
+  }
+
+  protected transformJsonField(obj: string, path: string) {
+    this.state.sqlType = 'raw'
+    return `json_extract(${obj}, '$${path}')`
   }
 }
 
@@ -202,6 +248,7 @@ export class SQLiteDriver extends Driver {
   init(buffer: ArrayLike<number> | null) {
     this.db = new this.sqlite.Database(buffer)
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
   }
 
   async load() {
@@ -316,10 +363,10 @@ export class SQLiteDriver extends Driver {
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const builder = new SQLiteBuilder(sel.tables)
-    const output = builder.parseEval(expr)
-    const inner = builder.get(sel.table as Selection, true)
+    const inner = builder.get(sel.table as Selection, true, true)
+    const output = builder.parseEval(expr, false)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
-    return value
+    return builder.load(value)
   }
 
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {

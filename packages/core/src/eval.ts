@@ -1,5 +1,5 @@
-import { defineProperty, isNullable } from 'cosmokit'
-import { Comparable, Flatten, isComparable, makeRegExp } from './utils'
+import { defineProperty, Dict, isNullable, valueMap } from 'cosmokit'
+import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils'
 
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
@@ -93,6 +93,19 @@ export namespace Eval {
     max(value: Number<false>): Expr<number, true>
     min(value: Number<false>): Expr<number, true>
     count(value: Any<false>): Expr<number, true>
+    length(value: Any<false>): Expr<number, true>
+
+    // json
+    sum<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    avg<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    max<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    min<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
+    length<A extends boolean>(value: any[] | Expr<any[], A>): Expr<number, A>
+
+    object<T extends Dict<Expr>>(fields: T): Expr<T, false>
+    object<T extends any>(row: Row.Cell<T>): Expr<T, false>
+    array<T>(value: Expr<T, false>): Expr<T[], true>
   }
 }
 
@@ -165,12 +178,42 @@ Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg))
 Eval.not = unary('not', (value, data) => !executeEval(data, value))
 
 // aggregation
-Eval.sum = unary('sum', (expr, table) => table.reduce<number>((prev, curr) => prev + executeAggr(expr, curr), 0))
-Eval.avg = unary('avg', (expr, table) => table.reduce((prev, curr) => prev + executeAggr(expr, curr), 0) / table.length)
-Eval.max = unary('max', (expr, table) => Math.max(...table.map(data => executeAggr(expr, data))))
-Eval.min = unary('min', (expr, table) => Math.min(...table.map(data => executeAggr(expr, data))))
+Eval.sum = unary('sum', (expr, table) => Array.isArray(table)
+  ? table.reduce<number>((prev, curr) => prev + executeAggr(expr, curr), 0)
+  : Array.from<number>(executeEval(table, expr)).reduce((prev, curr) => prev + curr, 0))
+Eval.avg = unary('avg', (expr, table) => {
+  if (Array.isArray(table)) return table.reduce((prev, curr) => prev + executeAggr(expr, curr), 0) / table.length
+  else {
+    const array = Array.from<number>(executeEval(table, expr))
+    return array.reduce((prev, curr) => prev + curr, 0) / array.length
+  }
+})
+Eval.max = unary('max', (expr, table) => Array.isArray(table)
+  ? Math.max(...table.map(data => executeAggr(expr, data)))
+  : Math.max(...Array.from<number>(executeEval(table, expr))))
+Eval.min = unary('min', (expr, table) => Array.isArray(table)
+  ? Math.min(...table.map(data => executeAggr(expr, data)))
+  : Math.min(...Array.from<number>(executeEval(table, expr))))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size)
+defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(table)
+  ? table.map(data => executeAggr(expr, data)).length
+  : Array.from(executeEval(table, expr)).length))
 
+operators.$object = (field, table) => valueMap(field, value => executeAggr(value, table))
+Eval.object = (fields) => {
+  if (fields.$model) {
+    const modelFields = Object.keys(fields.$model.fields)
+    const prefix: string = fields.$prefix
+    return Eval('object', Object.fromEntries(modelFields
+      .filter(path => path.startsWith(prefix))
+      .map(k => [k.slice(prefix.length), fields[k.slice(prefix.length)]]),
+    ))
+  }
+  return Eval('object', fields) as any
+}
+Eval.array = unary('array', (expr, table) => Array.isArray(table)
+  ? table.map(data => executeAggr(expr, data))
+  : Array.from(executeEval(table, expr)))
 export { Eval as $ }
 
 type MapUneval<S> = {

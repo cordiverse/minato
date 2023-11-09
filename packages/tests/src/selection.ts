@@ -107,6 +107,10 @@ namespace SelectionTests {
         { id: 2 },
         { id: 3 },
       ])
+
+      await expect(database.select('foo', row => $.eq(row.id, 1)).orderBy('id').execute(['id'])).to.eventually.deep.equal([
+        { id: 1 },
+      ])
     })
 
     it('callback', async () => {
@@ -141,29 +145,17 @@ namespace SelectionTests {
     })
 
     it('aggregate', async () => {
-      await expect(database
-        .select('foo')
-        .project({
-          count: row => $.count(row.id),
-          max: row => $.max(row.id),
-          min: row => $.min(row.id),
-          avg: row => $.avg(row.id),
-        })
-        .execute()
-      ).to.eventually.deep.equal([
-        { avg: 2, count: 3, max: 3, min: 1 },
-      ])
-
       await expect(database.select('foo')
         .groupBy({}, {
           count: row => $.count(row.id),
+          size: row => $.length(row.id),
           max: row => $.max(row.id),
           min: row => $.min(row.id),
           avg: row => $.avg(row.id),
         })
         .execute()
       ).to.eventually.deep.equal([
-        { avg: 2, count: 3, max: 3, min: 1 },
+        { avg: 2, count: 3, max: 3, min: 1, size: 3 },
       ])
     })
   }

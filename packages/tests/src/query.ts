@@ -271,6 +271,19 @@ namespace QueryOperators {
       })).eventually.to.have.length(2).with.shape([{ id: 2 }, { id: 3 }])
     })
 
+    size && it('$.length', async () => {
+      await expect(database.select('temp1')
+        .project({ x: row => $.length(row.list) })
+        .orderBy(row => row.x)
+        .execute()
+      ).eventually.to.deep.equal([
+        { x: 0 },
+        { x: 1 },
+        { x: 1 },
+        { x: 2 },
+      ])
+    })
+
     element && it('$el shorthand', async () => {
       await expect(database.get('temp1', {
         list: { $el: 233 },
