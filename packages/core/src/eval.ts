@@ -5,15 +5,12 @@ export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
-type $Date = Date
-type $RegExp = RegExp
-
 export type Uneval<U, A extends boolean> =
-  | U extends number ? Eval.Number<A>
-  : U extends string ? Eval.String<A>
-  : U extends boolean ? Eval.Boolean<A>
-  : U extends $Date ? Eval.Date<A>
-  : U extends $RegExp ? Eval.RegExp<A>
+  | U extends number ? Eval.Term<number, A>
+  : U extends string ? Eval.Term<string, A>
+  : U extends boolean ? Eval.Term<boolean, A>
+  : U extends Date ? Eval.Term<Date, A>
+  : U extends RegExp ? Eval.Term<RegExp, A>
   : any
 
 export type Eval<U> =
@@ -32,28 +29,32 @@ export namespace Eval {
     [kAggr]?: A
   }
 
-  export type Number<A extends boolean = boolean> = number | Expr<number, A>
-  export type String<A extends boolean = boolean> = string | Expr<string, A>
-  export type Boolean<A extends boolean = boolean> = boolean | Expr<boolean, A>
-  export type Date<A extends boolean = boolean> = $Date | Expr<$Date, A>
-  export type RegExp<A extends boolean = boolean> = $RegExp | Expr<$RegExp, A>
   export type Any<A extends boolean = boolean> = Comparable | Expr<any, A>
 
-  export type Binary<S, R> = <T extends S, A extends boolean>(x: T | Expr<T, A>, y: T | Expr<T, A>) => Expr<R, A>
-  export type Multi<S, R> = <T extends S, A extends boolean>(...args: (T | Expr<T, A>)[]) => Expr<R, A>
+  export type Term<T, A extends boolean = boolean> = T | Expr<T, A>
+  export type Array<T, A extends boolean = boolean> = Term<T, A>[] | Expr<T[], A>
+
+  export type Unary<S, R> = <T extends S, A extends boolean>(x: Term<T, A>) => Expr<R, A>
+  export type Binary<S, R> = <T extends S, A extends boolean>(x: Term<T, A>, y: Term<T, A>) => Expr<R, A>
+  export type Multi<S, R> = <T extends S, A extends boolean>(...args: Term<T, A>[]) => Expr<R, A>
+
+  export interface Aggr<S, R> {
+    <T extends S>(value: Term<T, false>): Expr<R, true>
+    <T extends S, A extends boolean>(value: Array<T, A>): Expr<R, A>
+  }
 
   export interface Branch<T, A extends boolean> {
-    case: Boolean
-    then: T | Expr<T, A>
+    case: Term<boolean, A>
+    then: Term<T, A>
   }
 
   export interface Static {
     <A extends boolean>(key: string, value: any): Eval.Expr<any, A>
 
     // univeral
-    if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: T | Expr<T, A>, vElse: T | Expr<T, A>): Expr<T, A>
-    ifNull<T extends Comparable, A extends boolean>(...args: (T | Expr<T, A>)[]): Expr<T, A>
-    switch<T, A extends boolean>(branches: Branch<T, A>[], vDefault: T | Expr<T, A>): Expr<T, A>
+    if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: Term<T, A>, vElse: Term<T, A>): Expr<T, A>
+    ifNull<T extends Comparable, A extends boolean>(...args: Term<T, A>[]): Expr<T, A>
+    switch<T, A extends boolean>(branches: Branch<T, A>[], vDefault: Term<T, A>): Expr<T, A>
 
     // arithmetic
     add: Multi<number, number>
@@ -75,31 +76,25 @@ export namespace Eval {
     lte: Binary<Comparable, boolean>
 
     // element
-    in<T extends Comparable, A extends boolean>(x: T | Expr<T, A>, array: (T | Expr<T, A>)[] | Expr<T[], A>): Expr<boolean, A>
-    nin<T extends Comparable, A extends boolean>(x: T | Expr<T, A>, array: (T | Expr<T, A>)[] | Expr<T[], A>): Expr<boolean, A>
+    in<T extends Comparable, A extends boolean>(x: Term<T, A>, array: Array<T, A>): Expr<boolean, A>
+    nin<T extends Comparable, A extends boolean>(x: Term<T, A>, array: Array<T, A>): Expr<boolean, A>
 
     // string
     concat: Multi<string, string>
-    regex<A extends boolean>(x: String<A>, y: String<A> | RegExp<A>): Expr<boolean, A>
+    regex<A extends boolean>(x: Term<string, A>, y: Term<string, A> | Term<RegExp, A>): Expr<boolean, A>
 
     // logical
-    and: Multi<Boolean, boolean>
-    or: Multi<Boolean, boolean>
-    not<A extends boolean>(value: Boolean<A>): Expr<boolean, A>
+    and: Multi<boolean, boolean>
+    or: Multi<boolean, boolean>
+    not: Unary<boolean, boolean>
 
-    // aggregation
-    sum(value: Number<false>): Expr<number, true>
-    avg(value: Number<false>): Expr<number, true>
-    max(value: Number<false>): Expr<number, true>
-    min(value: Number<false>): Expr<number, true>
+    // aggregation / json
+    sum: Aggr<number, number>
+    avg: Aggr<number, number>
+    max: Aggr<number, number>
+    min: Aggr<number, number>
     count(value: Any<false>): Expr<number, true>
     length(value: Any<false>): Expr<number, true>
-
-    // json
-    sum<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
-    avg<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
-    max<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
-    min<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
     size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
     length<A extends boolean>(value: any[] | Expr<any[], A>): Expr<number, A>
 
