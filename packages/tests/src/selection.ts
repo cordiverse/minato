@@ -148,7 +148,7 @@ namespace SelectionTests {
       await expect(database.select('foo')
         .groupBy({}, {
           count: row => $.count(row.id),
-          size: row => $.size(row.id),
+          size: row => $.length(row.id),
           max: row => $.max(row.id),
           min: row => $.min(row.id),
           avg: row => $.avg(row.id),

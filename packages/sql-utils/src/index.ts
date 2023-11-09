@@ -128,7 +128,7 @@ export class Builder {
       $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
       $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
-      $size: (expr) => this.createAggr(expr, value => `count(${value})`, value => {
+      $length: (expr) => this.createAggr(expr, value => `count(${value})`, value => {
         if (this.state.sqlType === 'json') {
           this.state.sqlType = 'raw'
           return `${this.jsonLength(value)}`

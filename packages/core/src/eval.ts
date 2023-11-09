@@ -93,14 +93,14 @@ export namespace Eval {
     max(value: Number<false>): Expr<number, true>
     min(value: Number<false>): Expr<number, true>
     count(value: Any<false>): Expr<number, true>
-    size(value: Any<false>): Expr<number, true>
+    length(value: Any<false>): Expr<number, true>
 
     // json
     sum<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
     avg<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
     max<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
     min<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
-    size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
+    length<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
 
     object<T extends Dict<Expr>>(fields: T): Expr<T, false>
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
@@ -193,12 +193,10 @@ Eval.max = unary('max', (expr, table) => Array.isArray(table)
 Eval.min = unary('min', (expr, table) => Array.isArray(table)
   ? Math.min(...table.map(data => executeAggr(expr, data)))
   : Math.min(...Array.from<number>(executeEval(table, expr))))
-Eval.count = unary('count', (expr, table) => Array.isArray(table)
-  ? new Set(table.map(data => executeAggr(expr, data))).size
-  : new Set(Array.from(executeEval(table, expr))).size)
-Eval.size = unary('size', (expr, table) => Array.isArray(table)
+Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size)
+defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).length
-  : Array.from(executeEval(table, expr)).length)
+  : Array.from(executeEval(table, expr)).length))
 
 operators.$object = (field, table) => valueMap(field, value => executeAggr(value, table))
 Eval.object = (fields) => {

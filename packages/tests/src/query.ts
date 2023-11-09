@@ -271,9 +271,9 @@ namespace QueryOperators {
       })).eventually.to.have.length(2).with.shape([{ id: 2 }, { id: 3 }])
     })
 
-    size && it('$.size', async () => {
+    size && it('$.length', async () => {
       await expect(database.select('temp1')
-        .project({ x: row => $.size(row.list) })
+        .project({ x: row => $.length(row.list) })
         .orderBy(row => row.x)
         .execute()
       ).eventually.to.deep.equal([
