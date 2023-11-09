@@ -96,11 +96,12 @@ export namespace Eval {
     length(value: Any<false>): Expr<number, true>
 
     // json
-    sum<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
-    avg<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
-    max<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
-    min<A extends boolean>(value: (Number | Expr<Number, A>)[] | Expr<Number[], A>): Expr<number, A>
-    length<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
+    sum<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    avg<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    max<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    min<A extends boolean>(value: (number | Expr<number, A>)[] | Expr<number[], A>): Expr<number, A>
+    size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
+    length<A extends boolean>(value: any[] | Expr<any[], A>): Expr<number, A>
 
     object<T extends Dict<Expr>>(fields: T): Expr<T, false>
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
