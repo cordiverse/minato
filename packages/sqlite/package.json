@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@minatojs/sql-utils": "^4.0.7",
-    "@minatojs/sql.js": "^2.0.1",
+    "@minatojs/sql.js": "^3.0.0",
     "cosmokit": "^1.5.1",
     "reggol": "^1.6.2"
   }

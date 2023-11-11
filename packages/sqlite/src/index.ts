@@ -2,7 +2,7 @@ import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
-import init from '@minatojs/sql.js'
+import sqlite from '@minatojs/sql.js'
 import Logger from 'reggol'
 
 const logger = new Logger('sqlite')
@@ -134,10 +134,11 @@ class SQLiteBuilder extends Builder {
 }
 
 export class SQLiteDriver extends Driver {
-  db!: init.Database
+  db!: sqlite.Database
   sql: Builder
+  shouldExport = false
   writeTask?: NodeJS.Timeout
-  sqlite!: init.SqlJsStatic
+  SQLite!: sqlite.SqlJsStatic
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
@@ -245,20 +246,21 @@ export class SQLiteDriver extends Driver {
     })
   }
 
-  init(buffer: ArrayLike<number> | null) {
-    this.db = new this.sqlite.Database(buffer)
+  init(buffer?: ArrayLike<number>) {
+    this.db = new this.SQLite.Database(undefined, buffer)
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
     this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
   }
 
   async load() {
-    if (this.config.path === ':memory:') return null
-    return fs.readFile(this.config.path).catch(() => null)
+    if (this.config.path === ':memory:') return
+    return fs.readFile(this.config.path).catch(() => undefined)
   }
 
   async start() {
-    const [sqlite, buffer] = await Promise.all([
-      init({
+    this.shouldExport = process.env.KOISHI_ENV === 'browser'
+    const [SQLite, buffer] = await Promise.all([
+      sqlite({
         locateFile: (file: string) => process.env.KOISHI_BASE
           ? process.env.KOISHI_BASE + '/' + file
           : process.env.KOISHI_ENV === 'browser'
@@ -267,7 +269,7 @@ export class SQLiteDriver extends Driver {
       }),
       this.load(),
     ])
-    this.sqlite = sqlite
+    this.SQLite = SQLite
     this.init(buffer)
   }
 
@@ -280,7 +282,7 @@ export class SQLiteDriver extends Driver {
     this.db?.close()
   }
 
-  #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
+  #exec(sql: string, params: any, callback: (stmt: sqlite.Statement) => any) {
     try {
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
@@ -317,7 +319,7 @@ export class SQLiteDriver extends Driver {
   #run(sql: string, params: any = [], callback?: () => any) {
     this.#exec(sql, params, stmt => stmt.run(params))
     const result = callback?.()
-    if (this.config.path) {
+    if (this.shouldExport) {
       clearTimeout(this.writeTask)
       this.writeTask = setTimeout(() => this.#export(), 0)
     }
