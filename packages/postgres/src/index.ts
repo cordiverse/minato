@@ -47,6 +47,10 @@ interface FieldInfo {
   def?: string
 }
 
+interface PostgresBuilderConfig {
+  upsert?: boolean
+}
+
 function type(field: Field & { autoInc?: boolean }) {
   let { type, length, precision, scale, initial, autoInc } = field
   let def = ''
@@ -126,7 +130,7 @@ function transformArray(arr: any[]) {
 }
 
 class PostgresBuilder extends Builder {
-  constructor(public tables?: Dict<Model>) {
+  constructor(public tables?: Dict<Model>, public config?: PostgresBuilderConfig) {
     super(tables)
 
     this.define<Date, string>({
@@ -141,12 +145,6 @@ class PostgresBuilder extends Builder {
         return date
       }
     })
-
-    // this.define<any[], string>({
-    //   types: ['list'],
-    //   dump: value => transformArray(value),
-    //   load: (value: any) => value
-    // })
 
     this.queryOperators = {
       ...this.queryOperators,
@@ -205,6 +203,31 @@ class PostgresBuilder extends Builder {
     if (limit < Infinity) sql += ' LIMIT ' + limit
     if (offset > 0) sql += ' OFFSET ' + offset
     return sql
+  }
+
+  protected getRecursive(args: string | string[]) {
+    if (typeof args === 'string') {
+      return this.getRecursive(['_', args])
+    }
+    const [table, key] = args
+    const fields = this.tables?.[table]?.fields || {}
+    if (fields[key]?.expr) {
+      return this.parseEvalExpr(fields[key]?.expr)
+    }
+
+    const prefix = (() => {
+      if (table === '_' ) {
+        return ''
+      } else if (this.config?.upsert) {
+        return `${this.escapeId(table)}.`
+      } else if (key in fields || (Object.keys(this.tables!).length === 1 && table in this.tables!)) {
+        return ''
+      } else {
+        return `${this.escapeId(table)}.`
+      }
+    })()
+
+    return this.transformKey(key, fields, prefix)
   }
 
   get(sel: Selection.Immutable, inline = false) {
@@ -313,7 +336,7 @@ export class PostgresDriver extends Driver {
       const column = columns?.find(c => names.includes(c.column_name))
       const isPrimary = primary.includes(key)
 
-      let operation: FieldOperation | undefined
+      let operation: FieldOperation
       if (!column) operation = 'create'
       else if (name !== column.column_name) operation = 'rename'
 
@@ -336,24 +359,40 @@ export class PostgresDriver extends Driver {
 
   async upsert(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<void> {
     if (!data.length) return
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(sel.tables, { upsert: true })
+    const comma = this.sql.unsafe(',')
 
     const sqls: {
-      expr: postgres.PendingQuery<any>[][],
-      value: Dict<any>[],
-    } = {
-      expr: [],
-      value: [],
-    }
+      expr: postgres.PendingQuery<any>[],
+      values: Dict<any>,
+    }[] = []
+
     for (const row of data) {
       const expr: postgres.PendingQuery<any>[] = []
-      const value: Dict<any> = {}
+      const values: Dict<any> = {}
       for (const [key, value] of Object.entries(row)) {
         if (!isEvalExpr(value)) {
-          expr.push()
+          if (isEvalExpr(value)) {
+            expr.push(this.sql.unsafe(`"${key}"=${builder.parseEval(value)}`))
+            values[key] = builder.escape(value, sel.tables[sel.table]?.fields[key])
+          } else {
+            expr.push(this.sql`${this.sql(key)}=${value}`)
+            values[key] = value
+          }
+          expr.push(comma)
         }
       }
+      expr.splice(-1, 1)
+      sqls.push({ expr, values })
     }
+
+    await Promise.all(sqls.map(sql => {
+      return this.sql`
+      INSERT INTO ${this.sql(sel.table)} ${this.sql(sql.values)}
+      ON CONFLICT (${this.sql(keys)})
+      DO UPDATE SET ${sql.expr}`
+    }))
+
   }
 
   async get(sel: Selection.Immutable) {
@@ -420,17 +459,20 @@ export class PostgresDriver extends Driver {
 
   async set(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
+    const comma = this.sql.unsafe(',')
     const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return
 
-    let expr: postgres.PendingQuery<any>[] = []
+    const expr: postgres.PendingQuery<any>[] = []
     for (const [key, value] of Object.entries(builder.dump(sel.model, data) as Dict<any>)) {
       if (isEvalExpr(value)) {
         expr.push(this.sql.unsafe(`"${key}"=${builder.parseEval(value)}`))
       } else {
         expr.push(this.sql`${this.sql(key)}=${value}`)
       }
+      expr.push(comma)
     }
+    expr.splice(-1, 1)
 
     await this.sql
       `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}

@@ -203,7 +203,7 @@ export class Builder {
     return this.logicalAnd(conditions)
   }
 
-  private parseEvalExpr(expr: any) {
+  protected parseEvalExpr(expr: any) {
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
@@ -212,21 +212,21 @@ export class Builder {
     return this.escape(expr)
   }
 
-  private parseAggr(expr: any) {
+  protected parseAggr(expr: any) {
     if (typeof expr === 'string') {
       return this.getRecursive(expr)
     }
     return this.parseEvalExpr(expr)
   }
 
-  private transformKey(key: string, fields: {}, prefix: string) {
+  protected transformKey(key: string, fields: {}, prefix: string) {
     if (key in fields || !key.includes('.')) return prefix + this.escapeId(key)
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
     return `json_unquote(json_extract(${prefix} ${this.escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
   }
 
-  private getRecursive(args: string | string[]) {
+  protected getRecursive(args: string | string[]) {
     if (typeof args === 'string') {
       return this.getRecursive(['_', args])
     }
