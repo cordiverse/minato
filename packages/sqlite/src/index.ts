@@ -136,8 +136,7 @@ class SQLiteBuilder extends Builder {
 export class SQLiteDriver extends Driver {
   db!: init.Database
   sql: Builder
-  writeTask?: NodeJS.Timeout
-  sqlite!: init.SqlJsStatic
+  beforeUnload?: () => void
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
@@ -245,30 +244,28 @@ export class SQLiteDriver extends Driver {
     })
   }
 
-  init(buffer: ArrayLike<number> | null) {
-    this.db = new this.sqlite.Database(buffer)
+  async start() {
+    const isBrowser = process.env.KOISHI_ENV === 'browser'
+    const sqlite = await init({
+      locateFile: (file: string) => process.env.KOISHI_BASE
+        ? process.env.KOISHI_BASE + '/' + file
+        : isBrowser
+          ? '/modules/@koishijs/plugin-database-sqlite/' + file
+          : require.resolve('@minatojs/sql.js/dist/' + file),
+    })
+    if (!isBrowser || this.config.path === ':memory:') {
+      this.db = new sqlite.Database(this.config.path)
+    } else {
+      const buffer = await fs.readFile(this.config.path).catch(() => null)
+      this.db = new sqlite.Database(this.config.path, buffer)
+      if (isBrowser) {
+        window.addEventListener('beforeunload', this.beforeUnload = () => {
+          this.#export()
+        })
+      }
+    }
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
     this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
-  }
-
-  async load() {
-    if (this.config.path === ':memory:') return null
-    return fs.readFile(this.config.path).catch(() => null)
-  }
-
-  async start() {
-    const [sqlite, buffer] = await Promise.all([
-      init({
-        locateFile: (file: string) => process.env.KOISHI_BASE
-          ? process.env.KOISHI_BASE + '/' + file
-          : process.env.KOISHI_ENV === 'browser'
-            ? '/modules/@koishijs/plugin-database-sqlite/' + file
-            : require.resolve('@minatojs/sql.js/dist/' + file),
-      }),
-      this.load(),
-    ])
-    this.sqlite = sqlite
-    this.init(buffer)
   }
 
   #joinKeys(keys?: string[]) {
@@ -278,6 +275,10 @@ export class SQLiteDriver extends Driver {
   async stop() {
     await new Promise(resolve => setTimeout(resolve, 0))
     this.db?.close()
+    if (this.beforeUnload) {
+      this.beforeUnload()
+      window.removeEventListener('beforeunload', this.beforeUnload)
+    }
   }
 
   #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
@@ -311,16 +312,11 @@ export class SQLiteDriver extends Driver {
   #export() {
     const data = this.db.export()
     fs.writeFile(this.config.path, data)
-    this.init(data)
   }
 
   #run(sql: string, params: any = [], callback?: () => any) {
     this.#exec(sql, params, stmt => stmt.run(params))
     const result = callback?.()
-    if (this.config.path) {
-      clearTimeout(this.writeTask)
-      this.writeTask = setTimeout(() => this.#export(), 0)
-    }
     return result
   }
 
@@ -333,9 +329,7 @@ export class SQLiteDriver extends Driver {
   }
 
   async stats() {
-    const data = this.db.export()
-    this.init(data)
-    const stats: Driver.Stats = { size: data.byteLength, tables: {} }
+    const stats: Driver.Stats = { size: this.db.size(), tables: {} }
     const tableNames: { name: string }[] = this.#all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
     const dbstats: { name: string; size: number }[] = this.#all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
     tableNames.forEach(tbl => {
