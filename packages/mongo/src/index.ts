@@ -265,7 +265,9 @@ export class MongoDriver extends Driver {
     const tables = Object.keys(this.database.tables)
     const entries = await Promise.all(tables.map(async (name) => {
       const coll = this.db.collection(name)
-      const { count, size } = await coll.stats()
+      const [{ storageStats: { count, size } }] = await coll.aggregate([{
+        $collStats: { storageStats: {} },
+      }]).toArray()
       return [coll.collectionName, { count, size }] as const
     }))
     return Object.fromEntries(entries)
@@ -479,13 +481,13 @@ export class MongoDriver extends Driver {
     if (typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary') {
       const missing = data.filter(item => !(primary in item))
       if (!missing.length) return
-      const { value } = await this.db.collection('_fields').findOneAndUpdate(
+      const doc = await this.db.collection('_fields').findOneAndUpdate(
         { table, field: primary },
         { $inc: { autoInc: missing.length } },
         { upsert: true },
       )
       for (let i = 1; i <= missing.length; i++) {
-        missing[i - 1][primary] = (value!.autoInc ?? 0) + i
+        missing[i - 1][primary] = (doc!.autoInc ?? 0) + i
       }
     }
   }
@@ -523,7 +525,7 @@ export class MongoDriver extends Driver {
     if (this.shouldEnsurePrimary(table)) {
       const original = (await coll.find({
         $or: data.map((item) => {
-          return this.transformQuery(pick(item, keys), table)
+          return this.transformQuery(pick(item, keys), table)!
         }),
       }).toArray()).map(row => this.patchVirtual(table, row))
 

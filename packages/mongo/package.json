@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "cosmokit": "^1.5.1",
-    "mongodb": "^4.17.1",
+    "mongodb": "^6.2.0",
     "reggol": "^1.6.3"
   }
 }
