@@ -144,7 +144,7 @@ export class Database<S = any> {
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
-  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Row.Computed<S[T], Update<S[T]>>) {
+  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Row.Computed<S[T], Update<S[T]>>): Promise<Driver.WriteResult> {
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)
@@ -154,7 +154,7 @@ export class Database<S = any> {
     return await sel._action('set', sel.model.format(update)).execute()
   }
 
-  async remove<T extends Keys<S>>(table: T, query: Query<S[T]>) {
+  async remove<T extends Keys<S>>(table: T, query: Query<S[T]>): Promise<Driver.WriteResult> {
     const sel = this.select(table, query)
     return await sel._action('remove').execute()
   }
@@ -171,7 +171,8 @@ export class Database<S = any> {
     return sel._action('create', sel.model.create(data)).execute()
   }
 
-  async upsert<T extends Keys<S>>(table: T, upsert: Row.Computed<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
+  async upsert<T extends Keys<S>>(table: T, upsert: Row.Computed<S[T], Update<S[T]>[]>,
+    keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>): Promise<Driver.WriteResult> {
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))
