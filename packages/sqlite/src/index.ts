@@ -342,8 +342,9 @@ export class SQLiteDriver extends Driver {
   async remove(sel: Selection.Mutable) {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
-    if (filter === '0') return
-    this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`)
+    if (filter === '0') return {}
+    const result = this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this.#get(`SELECT changes() AS id`))
+    return { removed: result.id }
   }
 
   async get(sel: Selection.Immutable) {
@@ -384,6 +385,7 @@ export class SQLiteDriver extends Driver {
     for (const row of data) {
       this.#update(sel, primaryFields, updateFields, update, row)
     }
+    return { modified: data.length }
   }
 
   #create(table: string, data: {}) {
@@ -404,8 +406,9 @@ export class SQLiteDriver extends Driver {
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
-    if (!data.length) return
+    if (!data.length) return {}
     const { model, table, ref } = sel
+    const result: Driver.WriteResult = { inserted: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -422,11 +425,14 @@ export class SQLiteDriver extends Driver {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
           this.#update(sel, keys, updateFields, item, row)
+          result.modified!++
         } else {
           this.#create(table, executeUpdate(model.create(), item, ref))
+          result.inserted!++
         }
       }
     }
+    return result
   }
 }
 

@@ -24,6 +24,12 @@ export namespace Driver {
     fields?: K[]
     sort?: Dict<Direction>
   }
+
+  export interface WriteResult {
+    inserted?: number
+    modified?: number
+    removed?: number
+  }
 }
 
 type TableLike<S> = Keys<S> | Selection
@@ -145,12 +151,12 @@ export class Database<S = any> {
     if (primary.some(key => key in update)) {
       throw new TypeError(`cannot modify primary key`)
     }
-    await sel._action('set', sel.model.format(update)).execute()
+    return await sel._action('set', sel.model.format(update)).execute()
   }
 
   async remove<T extends Keys<S>>(table: T, query: Query<S[T]>) {
     const sel = this.select(table, query)
-    await sel._action('remove').execute()
+    return await sel._action('remove').execute()
   }
 
   async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
@@ -170,7 +176,7 @@ export class Database<S = any> {
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))
     keys = makeArray(keys || sel.model.primary) as any
-    await sel._action('upsert', upsert, keys).execute()
+    return await sel._action('upsert', upsert, keys).execute()
   }
 
   async stopAll() {
@@ -210,10 +216,10 @@ export abstract class Driver {
   abstract prepare(name: string): Promise<void>
   abstract get(sel: Selection.Immutable, modifier: Modifier): Promise<any>
   abstract eval(sel: Selection.Immutable, expr: Eval.Expr): Promise<any>
-  abstract set(sel: Selection.Mutable, data: Update): Promise<void>
-  abstract remove(sel: Selection.Mutable): Promise<void>
+  abstract set(sel: Selection.Mutable, data: Update): Promise<Driver.WriteResult>
+  abstract remove(sel: Selection.Mutable): Promise<Driver.WriteResult>
   abstract create(sel: Selection.Mutable, data: any): Promise<any>
-  abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<void>
+  abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
 
   constructor(public database: Database) {}
 
