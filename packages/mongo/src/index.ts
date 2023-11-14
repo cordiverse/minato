@@ -265,7 +265,9 @@ export class MongoDriver extends Driver {
     const tables = Object.keys(this.database.tables)
     const entries = await Promise.all(tables.map(async (name) => {
       const coll = this.db.collection(name)
-      const { count, size } = await coll.stats()
+      const [{ storageStats: { count, size } }] = await coll.aggregate([{
+        $collStats: { storageStats: {} },
+      }]).toArray()
       return [coll.collectionName, { count, size }] as const
     }))
     return Object.fromEntries(entries)
@@ -485,7 +487,7 @@ export class MongoDriver extends Driver {
         { upsert: true },
       )
       for (let i = 1; i <= missing.length; i++) {
-        missing[i - 1][primary] = (doc!.value!.autoInc ?? 0) + i
+        missing[i - 1][primary] = (doc!.autoInc ?? 0) + i
       }
     }
   }
