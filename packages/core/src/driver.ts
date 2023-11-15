@@ -171,8 +171,11 @@ export class Database<S = any> {
     return sel._action('create', sel.model.create(data)).execute()
   }
 
-  async upsert<T extends Keys<S>>(table: T, upsert: Row.Computed<S[T], Update<S[T]>[]>,
-    keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>): Promise<Driver.WriteResult> {
+  async upsert<T extends Keys<S>>(
+    table: T,
+    upsert: Row.Computed<S[T], Update<S[T]>[]>,
+    keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>,
+  ): Promise<Driver.WriteResult> {
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))
