@@ -161,11 +161,11 @@ export class MemoryDriver extends Driver {
         return keys.every(key => row[key] === update[key])
       })
       if (row) {
-        result.modified! += +!deepEqual(clone(row), executeUpdate(row, update, ref))
+        result.modified += +!deepEqual(clone(row), executeUpdate(row, update, ref))
       } else {
         const data = executeUpdate(model.create(), update, ref)
         await this.database.create(table, data).catch(noop)
-        result.inserted!++
+        result.inserted++
       }
     }
     this.$save(table)

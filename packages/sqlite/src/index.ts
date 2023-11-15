@@ -428,10 +428,10 @@ export class SQLiteDriver extends Driver {
       for (const item of chunk) {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
-          result.modified! += this.#update(sel, keys, updateFields, item, row)
+          result.modified += this.#update(sel, keys, updateFields, item, row)
         } else {
           this.#create(table, executeUpdate(model.create(), item, ref))
-          result.inserted!++
+          result.inserted++
         }
       }
     }
