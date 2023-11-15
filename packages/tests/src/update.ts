@@ -133,12 +133,18 @@ namespace OrmOperations {
         data.list = ['2', '3', '3']
         return data.id
       })
-      await database.set('temp2', {
+      await expect(database.set('temp2', {
         $or: [
           { id: magicIds },
           { timestamp: magicBorn },
         ],
-      }, { list: ['2', '3', '3'] })
+      }, { list: ['2', '3', '3'] })).to.eventually.deep.equal({ modified: 3 })
+      await expect(database.set('temp2', {
+        $or: [
+          { id: magicIds },
+          { timestamp: magicBorn },
+        ],
+      }, { list: ['2', '3', '3'] })).to.eventually.deep.equal({ modified: 0 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -172,7 +178,7 @@ namespace OrmOperations {
         const index = table.findIndex(obj => obj.id === update.id)
         table[index] = merge(table[index], update)
       })
-      await database.upsert('temp2', data)
+      await expect(database.upsert('temp2', data)).to.eventually.deep.equal({ inserted: 0, modified: 2 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -183,7 +189,7 @@ namespace OrmOperations {
         { id: table[table.length - 1].id + 2, text: 'by\'tower' },
       ]
       table.push(...data.map(bar => merge(database.tables.temp2.create(), bar)))
-      await database.upsert('temp2', data)
+      await expect(database.upsert('temp2', data)).to.eventually.deep.equal({ inserted: 2, modified: 0 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -196,11 +202,15 @@ namespace OrmOperations {
       data3.num = data3.num! + 3
       expect(data9).to.be.undefined
       table.push({ id: 9, num: 999 })
-      await database.upsert('temp2', row => [
+      await expect(database.upsert('temp2', row => [
         { id: 2, num: $.multiply(2, row.id) },
         { id: 3, num: $.add(3, row.num) },
         { id: 9, num: 999 },
-      ])
+      ])).to.eventually.deep.equal({ inserted: 1, modified: 2 })
+      await expect(database.upsert('temp2', row => [
+        { id: 2, num: $.multiply(2, row.id) },
+        { id: 9, num: 999 },
+      ])).to.eventually.deep.equal({ inserted: 0, modified: 0 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -220,13 +230,13 @@ namespace OrmOperations {
   export const remove = function Remove(database: Database<Tables>) {
     it('basic support', async () => {
       await setup(database, 'temp3', bazTable)
-      await database.remove('temp3', { ida: 1, idb: 'a' })
+      await expect(database.remove('temp3', { ida: 1, idb: 'a' })).to.eventually.deep.equal({ removed: 1 })
       await expect(database.get('temp3', {})).eventually.length(3)
-      await database.remove('temp3', { ida: 1, idb: 'b', value: 'b' })
+      await expect(database.remove('temp3', { ida: 1, idb: 'b', value: 'b' })).to.eventually.deep.equal({ removed: 0 })
       await expect(database.get('temp3', {})).eventually.length(3)
-      await database.remove('temp3', { idb: 'b' })
+      await expect(database.remove('temp3', { idb: 'b' })).to.eventually.deep.equal({ removed: 2 })
       await expect(database.get('temp3', {})).eventually.length(1)
-      await database.remove('temp3', {})
+      await expect(database.remove('temp3', {})).to.eventually.deep.equal({ removed: 1 })
       await expect(database.get('temp3', {})).eventually.length(0)
     })
 

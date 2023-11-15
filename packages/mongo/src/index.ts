@@ -438,7 +438,7 @@ export class MongoDriver extends Driver {
   async set(sel: Selection.Mutable, update: {}) {
     const { query, table } = sel
     const filter = this.transformQuery(query, table)
-    if (!filter) return
+    if (!filter) return {}
     const coll = this.db.collection(table)
 
     const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
@@ -448,19 +448,21 @@ export class MongoDriver extends Driver {
       .map(([key, _]) => key)
     const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
 
-    await coll.updateMany(filter, [
+    const result = await coll.updateMany(filter, [
       ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
       ...$unset.length ? [{ $unset }] : [],
       { $set },
       ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
     ])
+    return { modified: result.modifiedCount }
   }
 
   async remove(sel: Selection.Mutable) {
     const { query, table } = sel
     const filter = this.transformQuery(query, table)
-    if (!filter) return
-    await this.db.collection(table).deleteMany(filter)
+    if (!filter) return {}
+    const result = await this.db.collection(table).deleteMany(filter)
+    return { removed: result.deletedCount }
   }
 
   private shouldEnsurePrimary(table: string) {
@@ -517,7 +519,7 @@ export class MongoDriver extends Driver {
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
-    if (!data.length) return
+    if (!data.length) return {}
     const { table, ref, model } = sel
     const coll = this.db.collection(table)
 
@@ -548,7 +550,8 @@ export class MongoDriver extends Driver {
         const copy = executeUpdate(model.create(), update, ref)
         bulk.insert(this.unpatchVirtual(table, copy))
       }
-      await bulk.execute()
+      const result = await bulk.execute()
+      return { inserted: result.insertedCount + result.upsertedCount, modified: result.modifiedCount }
     } else {
       const bulk = coll.initializeUnorderedBulkOp()
       const initial = model.create()
@@ -573,7 +576,8 @@ export class MongoDriver extends Driver {
           ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
         ])
       }
-      await bulk.execute()
+      const result = await bulk.execute()
+      return { inserted: result.insertedCount + result.upsertedCount, modified: result.modifiedCount }
     }
   }
 }

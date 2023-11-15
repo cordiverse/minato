@@ -528,7 +528,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const builder = new MySQLBuilder(tables, this._compat)
     const filter = builder.parseQuery(query)
     const { fields } = model
-    if (filter === '0') return
+    if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -537,15 +537,17 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       const escaped = escapeId(field)
       return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
-    await this.query(`UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
+    const result = await this.query(`UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
+    return { modified: result.changedRows }
   }
 
   async remove(sel: Selection.Mutable) {
     const { query, table, tables } = sel
     const builder = new MySQLBuilder(tables, this._compat)
     const filter = builder.parseQuery(query)
-    if (filter === '0') return
-    await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
+    if (filter === '0') return {}
+    const result = await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
+    return { removed: result.affectedRows }
   }
 
   async create(sel: Selection.Mutable, data: {}) {
@@ -562,7 +564,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
-    if (!data.length) return
+    if (!data.length) return {}
     const { model, table, tables, ref } = sel
     const builder = new MySQLBuilder(tables, this._compat)
 
@@ -609,11 +611,13 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       return `${escaped} = ${value}`
     }).join(', ')
 
-    await this.query([
+    const result = await this.query([
       `INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})`,
       `VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})`,
       `ON DUPLICATE KEY UPDATE ${update}`,
     ].join(' '))
+    const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
+    return { inserted: records - result.changedRows, modified: result.affectedRows - records }
   }
 }
 

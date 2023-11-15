@@ -1,4 +1,4 @@
-import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
+import { clone, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
@@ -342,8 +342,9 @@ export class SQLiteDriver extends Driver {
   async remove(sel: Selection.Mutable) {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
-    if (filter === '0') return
-    this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`)
+    if (filter === '0') return {}
+    const result = this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this.#get(`SELECT changes() AS count`))
+    return { removed: result.count }
   }
 
   async get(sel: Selection.Immutable) {
@@ -366,11 +367,14 @@ export class SQLiteDriver extends Driver {
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
     const { ref, table } = sel
     const model = this.model(table)
-    const row = this.sql.dump(model, executeUpdate(data, update, ref))
+    const modified = !deepEqual(clone(data), executeUpdate(data, update, ref))
+    if (!modified) return 0
+    const row = this.sql.dump(model, data)
     const assignment = updateFields.map((key) => `${escapeId(key)} = ${this.sql.escape(row[key])}`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
     this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`)
+    return 1
   }
 
   async set(sel: Selection.Mutable, update: {}) {
@@ -381,9 +385,11 @@ export class SQLiteDriver extends Driver {
     }))]
     const primaryFields = makeArray(primary)
     const data = await this.database.get(table, query)
+    let modified = 0
     for (const row of data) {
-      this.#update(sel, primaryFields, updateFields, update, row)
+      modified += this.#update(sel, primaryFields, updateFields, update, row)
     }
+    return { modified }
   }
 
   #create(table: string, data: {}) {
@@ -404,8 +410,9 @@ export class SQLiteDriver extends Driver {
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
-    if (!data.length) return
+    if (!data.length) return {}
     const { model, table, ref } = sel
+    const result = { inserted: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -421,12 +428,14 @@ export class SQLiteDriver extends Driver {
       for (const item of chunk) {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
-          this.#update(sel, keys, updateFields, item, row)
+          result.modified += this.#update(sel, keys, updateFields, item, row)
         } else {
           this.#create(table, executeUpdate(model.create(), item, ref))
+          result.inserted++
         }
       }
     }
+    return result
   }
 }
 

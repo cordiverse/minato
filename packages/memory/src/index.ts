@@ -1,4 +1,4 @@
-import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
+import { clone, deepEqual, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection } from '@minatojs/core'
 
 export namespace MemoryDriver {
@@ -112,16 +112,21 @@ export class MemoryDriver extends Driver {
 
   async set(sel: Selection.Mutable, data: {}) {
     const { table, ref, query } = sel
-    this.table(table)
+    const modified = this.table(table)
       .filter(row => executeQuery(row, query, ref))
-      .forEach(row => executeUpdate(row, data, ref))
+      .map(row => !deepEqual(clone(row), executeUpdate(row, data, ref)))
+      .filter(x => x)
+      .length
     this.$save(table)
+    return { modified }
   }
 
   async remove(sel: Selection.Mutable) {
     const { ref, query, table } = sel
-    this.#store[table] = this.table(table).filter(row => !executeQuery(row, query, ref))
+    const data = this.table(table)
+    this.#store[table] = data.filter(row => !executeQuery(row, query, ref))
     this.$save(table)
+    return { removed: data.length - this.#store[table].length }
   }
 
   async create(sel: Selection.Mutable, data: any) {
@@ -150,18 +155,21 @@ export class MemoryDriver extends Driver {
 
   async upsert(sel: Selection.Mutable, data: any, keys: string[]) {
     const { table, model, ref } = sel
+    const result = { inserted: 0, modified: 0 }
     for (const update of data) {
       const row = this.table(table).find(row => {
         return keys.every(key => row[key] === update[key])
       })
       if (row) {
-        executeUpdate(row, update, ref)
+        result.modified += +!deepEqual(clone(row), executeUpdate(row, update, ref))
       } else {
         const data = executeUpdate(model.create(), update, ref)
         await this.database.create(table, data).catch(noop)
+        result.inserted++
       }
     }
     this.$save(table)
+    return result
   }
 }
 
