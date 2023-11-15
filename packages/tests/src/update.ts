@@ -139,6 +139,12 @@ namespace OrmOperations {
           { timestamp: magicBorn },
         ],
       }, { list: ['2', '3', '3'] })).to.eventually.deep.equal({ modified: 3 })
+      await expect(database.set('temp2', {
+        $or: [
+          { id: magicIds },
+          { timestamp: magicBorn },
+        ],
+      }, { list: ['2', '3', '3'] })).to.eventually.deep.equal({ modified: 0 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -201,6 +207,10 @@ namespace OrmOperations {
         { id: 3, num: $.add(3, row.num) },
         { id: 9, num: 999 },
       ])).to.eventually.deep.equal({ inserted: 1, modified: 2 })
+      await expect(database.upsert('temp2', row => [
+        { id: 2, num: $.multiply(2, row.id) },
+        { id: 9, num: 999 },
+      ])).to.eventually.deep.equal({ inserted: 0, modified: 0 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 

@@ -616,7 +616,8 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       `VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})`,
       `ON DUPLICATE KEY UPDATE ${update}`,
     ].join(' '))
-    return { inserted: result.affectedRows - 2 * result.changedRows, modified: result.changedRows }
+    const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
+    return { inserted: records - result.changedRows, modified: result.affectedRows - records }
   }
 }
 
