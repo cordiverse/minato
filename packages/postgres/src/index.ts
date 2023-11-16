@@ -166,9 +166,9 @@ class PostgresBuilder extends Builder {
       $if: (args) => `(SELECT CASE WHEN ${this.parseEval(args[0])} THEN ${this.parseEval(args[1])} ELSE ${this.parseEval(args[2])} END)`,
       $ifNull: (args) => `coalesce(${args.map(arg => this.parseEval(arg)).join(', ')})`,
 
-      $sum: (expr) => `coalesce(sum(${this.parseAggr(expr)})::integer, 0)`,
-      $avg: (expr) => `avg(${this.parseAggr(expr)})::double precision`,
-      $count: (expr) => `count(distinct ${this.parseAggr(expr)})::integer`,
+      $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::integer, 0)`),
+      $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`),
+      $count: (expr) => this.createAggr(expr, value =>`count(distinct ${value})::integer`),
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg)).join('||')}`,
     }
@@ -235,7 +235,7 @@ class PostgresBuilder extends Builder {
       }
     })()
 
-    return this.transformKey(key, fields, prefix)
+    return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
   get(sel: Selection.Immutable, inline = false) {
@@ -359,7 +359,7 @@ export class PostgresDriver extends Driver {
       else if (key !== column.column_name) rename.push(info)
     })
 
-    if (columns?.length) {
+    if (!columns?.length) {
       await this.sql`
         CREATE TABLE ${this.sql(name)}
         (${this.sql.unsafe(create.map(f => `"${f.key}" ${f.def}`).join(','))},
@@ -469,7 +469,8 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return
-    await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
+    const a = await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
+    a
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {

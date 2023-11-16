@@ -234,7 +234,7 @@ export class Builder {
     } else {
       const value = this.parseEval(expr, false)
       const res = nonaggr ? nonaggr(value)
-        : `(select ${aggr(`json_unquote(${escapeId('value')})`)} from json_table(${value}, '$[*]' columns (value json path '$')) ${randomId()})`
+        : `(select ${aggr(`json_unquote(${this.escapeId('value')})`)} from json_table(${value}, '$[*]' columns (value json path '$')) ${randomId()})`
       this.state.sqlType = 'raw'
       return res
     }
@@ -319,11 +319,11 @@ export class Builder {
       if (this.state.sqlTypes?.[key] || this.state.sqlTypes?.[fullKey]) {
         this.state.sqlType = this.state.sqlTypes[key] || this.state.sqlTypes[fullKey]
       }
-      return prefix + escapeId(key)
+      return prefix + this.escapeId(key)
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
-    return this.transformJsonField(`${prefix} ${escapeId(field)}`, rest.map(key => `."${key}"`).join(''))
+    return this.transformJsonField(`${prefix} ${this.escapeId(field)}`, rest.map(key => `."${key}"`).join(''))
   }
 
   protected getRecursive(args: string | string[]) {
@@ -421,7 +421,7 @@ export class Builder {
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
       sqlTypes[key] = this.state.sqlType!
-      return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
+      return this.escapeId(key) === value ? this.escapeId(key) : `${value} AS ${this.escapeId(key)}`
     }).join(', ')
 
     // get suffix
