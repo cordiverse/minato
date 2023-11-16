@@ -238,47 +238,69 @@ class PostgresBuilder extends Builder {
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
-  get(sel: Selection.Immutable, inline = false) {
+  // sync from sql-utils
+  get(sel: Selection.Immutable, inline = false, group = false) {
     const { args, table, query, ref, model } = sel
+
+    // get prefix
+    let prefix: string | undefined
+    if (typeof table === 'string') {
+      prefix = this.escapeId(table)
+      this.state.sqlTypes = Object.fromEntries(Object.entries(model.fields).map(([key, field]) => {
+        return [key, field!.type === 'json' ? 'json' : field!.type === 'list' ? 'list' : 'raw']
+      }))
+    } else if (table instanceof Selection) {
+      prefix = this.get(table, true)
+      if (!prefix) return
+    } else {
+      const sqlTypes = {}
+      prefix = Object.entries(table).map(([key, table]) => {
+        if (typeof table !== 'string') {
+          const t = `${this.get(table, true)} AS ${this.escapeId(key)}`
+          for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
+            sqlTypes[`${key}.${fieldKey}`] = fieldType
+          }
+          return t
+        } else {
+          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
+        }
+      }).join(' JOIN ')
+      this.state.sqlTypes = sqlTypes
+      const filter = this.parseEval(args[0].having)
+      if (filter !== 'TRUE') prefix += ` ON ${filter}`
+    }
+
     const filter = this.parseQuery(query)
     if (filter === 'FALSE') return
 
+    this.state.group = group || !!args[0].group
+    const sqlTypes = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
       .map(([key]) => [key, { $: [ref, key] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
-      key = this.escapeId(key)
-      value = this.parseEval(value)
-      return key === value ? key : `${value} AS ${key}`
+      value = this.parseEval(value, false)
+      sqlTypes[key] = this.state.sqlType!
+      return this.escapeId(key) === value ? this.escapeId(key) : `${value} AS ${this.escapeId(key)}`
     }).join(', ')
-    let prefix: string | undefined
-    if (typeof table === 'string') {
-      prefix = this.escapeId(table)
-    } else if (table instanceof Selection) {
-      prefix = this.get(table, true)
-      if (!prefix) return
-    } else {
-      prefix = Object.entries(table).map(([key, table]) => {
-        if (typeof table !== 'string') {
-          return `${this.get(table, true)} AS ${this.escapeId(key)}`
-        } else {
-          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
-        }
-      }).join(' JOIN ')
-      const filter = this.parseEval(args[0].having)
-      if (filter !== 'TRUE') prefix += ` ON ${filter}`
-    }
 
+    // get suffix
     let suffix = this.suffix(args[0])
+    this.state.sqlTypes = sqlTypes
+
     if (filter !== 'TRUE') {
       suffix = ` WHERE ${filter}` + suffix
     }
+
+    if (inline && !args[0].fields && !suffix) {
+      return (prefix.startsWith('(') && prefix.endsWith(')')) ? `${prefix} ${ref}` : prefix
+    }
+
     if (!prefix.includes(' ') || prefix.startsWith('(')) {
       suffix = ` ${ref}` + suffix
     }
 
-    if (inline && !args[0].fields && !suffix) return prefix
     const result = `SELECT ${keys} FROM ${prefix}${suffix}`
     return inline ? `(${result})` : result
   }
@@ -495,10 +517,10 @@ export class PostgresDriver extends Driver {
   async create(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
     data = builder.dump(sel.model, data)
-    const [row] = await this.sql`
+    const sql = await this.sql`
       INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
       RETURNING *`
-    return row
+    return sql[0]
   }
 
   async set(sel: Selection.Mutable, data: any) {
