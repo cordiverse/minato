@@ -338,6 +338,9 @@ export class PostgresDriver extends Driver {
 
     this.config = {
       onnotice: () => { },
+      debug(_, query, parameters) {
+        logger.debug('> %s\n parameters: %o', query, parameters)
+      },
       ...config,
     }
   }
@@ -517,10 +520,10 @@ export class PostgresDriver extends Driver {
   async create(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
     data = builder.dump(sel.model, data)
-    const sql = await this.sql`
+    const [row] = await this.sql`
       INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
       RETURNING *`
-    return sql[0]
+    return row
   }
 
   async set(sel: Selection.Mutable, data: any) {
