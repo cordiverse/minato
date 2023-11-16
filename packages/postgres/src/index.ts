@@ -448,16 +448,15 @@ export class PostgresDriver extends Driver {
       sqls.push({ expr, values })
     }
 
-    await Promise.all(sqls.map(sql => {
+    const a = await Promise.all(sqls.map(sql => {
       return this.sql`
       INSERT INTO ${this.sql(sel.table)} ${this.sql(sql.values)}
       ON CONFLICT (${this.sql(keys)})
       DO UPDATE SET ${sql.expr}`
     }))
 
-    return {
-
-    }
+    // postgres's upsert cannot distinguish between the quantities of modify and insert.
+    return {}
   }
 
   async get(sel: Selection.Immutable) {
@@ -490,12 +489,12 @@ export class PostgresDriver extends Driver {
     return data?.value
   }
 
-  async remove(sel: Selection.Mutable) {
+  async remove(sel: Selection.Mutable): Promise<Driver.WriteResult> {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseQuery(sel.query)
-    if (query === 'FALSE') return
-    const a = await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
-    a
+    if (query === 'FALSE') return {}
+    const { count } = await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
+    return { removed: count }
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
@@ -526,11 +525,11 @@ export class PostgresDriver extends Driver {
     return row
   }
 
-  async set(sel: Selection.Mutable, data: any) {
+  async set(sel: Selection.Mutable, data: any): Promise<Driver.WriteResult> {
     const builder = new PostgresBuilder(sel.tables)
     const comma = this.sql.unsafe(',')
     const query = builder.parseQuery(sel.query)
-    if (query === 'FALSE') return
+    if (query === 'FALSE') return {}
 
     const expr: postgres.PendingQuery<any>[] = []
     for (const [key, value] of Object.entries(builder.dump(sel.model, data) as Dict<any>)) {
@@ -543,10 +542,12 @@ export class PostgresDriver extends Driver {
     }
     expr.splice(-1, 1)
 
-    await this.sql`
+    const { count } = await this.sql`
       UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
       SET ${expr}
       WHERE ${this.sql.unsafe(query)}`
+
+    return { modified: count }
   }
 }
 
