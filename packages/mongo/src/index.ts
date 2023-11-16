@@ -265,7 +265,9 @@ export class MongoDriver extends Driver {
     const tables = Object.keys(this.database.tables)
     const entries = await Promise.all(tables.map(async (name) => {
       const coll = this.db.collection(name)
-      const { count, size } = await coll.stats()
+      const [{ storageStats: { count, size } }] = await coll.aggregate([{
+        $collStats: { storageStats: {} },
+      }]).toArray()
       return [coll.collectionName, { count, size }] as const
     }))
     return Object.fromEntries(entries)
@@ -436,7 +438,7 @@ export class MongoDriver extends Driver {
   async set(sel: Selection.Mutable, update: {}) {
     const { query, table } = sel
     const filter = this.transformQuery(query, table)
-    if (!filter) return
+    if (!filter) return {}
     const coll = this.db.collection(table)
 
     const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
@@ -446,19 +448,21 @@ export class MongoDriver extends Driver {
       .map(([key, _]) => key)
     const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
 
-    await coll.updateMany(filter, [
+    const result = await coll.updateMany(filter, [
       ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
       ...$unset.length ? [{ $unset }] : [],
       { $set },
       ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
     ])
+    return { modified: result.modifiedCount }
   }
 
   async remove(sel: Selection.Mutable) {
     const { query, table } = sel
     const filter = this.transformQuery(query, table)
-    if (!filter) return
-    await this.db.collection(table).deleteMany(filter)
+    if (!filter) return {}
+    const result = await this.db.collection(table).deleteMany(filter)
+    return { removed: result.deletedCount }
   }
 
   private shouldEnsurePrimary(table: string) {
@@ -479,13 +483,13 @@ export class MongoDriver extends Driver {
     if (typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary') {
       const missing = data.filter(item => !(primary in item))
       if (!missing.length) return
-      const { value } = await this.db.collection('_fields').findOneAndUpdate(
+      const doc = await this.db.collection('_fields').findOneAndUpdate(
         { table, field: primary },
         { $inc: { autoInc: missing.length } },
         { upsert: true },
       )
       for (let i = 1; i <= missing.length; i++) {
-        missing[i - 1][primary] = (value!.autoInc ?? 0) + i
+        missing[i - 1][primary] = (doc!.autoInc ?? 0) + i
       }
     }
   }
@@ -515,7 +519,7 @@ export class MongoDriver extends Driver {
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
-    if (!data.length) return
+    if (!data.length) return {}
     const { table, ref, model } = sel
     const coll = this.db.collection(table)
 
@@ -523,7 +527,7 @@ export class MongoDriver extends Driver {
     if (this.shouldEnsurePrimary(table)) {
       const original = (await coll.find({
         $or: data.map((item) => {
-          return this.transformQuery(pick(item, keys), table)
+          return this.transformQuery(pick(item, keys), table)!
         }),
       }).toArray()).map(row => this.patchVirtual(table, row))
 
@@ -546,7 +550,8 @@ export class MongoDriver extends Driver {
         const copy = executeUpdate(model.create(), update, ref)
         bulk.insert(this.unpatchVirtual(table, copy))
       }
-      await bulk.execute()
+      const result = await bulk.execute()
+      return { inserted: result.insertedCount + result.upsertedCount, modified: result.modifiedCount }
     } else {
       const bulk = coll.initializeUnorderedBulkOp()
       const initial = model.create()
@@ -571,7 +576,8 @@ export class MongoDriver extends Driver {
           ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
         ])
       }
-      await bulk.execute()
+      const result = await bulk.execute()
+      return { inserted: result.insertedCount + result.upsertedCount, modified: result.modifiedCount }
     }
   }
 }

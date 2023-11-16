@@ -1,5 +1,5 @@
-import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, isEvalExpr, RuntimeError, Selection } from '@minatojs/core'
+import { clone, deepEqual, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
+import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection } from '@minatojs/core'
 
 export namespace MemoryDriver {
   export interface Config {}
@@ -47,12 +47,9 @@ export class MemoryDriver extends Driver {
     const { ref, query, table, args, model } = sel
     const { fields, group, having } = sel.args[0]
     const data = this.table(table, having).filter(row => executeQuery(row, query, ref))
-    if (!group.length && fields && Object.values(args[0].fields ?? {}).some(x => isAggrExpr(x))) {
-      return [valueMap(fields!, (expr) => executeEval(data.map(row => ({ [ref]: row })), expr))]
-    }
 
     const branches: { index: Dict; table: any[] }[] = []
-    const groupFields = group.length ? pick(fields!, group) : fields
+    const groupFields = group ? pick(fields!, group) : fields
     for (let row of executeSort(data, args[0], ref)) {
       row = model.format(row, false)
       for (const key in model.fields) {
@@ -64,7 +61,7 @@ export class MemoryDriver extends Driver {
         index = valueMap(groupFields!, (expr) => executeEval({ [ref]: row }, expr))
       }
       let branch = branches.find((branch) => {
-        if (!groupFields) return false
+        if (!group || !groupFields) return false
         for (const key in groupFields) {
           if (branch.index[key] !== index[key]) return false
         }
@@ -77,7 +74,7 @@ export class MemoryDriver extends Driver {
       branch.table.push(row)
     }
     return branches.map(({ index, table }) => {
-      if (group.length) {
+      if (group) {
         if (having) {
           const value = executeEval(table.map(row => ({ [ref]: row, _: row })), having)
           if (!value) return
@@ -115,16 +112,21 @@ export class MemoryDriver extends Driver {
 
   async set(sel: Selection.Mutable, data: {}) {
     const { table, ref, query } = sel
-    this.table(table)
+    const modified = this.table(table)
       .filter(row => executeQuery(row, query, ref))
-      .forEach(row => executeUpdate(row, data, ref))
+      .map(row => !deepEqual(clone(row), executeUpdate(row, data, ref)))
+      .filter(x => x)
+      .length
     this.$save(table)
+    return { modified }
   }
 
   async remove(sel: Selection.Mutable) {
     const { ref, query, table } = sel
-    this.#store[table] = this.table(table).filter(row => !executeQuery(row, query, ref))
+    const data = this.table(table)
+    this.#store[table] = data.filter(row => !executeQuery(row, query, ref))
     this.$save(table)
+    return { removed: data.length - this.#store[table].length }
   }
 
   async create(sel: Selection.Mutable, data: any) {
@@ -153,32 +155,22 @@ export class MemoryDriver extends Driver {
 
   async upsert(sel: Selection.Mutable, data: any, keys: string[]) {
     const { table, model, ref } = sel
+    const result = { inserted: 0, modified: 0 }
     for (const update of data) {
       const row = this.table(table).find(row => {
         return keys.every(key => row[key] === update[key])
       })
       if (row) {
-        executeUpdate(row, update, ref)
+        result.modified += +!deepEqual(clone(row), executeUpdate(row, update, ref))
       } else {
         const data = executeUpdate(model.create(), update, ref)
         await this.database.create(table, data).catch(noop)
+        result.inserted++
       }
     }
     this.$save(table)
+    return result
   }
-}
-
-const nonAggrKeys = ['$']
-const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count']
-
-function isAggrExpr(value: any) {
-  if (!isEvalExpr(value)) return false
-  for (const [key, args] of Object.entries(value)) {
-    if (!key.startsWith('$')) continue
-    if (nonAggrKeys.includes(key)) return false
-    if (aggrKeys.includes(key) || ((Array.isArray(args) ? args : [args]).some(x => isAggrExpr(x)))) return true
-  }
-  return false
 }
 
 export default MemoryDriver

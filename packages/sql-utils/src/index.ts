@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, Selection } from '@minatojs/core'
+import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from '@minatojs/core'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -21,6 +21,14 @@ export interface Transformer<S = any, T = any> {
   load: (value: T, initial?: S) => S | null
 }
 
+type SQLType = 'raw' | 'json' | 'list'
+
+interface State {
+  sqlType?: SQLType
+  sqlTypes?: Dict<SQLType>
+  group?: boolean
+}
+
 export class Builder {
   protected escapeMap = {}
   protected escapeRegExp?: RegExp
@@ -28,6 +36,7 @@ export class Builder {
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
+  protected state: State = {}
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -73,7 +82,11 @@ export class Builder {
       },
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
+        if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+          return `${this.jsonLength(key)} = ${this.escape(value)}`
+        } else {
+          return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
+        }
       },
     }
 
@@ -105,22 +118,48 @@ export class Builder {
       $lt: this.binary('<'),
       $lte: this.binary('<='),
 
+      // membership
+      $in: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ''),
+      $nin: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ' NOT'),
+
       // aggregation
-      $sum: (expr) => `ifnull(sum(${this.parseAggr(expr)}), 0)`,
-      $avg: (expr) => `avg(${this.parseAggr(expr)})`,
-      $min: (expr) => `min(${this.parseAggr(expr)})`,
-      $max: (expr) => `max(${this.parseAggr(expr)})`,
-      $count: (expr) => `count(distinct ${this.parseAggr(expr)})`,
+      $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
+      $avg: (expr) => this.createAggr(expr, value => `avg(${value})`),
+      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
+      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
+      $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
+      $length: (expr) => this.createAggr(expr, value => `count(${value})`, value => {
+        if (this.state.sqlType === 'json') {
+          this.state.sqlType = 'raw'
+          return `${this.jsonLength(value)}`
+        } else {
+          this.state.sqlType = 'raw'
+          return `if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
+        }
+      }),
+
+      $object: (fields) => this.groupObject(fields),
+      $array: (expr) => this.groupArray(this.parseEval(expr, false)),
     }
+  }
+
+  protected unescapeId(value: string) {
+    return value.slice(1, value.length - 1)
   }
 
   protected createNullQuery(key: string, value: boolean) {
     return `${key} is ${value ? 'not ' : ''}null`
   }
 
-  protected createMemberQuery(key: string, value: any[], notStr = '') {
-    if (!value.length) return notStr ? '1' : '0'
-    return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+  protected createMemberQuery(key: string, value: any, notStr = '') {
+    if (Array.isArray(value)) {
+      if (!value.length) return notStr ? '1' : '0'
+      return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+    } else {
+      const res = this.jsonContains(this.parseEval(value, false), this.jsonQuote(key, true))
+      this.state.sqlType = 'raw'
+      return notStr ? this.logicalNot(res) : res
+    }
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
@@ -128,7 +167,11 @@ export class Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    return `find_in_set(${this.escape(value)}, ${key})`
+    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+    } else {
+      return `find_in_set(${this.escape(value)}, ${key})`
+    }
   }
 
   protected comparator(operator: string) {
@@ -157,6 +200,59 @@ export class Builder {
 
   protected logicalNot(condition: string) {
     return `NOT(${condition})`
+  }
+
+  protected jsonLength(value: string) {
+    return `json_length(${value})`
+  }
+
+  protected jsonContains(obj: string, value: string) {
+    return `json_contains(${obj}, ${value})`
+  }
+
+  protected jsonUnquote(value: string, pure: boolean = false) {
+    if (pure) return `json_unquote(${value})`
+    const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
+    this.state.sqlType = 'raw'
+    return res
+  }
+
+  protected jsonQuote(value: string, pure: boolean = false) {
+    if (pure) return `cast(${value} as json)`
+    const res = this.state.sqlType === 'raw' ? `cast(${value} as json)` : value
+    this.state.sqlType = 'json'
+    return res
+  }
+
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
+    if (this.state.group) {
+      this.state.group = false
+      const value = aggr(this.parseEval(expr, false))
+      this.state.group = true
+      this.state.sqlType = 'raw'
+      return value
+    } else {
+      const value = this.parseEval(expr, false)
+      const res = nonaggr ? nonaggr(value)
+        : `(select ${aggr(`json_unquote(${escapeId('value')})`)} from json_table(${value}, '$[*]' columns (value json path '$')) ${randomId()})`
+      this.state.sqlType = 'raw'
+      return res
+    }
+  }
+
+  protected groupObject(fields: any) {
+    const parse = (expr) => {
+      const value = this.parseEval(expr, false)
+      return this.state.sqlType === 'json' ? `json_extract(${value}, '$')` : `${value}`
+    }
+    const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
+    this.state.sqlType = 'json'
+    return res
+  }
+
+  protected groupArray(value: string) {
+    this.state.sqlType = 'json'
+    return `ifnull(json_arrayagg(${value}), json_array())`
   }
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
@@ -204,6 +300,7 @@ export class Builder {
   }
 
   protected parseEvalExpr(expr: any) {
+    this.state.sqlType = 'raw'
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
@@ -212,18 +309,21 @@ export class Builder {
     return this.escape(expr)
   }
 
-  protected parseAggr(expr: any) {
-    if (typeof expr === 'string') {
-      return this.getRecursive(expr)
-    }
-    return this.parseEvalExpr(expr)
+  protected transformJsonField(obj: string, path: string) {
+    this.state.sqlType = 'json'
+    return `json_extract(${obj}, '$${path}')`
   }
 
-  protected transformKey(key: string, fields: {}, prefix: string) {
-    if (key in fields || !key.includes('.')) return prefix + this.escapeId(key)
+  protected transformKey(key: string, fields: {}, prefix: string, fullKey: string) {
+    if (key in fields || !key.includes('.')) {
+      if (this.state.sqlTypes?.[key] || this.state.sqlTypes?.[fullKey]) {
+        this.state.sqlType = this.state.sqlTypes[key] || this.state.sqlTypes[fullKey]
+      }
+      return prefix + escapeId(key)
+    }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
-    return `json_unquote(json_extract(${prefix} ${this.escapeId(field)}, '$${rest.map(key => `."${key}"`).join('')}'))`
+    return this.transformJsonField(`${prefix} ${escapeId(field)}`, rest.map(key => `."${key}"`).join(''))
   }
 
   protected getRecursive(args: string | string[]) {
@@ -232,30 +332,38 @@ export class Builder {
     }
     const [table, key] = args
     const fields = this.tables?.[table]?.fields || {}
-    if (fields[key]?.expr) {
-      return this.parseEvalExpr(fields[key]?.expr)
+    const fkey = Object.keys(fields).find(field => key === field || key.startsWith(field + '.'))
+    if (fkey && fields[fkey]?.expr) {
+      if (key === fkey) {
+        return this.parseEvalExpr(fields[fkey]?.expr)
+      } else {
+        const field = this.parseEvalExpr(fields[fkey]?.expr)
+        const rest = key.slice(fkey.length + 1).split('.')
+        return this.transformJsonField(`${field}`, rest.map(key => `."${key}"`).join(''))
+      }
     }
     const prefix = !this.tables || table === '_' || key in fields
     // the only table must be the main table
     || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`
-    return this.transformKey(key, fields, prefix)
+    return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
   escapeId(value: string) {
     return escapeId(value)
   }
 
-  parseEval(expr: any): string {
+  parseEval(expr: any, unquote: boolean = true): string {
+    this.state.sqlType = 'raw'
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
       return this.escape(expr)
     }
-    return this.parseEvalExpr(expr)
+    return unquote ? this.jsonUnquote(this.parseEvalExpr(expr)) : this.parseEvalExpr(expr)
   }
 
   suffix(modifier: Modifier) {
     const { limit, offset, sort, group, having } = modifier
     let sql = ''
-    if (group.length) {
+    if (group?.length) {
       sql += ` GROUP BY ${group.map(this.escapeId).join(', ')}`
       const filter = this.parseEval(having)
       if (filter !== '1') sql += ` HAVING ${filter}`
@@ -270,41 +378,56 @@ export class Builder {
     return sql
   }
 
-  get(sel: Selection.Immutable, inline = false) {
+  get(sel: Selection.Immutable, inline = false, group = false) {
     const { args, table, query, ref, model } = sel
+
+    // get prefix
+    let prefix: string | undefined
+    if (typeof table === 'string') {
+      prefix = this.escapeId(table)
+      this.state.sqlTypes = Object.fromEntries(Object.entries(model.fields).map(([key, field]) => {
+        return [key, field!.type === 'json' ? 'json' : field!.type === 'list' ? 'list' : 'raw']
+      }))
+    } else if (table instanceof Selection) {
+      prefix = this.get(table, true)
+      if (!prefix) return
+    } else {
+      const sqlTypes: Dict<SQLType> = {}
+      prefix = Object.entries(table).map(([key, table]) => {
+        if (typeof table !== 'string') {
+          const t = `${this.get(table, true)} AS ${this.escapeId(key)}`
+          for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
+            sqlTypes[`${key}.${fieldKey}`] = fieldType
+          }
+          return t
+        } else {
+          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
+        }
+      }).join(' JOIN ')
+      this.state.sqlTypes = sqlTypes
+      const filter = this.parseEval(args[0].having)
+      if (filter !== '1') prefix += ` ON ${filter}`
+    }
+
     const filter = this.parseQuery(query)
     if (filter === '0') return
 
-    // get prefix
+    this.state.group = group || !!args[0].group
+    const sqlTypes: Dict<SQLType> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
       .map(([key]) => [key, { $: [ref, key] }]))
     const keys = Object.entries(fields).map(([key, value]) => {
-      key = this.escapeId(key)
-      value = this.parseEval(value)
-      return key === value ? key : `${value} AS ${key}`
+      value = this.parseEval(value, false)
+      sqlTypes[key] = this.state.sqlType!
+      return escapeId(key) === value ? escapeId(key) : `${value} AS ${escapeId(key)}`
     }).join(', ')
-    let prefix: string | undefined
-    if (typeof table === 'string') {
-      prefix = this.escapeId(table)
-    } else if (table instanceof Selection) {
-      prefix = this.get(table, true)
-      if (!prefix) return
-    } else {
-      prefix = Object.entries(table).map(([key, table]) => {
-        if (typeof table !== 'string') {
-          return `${this.get(table, true)} AS ${this.escapeId(key)}`
-        } else {
-          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
-        }
-      }).join(' JOIN ')
-      const filter = this.parseEval(args[0].having)
-      if (filter !== '1') prefix += ` ON ${filter}`
-    }
 
     // get suffix
     let suffix = this.suffix(args[0])
+    this.state.sqlTypes = sqlTypes
+
     if (filter !== '1') {
       suffix = ` WHERE ${filter}` + suffix
     }
@@ -334,12 +457,19 @@ export class Builder {
     return result
   }
 
-  load(model: Model, obj: any): any {
+  load(obj: any): any
+  load(model: Model, obj: any): any
+  load(model: any, obj?: any) {
+    if (!obj) {
+      const converter = this.types[this.state.sqlType!]
+      return converter ? converter.load(model) : model
+    }
+
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial } = model.fields[key]!
-      const converter = this.types[type]
+      const converter = this.state.sqlTypes?.[key] === 'raw' ? this.types[type] : this.types[this.state.sqlTypes![key]]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)

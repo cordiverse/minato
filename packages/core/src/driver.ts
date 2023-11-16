@@ -24,6 +24,12 @@ export namespace Driver {
     fields?: K[]
     sort?: Dict<Direction>
   }
+
+  export interface WriteResult {
+    inserted?: number
+    modified?: number
+    removed?: number
+  }
 }
 
 type TableLike<S> = Keys<S> | Selection
@@ -114,14 +120,14 @@ export class Database<S = any> {
   join<U extends Dict<TableLike<S>>>(tables: U, callback?: JoinCallback2<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<TableMap2<S, U>>
   join(tables: any, query?: any, optional?: any) {
     if (Array.isArray(tables)) {
-      const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, name])))
+      const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, this.select(name)])))
       if (typeof query === 'function') {
         sel.args[0].having = Eval.and(query(...tables.map(name => sel.row[name])))
       }
       sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
       return new Selection(this.getDriver(sel), sel)
     } else {
-      const sel = new Selection(this.getDriver(tables[0]), tables)
+      const sel = new Selection(this.getDriver(Object.values(tables)[0]), valueMap(tables, (t: TableLike<S>) => typeof t === 'string' ? this.select(t) : t))
       if (typeof query === 'function') {
         sel.args[0].having = Eval.and(query(sel.row))
       }
@@ -138,19 +144,19 @@ export class Database<S = any> {
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
-  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Row.Computed<S[T], Update<S[T]>>) {
+  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Row.Computed<S[T], Update<S[T]>>): Promise<Driver.WriteResult> {
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)
     if (primary.some(key => key in update)) {
       throw new TypeError(`cannot modify primary key`)
     }
-    await sel._action('set', sel.model.format(update)).execute()
+    return await sel._action('set', sel.model.format(update)).execute()
   }
 
-  async remove<T extends Keys<S>>(table: T, query: Query<S[T]>) {
+  async remove<T extends Keys<S>>(table: T, query: Query<S[T]>): Promise<Driver.WriteResult> {
     const sel = this.select(table, query)
-    await sel._action('remove').execute()
+    return await sel._action('remove').execute()
   }
 
   async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
@@ -165,12 +171,16 @@ export class Database<S = any> {
     return sel._action('create', sel.model.create(data)).execute()
   }
 
-  async upsert<T extends Keys<S>>(table: T, upsert: Row.Computed<S[T], Update<S[T]>[]>, keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>) {
+  async upsert<T extends Keys<S>>(
+    table: T,
+    upsert: Row.Computed<S[T], Update<S[T]>[]>,
+    keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>,
+  ): Promise<Driver.WriteResult> {
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))
     keys = makeArray(keys || sel.model.primary) as any
-    await sel._action('upsert', upsert, keys).execute()
+    return await sel._action('upsert', upsert, keys).execute()
   }
 
   async stopAll() {
@@ -210,10 +220,10 @@ export abstract class Driver {
   abstract prepare(name: string): Promise<void>
   abstract get(sel: Selection.Immutable, modifier: Modifier): Promise<any>
   abstract eval(sel: Selection.Immutable, expr: Eval.Expr): Promise<any>
-  abstract set(sel: Selection.Mutable, data: Update): Promise<void>
-  abstract remove(sel: Selection.Mutable): Promise<void>
+  abstract set(sel: Selection.Mutable, data: Update): Promise<Driver.WriteResult>
+  abstract remove(sel: Selection.Mutable): Promise<Driver.WriteResult>
   abstract create(sel: Selection.Mutable, data: any): Promise<any>
-  abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<void>
+  abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
 
   constructor(public database: Database) {}
 

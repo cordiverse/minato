@@ -1,11 +1,12 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "MongoDB Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
-    "lib"
+    "lib",
+    "src"
   ],
   "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
@@ -26,14 +27,14 @@
     "mongodb"
   ],
   "devDependencies": {
-    "@minatojs/tests": "^1.6.0"
+    "@minatojs/tests": "^1.7.0"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.4.2"
+    "@minatojs/core": "^2.5.0"
   },
   "dependencies": {
-    "mongodb": "^4.16.0",
-    "cosmokit": "^1.4.5",
-    "reggol": "^1.5.1"
+    "cosmokit": "^1.5.1",
+    "mongodb": "^6.2.0",
+    "reggol": "^1.6.3"
   }
 }

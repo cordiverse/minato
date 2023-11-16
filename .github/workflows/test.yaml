@@ -32,9 +32,9 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install
@@ -42,7 +42,6 @@ jobs:
       - name: Unit Test
         run: yarn test:json mysql
       - name: Report Coverage
-        if: ${{ matrix.node-version == 16 && matrix.mysql-image == 'mysql:5.7' }}
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -50,16 +49,20 @@ jobs:
           name: codecov
 
   mongo:
+    name: ${{ matrix.mongo-image }} (${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
+        mongo-image:
+          - mongo:6.0
+          - mongo:latest
         node-version: [16, 18, 20]
 
     services:
       mongo:
-        image: mongo
+        image: ${{ matrix.mongo-image }}
         ports:
           - 27017:27017
         # https://stackoverflow.com/questions/66317184/github-actions-cannot-connect-to-mongodb-service
@@ -67,9 +70,9 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install
@@ -95,9 +98,9 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install

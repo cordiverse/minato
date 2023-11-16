@@ -1,11 +1,12 @@
 {
   "name": "@minatojs/driver-mysql",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "description": "MySQL Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
-    "lib"
+    "lib",
+    "src"
   ],
   "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
@@ -25,16 +26,16 @@
     "mysql"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.4.2"
+    "@minatojs/core": "^2.5.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^1.6.0",
-    "@types/mysql": "^2.15.21"
+    "@minatojs/tests": "^1.7.0",
+    "@types/mysql": "^2.15.23"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^4.0.6",
+    "@minatojs/sql-utils": "^4.1.0",
     "@vlasky/mysql": "^2.18.6",
-    "cosmokit": "^1.4.5",
-    "reggol": "^1.5.1"
+    "cosmokit": "^1.5.1",
+    "reggol": "^1.6.3"
   }
 }

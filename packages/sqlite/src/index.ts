@@ -1,5 +1,5 @@
-import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, Model, Selection } from '@minatojs/core'
+import { clone, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
+import { Database, Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
@@ -51,6 +51,16 @@ class SQLiteBuilder extends Builder {
     super(tables)
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
+    this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
+    this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => {
+      if (this.state.sqlType === 'json') {
+        this.state.sqlType = 'raw'
+        return `${this.jsonLength(value)}`
+      } else {
+        this.state.sqlType = 'raw'
+        return `iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
+      }
+    })
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -83,15 +93,50 @@ class SQLiteBuilder extends Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
+    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+    } else {
+      return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
+    }
+  }
+
+  protected jsonLength(value: string) {
+    return `json_array_length(${value})`
+  }
+
+  protected jsonContains(obj: string, value: string) {
+    return `json_array_contains(${obj}, ${value})`
+  }
+
+  protected jsonUnquote(value: string, pure: boolean = false) {
+    return value
+  }
+
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
+    if (!this.state.group && !nonaggr) {
+      const value = this.parseEval(expr, false)
+      return `(select ${aggr(escapeId('value'))} from json_each(${value}) ${randomId()})`
+    } else {
+      return super.createAggr(expr, aggr, nonaggr)
+    }
+  }
+
+  protected groupArray(value: string) {
+    const res = this.state.sqlType === 'json' ? `('[' || group_concat(${value}) || ']')` : `('[' || group_concat(json_quote(${value})) || ']')`
+    this.state.sqlType = 'json'
+    return `ifnull(${res}, json_array())`
+  }
+
+  protected transformJsonField(obj: string, path: string) {
+    this.state.sqlType = 'raw'
+    return `json_extract(${obj}, '$${path}')`
   }
 }
 
 export class SQLiteDriver extends Driver {
   db!: init.Database
   sql: Builder
-  writeTask?: NodeJS.Timeout
-  sqlite!: init.SqlJsStatic
+  beforeUnload?: () => void
 
   constructor(database: Database, public config: SQLiteDriver.Config) {
     super(database)
@@ -199,29 +244,28 @@ export class SQLiteDriver extends Driver {
     })
   }
 
-  init(buffer: ArrayLike<number> | null) {
-    this.db = new this.sqlite.Database(buffer)
-    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
-  }
-
-  async load() {
-    if (this.config.path === ':memory:') return null
-    return fs.readFile(this.config.path).catch(() => null)
-  }
-
   async start() {
-    const [sqlite, buffer] = await Promise.all([
-      init({
-        locateFile: (file: string) => process.env.KOISHI_BASE
-          ? process.env.KOISHI_BASE + '/' + file
-          : process.env.KOISHI_ENV === 'browser'
-            ? '/modules/@koishijs/plugin-database-sqlite/' + file
-            : require.resolve('@minatojs/sql.js/dist/' + file),
-      }),
-      this.load(),
-    ])
-    this.sqlite = sqlite
-    this.init(buffer)
+    const isBrowser = process.env.KOISHI_ENV === 'browser'
+    const sqlite = await init({
+      locateFile: (file: string) => process.env.KOISHI_BASE
+        ? process.env.KOISHI_BASE + '/' + file
+        : isBrowser
+          ? '/modules/@koishijs/plugin-database-sqlite/' + file
+          : require.resolve('@minatojs/sql.js/dist/' + file),
+    })
+    if (!isBrowser || this.config.path === ':memory:') {
+      this.db = new sqlite.Database(this.config.path)
+    } else {
+      const buffer = await fs.readFile(this.config.path).catch(() => null)
+      this.db = new sqlite.Database(this.config.path, buffer)
+      if (isBrowser) {
+        window.addEventListener('beforeunload', this.beforeUnload = () => {
+          this.#export()
+        })
+      }
+    }
+    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
   }
 
   #joinKeys(keys?: string[]) {
@@ -231,6 +275,10 @@ export class SQLiteDriver extends Driver {
   async stop() {
     await new Promise(resolve => setTimeout(resolve, 0))
     this.db?.close()
+    if (this.beforeUnload) {
+      this.beforeUnload()
+      window.removeEventListener('beforeunload', this.beforeUnload)
+    }
   }
 
   #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
@@ -264,16 +312,11 @@ export class SQLiteDriver extends Driver {
   #export() {
     const data = this.db.export()
     fs.writeFile(this.config.path, data)
-    this.init(data)
   }
 
   #run(sql: string, params: any = [], callback?: () => any) {
     this.#exec(sql, params, stmt => stmt.run(params))
     const result = callback?.()
-    if (this.config.path) {
-      clearTimeout(this.writeTask)
-      this.writeTask = setTimeout(() => this.#export(), 0)
-    }
     return result
   }
 
@@ -286,9 +329,7 @@ export class SQLiteDriver extends Driver {
   }
 
   async stats() {
-    const data = this.db.export()
-    this.init(data)
-    const stats: Driver.Stats = { size: data.byteLength, tables: {} }
+    const stats: Driver.Stats = { size: this.db.size(), tables: {} }
     const tableNames: { name: string }[] = this.#all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
     const dbstats: { name: string; size: number }[] = this.#all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
     tableNames.forEach(tbl => {
@@ -301,8 +342,9 @@ export class SQLiteDriver extends Driver {
   async remove(sel: Selection.Mutable) {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
-    if (filter === '0') return
-    this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`)
+    if (filter === '0') return {}
+    const result = this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this.#get(`SELECT changes() AS count`))
+    return { removed: result.count }
   }
 
   async get(sel: Selection.Immutable) {
@@ -316,20 +358,23 @@ export class SQLiteDriver extends Driver {
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const builder = new SQLiteBuilder(sel.tables)
-    const output = builder.parseEval(expr)
-    const inner = builder.get(sel.table as Selection, true)
+    const inner = builder.get(sel.table as Selection, true, true)
+    const output = builder.parseEval(expr, false)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
-    return value
+    return builder.load(value)
   }
 
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
     const { ref, table } = sel
     const model = this.model(table)
-    const row = this.sql.dump(model, executeUpdate(data, update, ref))
+    const modified = !deepEqual(clone(data), executeUpdate(data, update, ref))
+    if (!modified) return 0
+    const row = this.sql.dump(model, data)
     const assignment = updateFields.map((key) => `${escapeId(key)} = ${this.sql.escape(row[key])}`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
     this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`)
+    return 1
   }
 
   async set(sel: Selection.Mutable, update: {}) {
@@ -340,9 +385,11 @@ export class SQLiteDriver extends Driver {
     }))]
     const primaryFields = makeArray(primary)
     const data = await this.database.get(table, query)
+    let modified = 0
     for (const row of data) {
-      this.#update(sel, primaryFields, updateFields, update, row)
+      modified += this.#update(sel, primaryFields, updateFields, update, row)
     }
+    return { modified }
   }
 
   #create(table: string, data: {}) {
@@ -363,12 +410,14 @@ export class SQLiteDriver extends Driver {
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
-    if (!data.length) return
+    if (!data.length) return {}
     const { model, table, ref } = sel
+    const result = { inserted: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
-    const updateFields = difference(dataFields, keys)
+    let updateFields = difference(dataFields, keys)
+    if (!updateFields.length) updateFields = [dataFields[0]]
     // Error: Expression tree is too large (maximum depth 1000)
     const step = Math.floor(960 / keys.length)
     for (let i = 0; i < data.length; i += step) {
@@ -379,12 +428,14 @@ export class SQLiteDriver extends Driver {
       for (const item of chunk) {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
-          this.#update(sel, keys, updateFields, item, row)
+          result.modified += this.#update(sel, keys, updateFields, item, row)
         } else {
           this.#create(table, executeUpdate(model.create(), item, ref))
+          result.inserted++
         }
       }
     }
+    return result
   }
 }
 

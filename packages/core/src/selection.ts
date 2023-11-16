@@ -11,7 +11,7 @@ export interface Modifier {
   limit: number
   offset: number
   sort: [Eval.Expr, Direction][]
-  group: string[]
+  group?: string[]
   having: Eval.Expr<boolean>
   fields?: Dict<Eval.Expr>
   optional: Dict<boolean>
@@ -22,17 +22,19 @@ namespace Executable {
 
   export interface Payload {
     type: Action
-    table: string | Selection | Dict<string | Selection.Immutable>
+    table: string | Selection | Dict<Selection.Immutable>
     ref: string
     query: Query.Expr
     args: any[]
   }
 }
 
-const createRow = (ref: string, expr = {}, prefix = '') => new Proxy(expr, {
+const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Proxy(expr, {
   get(target, key) {
+    if (key === '$prefix') return prefix
+    if (key === '$model') return model
     if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
-    return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`)
+    return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`, model)
   },
 })
 
@@ -45,15 +47,15 @@ class Executable<S = any, T = any> {
 
   constructor(driver: Driver, payload: Executable.Payload) {
     Object.assign(this, payload)
-    const expr = {}
+    defineProperty(this, 'model', driver.model(this.table))
+    const expr = { $model: this.model }
     if (typeof payload.table !== 'string' && !(payload.table instanceof Selection)) {
       for (const key in payload.table) {
-        expr[key] = createRow(key)
+        expr[key] = createRow(key, {}, '', this.model)
       }
     }
     defineProperty(this, 'driver', driver)
-    defineProperty(this, 'row', createRow(this.ref, expr))
-    defineProperty(this, 'model', driver.model(this.table))
+    defineProperty(this, 'row', createRow(this.ref, expr, '', this.model))
   }
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>
@@ -130,13 +132,13 @@ export interface Selection extends Executable.Payload {
 export class Selection<S = any> extends Executable<S, S[]> {
   public tables: Dict<Model> = {}
 
-  constructor(driver: Driver, table: string | Selection | Dict<string | Selection.Immutable>, query?: Query) {
+  constructor(driver: Driver, table: string | Selection | Dict<Selection.Immutable>, query?: Query) {
     super(driver, {
       type: 'get',
       ref: randomId(),
       table,
       query: null as never,
-      args: [{ sort: [], limit: Infinity, offset: 0, group: [], having: Eval.and(), optional: {} }],
+      args: [{ sort: [], limit: Infinity, offset: 0, group: undefined, having: Eval.and(), optional: {} }],
     })
     this.tables[this.ref] = this.model
     this.query = this.resolveQuery(query)

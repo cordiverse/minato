@@ -68,6 +68,12 @@ function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
 
+interface Compat {
+  maria?: boolean
+  maria105?: boolean
+  mysql57?: boolean
+}
+
 interface ColumnInfo {
   COLUMN_NAME: string
   IS_NULLABLE: 'YES' | 'NO'
@@ -104,13 +110,24 @@ class MySQLBuilder extends Builder {
     '\\': '\\\\',
   }
 
-  constructor(tables?: Dict<Model>) {
+  constructor(tables?: Dict<Model>, private compat: Compat = {}) {
     super(tables)
+
+    this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
+    this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
+    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, value => `(0+minato_cfunc_min(${value}))`)
+    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, value => `(0+minato_cfunc_max(${value}))`)
 
     this.define<string[], string>({
       types: ['list'],
       dump: value => value.join(','),
       load: value => value ? value.split(',') : [],
+    })
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => JSON.stringify(value),
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
     })
   }
 
@@ -121,6 +138,31 @@ class MySQLBuilder extends Builder {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
     return super.escape(value, field)
+  }
+
+  protected jsonQuote(value: string, pure: boolean = false) {
+    if (pure) return this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`
+    const res = this.state.sqlType === 'raw' ? (this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`) : value
+    this.state.sqlType = 'json'
+    return res
+  }
+
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
+    if (!this.state.group && compat && (this.compat.mysql57 || this.compat.maria)) {
+      const value = compat(this.parseEval(expr, false))
+      this.state.sqlType = 'raw'
+      return value
+    } else {
+      return super.createAggr(expr, aggr, nonaggr)
+    }
+  }
+
+  protected groupArray(value: string) {
+    if (!this.compat.maria105) return super.groupArray(value)
+    const res = this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
+      : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`
+    this.state.sqlType = 'json'
+    return `ifnull(${res}, json_array())`
   }
 
   toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
@@ -179,6 +221,7 @@ export class MySQLDriver extends Driver {
   public config: MySQLDriver.Config
   public sql: MySQLBuilder
 
+  private _compat: Compat = {}
   private _queryTasks: QueryTask[] = []
 
   constructor(database: Database, config?: MySQLDriver.Config) {
@@ -223,6 +266,18 @@ export class MySQLDriver extends Driver {
 
   async start() {
     this.pool = createPool(this.config)
+
+    const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
+    // https://jira.mariadb.org/browse/MDEV-30623
+    this._compat.maria = version.includes('MariaDB')
+    // https://jira.mariadb.org/browse/MDEV-26506
+    this._compat.maria105 = !!version.match(/10.5.\d+-MariaDB/)
+    // For json_table
+    this._compat.mysql57 = !!version.match(/5.7.\d+/)
+
+    if (this._compat.mysql57 || this._compat.maria) {
+      await this._setupCompatFunctions()
+    }
   }
 
   async stop() {
@@ -357,6 +412,29 @@ export class MySQLDriver extends Driver {
     }).join(', ')
   }
 
+  async _setupCompatFunctions() {
+    try {
+      await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_sum`)
+      await this.query(`CREATE FUNCTION minato_cfunc_sum (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
+INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT sum(value) INTO r FROM mtt; RETURN r; END`)
+      await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_avg`)
+      await this.query(`CREATE FUNCTION minato_cfunc_avg (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
+INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT avg(value) INTO r FROM mtt; RETURN r; END`)
+      await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_min`)
+      await this.query(`CREATE FUNCTION minato_cfunc_min (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
+INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT min(value) INTO r FROM mtt; RETURN r; END`)
+      await this.query(`DROP FUNCTION IF EXISTS minato_cfunc_max`)
+      await this.query(`CREATE FUNCTION minato_cfunc_max (j JSON) RETURNS DOUBLE DETERMINISTIC BEGIN DECLARE n int; DECLARE i int; DECLARE r DOUBLE;
+DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
+INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT max(value) INTO r FROM mtt; RETURN r; END`)
+    } catch (e) {
+      logger.warn(`Failed to setup compact functions: ${e}`)
+    }
+  }
+
   query<T = any>(sql: string, debug = true): Promise<T> {
     const error = new Error()
     return new Promise((resolve, reject) => {
@@ -428,7 +506,7 @@ export class MySQLDriver extends Driver {
 
   async get(sel: Selection.Immutable) {
     const { model, tables } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._compat)
     const sql = builder.get(sel)
     if (!sql) return []
     return this.queue(sql).then((data) => {
@@ -437,19 +515,20 @@ export class MySQLDriver extends Driver {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const builder = new MySQLBuilder(sel.tables)
-    const output = builder.parseEval(expr)
-    const inner = builder.get(sel.table as Selection, true)
-    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner}`)
-    return data.value
+    const builder = new MySQLBuilder(sel.tables, this._compat)
+    const inner = builder.get(sel.table as Selection, true, true)
+    const output = builder.parseEval(expr, false)
+    const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
+    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${ref}`)
+    return builder.load(data.value)
   }
 
   async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._compat)
     const filter = builder.parseQuery(query)
     const { fields } = model
-    if (filter === '0') return
+    if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -458,15 +537,17 @@ export class MySQLDriver extends Driver {
       const escaped = escapeId(field)
       return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
-    await this.query(`UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
+    const result = await this.query(`UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
+    return { modified: result.changedRows }
   }
 
   async remove(sel: Selection.Mutable) {
     const { query, table, tables } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._compat)
     const filter = builder.parseQuery(query)
-    if (filter === '0') return
-    await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
+    if (filter === '0') return {}
+    const result = await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
+    return { removed: result.affectedRows }
   }
 
   async create(sel: Selection.Mutable, data: {}) {
@@ -483,9 +564,9 @@ export class MySQLDriver extends Driver {
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
-    if (!data.length) return
+    if (!data.length) return {}
     const { model, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables)
+    const builder = new MySQLBuilder(tables, this._compat)
 
     const merged = {}
     const insertion = data.map((item) => {
@@ -496,7 +577,8 @@ export class MySQLDriver extends Driver {
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
-    const updateFields = difference(dataFields, keys)
+    let updateFields = difference(dataFields, keys)
+    if (!updateFields.length) updateFields = [dataFields[0]]
 
     const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
     const createMultiFilter = (items: any[]) => {
@@ -529,11 +611,13 @@ export class MySQLDriver extends Driver {
       return `${escaped} = ${value}`
     }).join(', ')
 
-    await this.query([
+    const result = await this.query([
       `INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})`,
       `VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})`,
       `ON DUPLICATE KEY UPDATE ${update}`,
     ].join(' '))
+    const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
+    return { inserted: records - result.changedRows, modified: result.affectedRows - records }
   }
 }
 
