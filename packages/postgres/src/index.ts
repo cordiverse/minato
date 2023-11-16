@@ -1,6 +1,6 @@
 import postgres from 'postgres'
-import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, Modifier, RuntimeError, Selection } from '@minatojs/core'
+import { Dict, isNullable, makeArray, Time } from 'cosmokit'
+import { Database, Driver, Eval, Field, isEvalExpr, Model, Modifier, Selection } from '@minatojs/core'
 import { Builder } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
@@ -8,32 +8,32 @@ const logger = new Logger('postgres')
 const timeRegex = /(\d+):(\d+):(\d+)/
 
 interface ColumnInfo {
-  table_catalog: string;
-  table_schema: string;
-  table_name: string;
-  column_name: string;
-  ordinal_position: number;
-  column_default: any;
-  is_nullable: string;
-  data_type: string;
-  character_maximum_length: number;
-  is_identity: string;
-  is_updatable: string;
+  table_catalog: string
+  table_schema: string
+  table_name: string
+  column_name: string
+  ordinal_position: number
+  column_default: any
+  is_nullable: string
+  data_type: string
+  character_maximum_length: number
+  is_identity: string
+  is_updatable: string
 }
 
 interface TableInfo {
-  table_catalog: string;
-  table_schema: string;
-  table_name: string;
-  table_type: string;
-  self_referencing_column_name: null;
-  reference_generation: null;
-  user_defined_type_catalog: null;
-  user_defined_type_schema: null;
-  user_defined_type_name: null;
-  is_insertable_into: string;
-  is_typed: string;
-  commit_action: null;
+  table_catalog: string
+  table_schema: string
+  table_name: string
+  table_type: string
+  self_referencing_column_name: null
+  reference_generation: null
+  user_defined_type_catalog: null
+  user_defined_type_schema: null
+  user_defined_type_name: null
+  is_insertable_into: string
+  is_typed: string
+  commit_action: null
 }
 
 interface FieldInfo {
@@ -59,8 +59,7 @@ function type(field: Field & { autoInc?: boolean }) {
       else if (length <= 4) def += 'SMALLSERIAL'
       else if (length <= 8) def += 'BIGSERIAL'
       else throw new Error(`unsupported type: ${type}`)
-    }
-    else if (length <= 2) def += 'SMALLINT'
+    } else if (length <= 2) def += 'SMALLINT'
     else if (length <= 4) def += 'INTEGER'
     else if (length <= 8) def += 'BIGINT'
     else new Error(`unsupported type: ${type}`)
@@ -72,7 +71,7 @@ function type(field: Field & { autoInc?: boolean }) {
   } else if (type === 'float') {
     def += 'REAL'
     if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type == 'double') {
+  } else if (type === 'double') {
     def += 'DOUBLE PRECISION'
     if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'char') {
@@ -140,7 +139,7 @@ class PostgresBuilder extends Builder {
         if (!parsed) throw Error(`unexpected time value: ${str}`)
         date.setHours(+parsed[1], +parsed[2], +parsed[3])
         return date
-      }
+      },
     })
 
     this.queryOperators = {
@@ -330,8 +329,8 @@ export class PostgresDriver extends Driver {
   }
 
   async prepare(name: string) {
-    const columns: ColumnInfo[] = await this.sql
-      `SELECT *
+    const columns: ColumnInfo[] = await this.sql`
+      SELECT *
       FROM information_schema.columns
       WHERE table_schema = 'public'
       AND table_name = ${name}`
@@ -347,10 +346,12 @@ export class PostgresDriver extends Driver {
       const isPrimary = primary.includes(key)
 
       let def: string | undefined
-      if (!column) def = type(Object.assign({
-        primary: isPrimary,
-        autoInc: isPrimary && table.autoInc
-      }, field))
+      if (!column) {
+        def = type(Object.assign({
+          primary: isPrimary,
+          autoInc: isPrimary && table.autoInc,
+        }, field))
+      }
 
       const info = { key, field, names, column, def }
 
@@ -358,20 +359,25 @@ export class PostgresDriver extends Driver {
       else if (key !== column.column_name) rename.push(info)
     })
 
-    if (!columns?.length) {
-      return void await this.sql`
+    if (columns?.length) {
+      await this.sql`
         CREATE TABLE ${this.sql(name)}
         (${this.sql.unsafe(create.map(f => `"${f.key}" ${f.def}`).join(','))},
         PRIMARY KEY(${this.sql(primary)}))`
+      return
     }
 
-    if (rename?.length) await this.sql.unsafe(
-      rename.map(f => `ALTER TABLE "${name}" RENAME "${f.column?.column_name}" TO "${f.key}"`).join(';')
-    )
+    if (rename?.length) {
+      await this.sql.unsafe(
+        rename.map(f => `ALTER TABLE "${name}" RENAME "${f.column?.column_name}" TO "${f.key}"`).join(';'),
+      )
+    }
 
-    if (create?.length) await this.sql.unsafe(`
-      ALTER TABLE "${name}" ${rename.map(f => `ADD "${f.key}" ${f.def}`).join(',')}`
-    )
+    if (create?.length) {
+      await this.sql.unsafe(
+        `ALTER TABLE "${name}" ${rename.map(f => `ADD "${f.key}" ${f.def}`).join(',')}`,
+      )
+    }
 
     const drop: string[] = []
     this.migrate(name, {
@@ -384,7 +390,7 @@ export class PostgresDriver extends Driver {
         await this.sql`
           ALTER TABLE ${this.sql(name)}
           ${this.sql.unsafe(drop.map(key => `DROP "${key}"`).join(', '))}`
-      }
+      },
     })
   }
 
@@ -394,8 +400,8 @@ export class PostgresDriver extends Driver {
     const comma = this.sql.unsafe(',')
 
     const sqls: {
-      expr: postgres.PendingQuery<any>[],
-      values: Dict<any>,
+      expr: postgres.PendingQuery<any>[]
+      values: Dict<any>
     }[] = []
 
     for (const row of data) {
@@ -423,7 +429,6 @@ export class PostgresDriver extends Driver {
       ON CONFLICT (${this.sql(keys)})
       DO UPDATE SET ${sql.expr}`
     }))
-
   }
 
   async get(sel: Selection.Immutable) {
@@ -436,9 +441,12 @@ export class PostgresDriver extends Driver {
   }
 
   async drop(table?: string) {
-    if (table) return void await this.sql`DROP TABLE IF EXISTS "${this.sql(table)}" CASCADE`
-    const tables: TableInfo[] = await this.sql
-      `SELECT *
+    if (table) {
+      await this.sql`DROP TABLE IF EXISTS "${this.sql(table)}" CASCADE`
+      return
+    }
+    const tables: TableInfo[] = await this.sql`
+      SELECT *
       FROM information_schema.tables
       WHERE table_schema = 'public'`
     if (!tables.length) return
@@ -455,14 +463,14 @@ export class PostgresDriver extends Driver {
 
   async remove(sel: Selection.Mutable) {
     const builder = new PostgresBuilder(sel.tables)
-    let query = builder.parseQuery(sel.query)
+    const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return
     await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
-    const tables = await this.sql
-      `SELECT *
+    const tables = await this.sql`
+      SELECT *
       FROM information_schema.tables
       WHERE table_schema = 'public'`
     const tableStats = await this.sql.unsafe(
@@ -470,20 +478,20 @@ export class PostgresDriver extends Driver {
         return `SELECT '${name}' AS name,
           pg_total_relation_size('${name}') AS size,
           COUNT(*) AS count FROM ${name}`
-      }).join(' UNION ')
+      }).join(' UNION '),
     ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
 
     return {
       size: tableStats.reduce((p, c) => p += c[1].size, 0),
-      tables: Object.fromEntries(tableStats)
+      tables: Object.fromEntries(tableStats),
     }
   }
 
   async create(sel: Selection.Mutable, data: any) {
     const builder = new PostgresBuilder(sel.tables)
     data = builder.dump(sel.model, data)
-    let [row] = await this.sql
-      `INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
+    const [row] = await this.sql`
+      INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
       RETURNING *`
     return row
   }
@@ -505,8 +513,8 @@ export class PostgresDriver extends Driver {
     }
     expr.splice(-1, 1)
 
-    await this.sql
-      `UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
+    await this.sql`
+      UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
       SET ${expr}
       WHERE ${this.sql.unsafe(query)}`
   }
