@@ -168,7 +168,7 @@ class PostgresBuilder extends Builder {
 
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::integer, 0)`),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`),
-      $count: (expr) => this.createAggr(expr, value =>`count(distinct ${value})::integer`),
+      $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})::integer`),
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg)).join('||')}`,
     }
@@ -448,7 +448,7 @@ export class PostgresDriver extends Driver {
       sqls.push({ expr, values })
     }
 
-    const a = await Promise.all(sqls.map(sql => {
+    await Promise.all(sqls.map(sql => {
       return this.sql`
       INSERT INTO ${this.sql(sel.table)} ${this.sql(sql.values)}
       ON CONFLICT (${this.sql(keys)})
