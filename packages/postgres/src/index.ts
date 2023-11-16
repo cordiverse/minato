@@ -198,7 +198,7 @@ class PostgresBuilder extends Builder {
   suffix(modifier: Modifier) {
     const { limit, offset, sort, group, having } = modifier
     let sql = ''
-    if (group.length) {
+    if (group?.length) {
       sql += ` GROUP BY ${group.map(this.escapeId).join(', ')}`
       const filter = this.parseEval(having)
       if (filter !== 'TRUE') sql += ` HAVING ${filter}`
@@ -394,8 +394,8 @@ export class PostgresDriver extends Driver {
     })
   }
 
-  async upsert(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<void> {
-    if (!data.length) return
+  async upsert(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<Driver.WriteResult> {
+    if (!data.length) return {}
     const builder = new PostgresBuilder(sel.tables, { upsert: true })
     const comma = this.sql.unsafe(',')
 
@@ -429,6 +429,10 @@ export class PostgresDriver extends Driver {
       ON CONFLICT (${this.sql(keys)})
       DO UPDATE SET ${sql.expr}`
     }))
+
+    return {
+
+    }
   }
 
   async get(sel: Selection.Immutable) {
