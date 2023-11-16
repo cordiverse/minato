@@ -36,14 +36,11 @@ interface TableInfo {
   commit_action: null;
 }
 
-type FieldOperation = 'create' | 'rename' | undefined
-
 interface FieldInfo {
   key: string
   names: string[]
   field?: Field
   column?: ColumnInfo | undefined
-  operations?: FieldOperation
   def?: string
 }
 
@@ -164,6 +161,18 @@ class PostgresBuilder extends Builder {
         }
       },
     }
+
+    this.evalOperators = {
+      ...this.evalOperators,
+      $if: (args) => `(SELECT CASE WHEN ${this.parseEval(args[0])} THEN ${this.parseEval(args[1])} ELSE ${this.parseEval(args[2])} END)`,
+      $ifNull: (args) => `coalesce(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+
+      $sum: (expr) => `coalesce(sum(${this.parseAggr(expr)})::integer, 0)`,
+      $avg: (expr) => `avg(${this.parseAggr(expr)})::double precision`,
+      $count: (expr) => `count(distinct ${this.parseAggr(expr)})::integer`,
+
+      $concat: (args) => `${args.map(arg => this.parseEval(arg)).join('||')}`,
+    }
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
@@ -216,7 +225,7 @@ class PostgresBuilder extends Builder {
     }
 
     const prefix = (() => {
-      if (table === '_' ) {
+      if (table === '_') {
         return ''
       } else if (this.config?.upsert) {
         return `${this.escapeId(table)}.`
@@ -326,35 +335,57 @@ export class PostgresDriver extends Driver {
       FROM information_schema.columns
       WHERE table_schema = 'public'
       AND table_name = ${name}`
-
     const table = this.model(name)
     const { fields } = table
     const primary = makeArray(table.primary)
 
-    const operations: FieldInfo[] = Object.entries(fields).map(([key, field]) => {
+    const create: FieldInfo[] = []
+    const rename: FieldInfo[] = []
+    Object.entries(fields).forEach(([key, field]) => {
       const names = [key].concat(field?.legacy ?? [])
       const column = columns?.find(c => names.includes(c.column_name))
       const isPrimary = primary.includes(key)
 
-      let operation: FieldOperation
-      if (!column) operation = 'create'
-      else if (name !== column.column_name) operation = 'rename'
-
       let def: string | undefined
-      if (operation === 'create') def = type(Object.assign({
+      if (!column) def = type(Object.assign({
         primary: isPrimary,
         autoInc: isPrimary && table.autoInc
       }, field))
-      return { key, field, names, column, operation, def }
+
+      const info = { key, field, names, column, def }
+
+      if (!column) create.push(info)
+      else if (key !== column.column_name) rename.push(info)
     })
 
     if (!columns?.length) {
-      const s = `CREATE TABLE "${name}"
-        (${operations.map(f => `"${f.key}" ${f.def}`).join(',')},
-        PRIMARY KEY("${primary.join('","')}"))`
-      await this.sql.unsafe(s)
-      return
+      return void await this.sql`
+        CREATE TABLE ${this.sql(name)}
+        (${this.sql.unsafe(create.map(f => `"${f.key}" ${f.def}`).join(','))},
+        PRIMARY KEY(${this.sql(primary)}))`
     }
+
+    if (rename?.length) await this.sql.unsafe(
+      rename.map(f => `ALTER TABLE "${name}" RENAME "${f.column?.column_name}" TO "${f.key}"`).join(';')
+    )
+
+    if (create?.length) await this.sql.unsafe(`
+      ALTER TABLE "${name}" ${rename.map(f => `ADD "${f.key}" ${f.def}`).join(',')}`
+    )
+
+    const drop: string[] = []
+    this.migrate(name, {
+      error: logger.warn,
+      before: keys => keys.every(key => columns.some(c => c.column_name === key)),
+      after: keys => drop.push(...keys),
+      finalize: async () => {
+        if (!drop.length) return
+        logger.info('auto migrating table %c', name)
+        await this.sql`
+          ALTER TABLE ${this.sql(name)}
+          ${this.sql.unsafe(drop.map(key => `DROP "${key}"`).join(', '))}`
+      }
+    })
   }
 
   async upsert(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<void> {
@@ -418,9 +449,7 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseEval(expr)
     const sub = builder.get(sel.table as Selection, true)
-    const [data] = await this.sql
-      `SELECT ${this.sql(query)} AS value
-      FROM ${this.sql(sub)} ${this.sql(sel.ref)}`
+    const [data] = await this.sql.unsafe(`SELECT ${query} AS value FROM ${sub} "${sel.ref}"`)
     return data?.value
   }
 
@@ -451,6 +480,8 @@ export class PostgresDriver extends Driver {
   }
 
   async create(sel: Selection.Mutable, data: any) {
+    const builder = new PostgresBuilder(sel.tables)
+    data = builder.dump(sel.model, data)
     let [row] = await this.sql
       `INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
       RETURNING *`
