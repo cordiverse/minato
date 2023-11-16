@@ -454,7 +454,7 @@ export class MongoDriver extends Driver {
       { $set },
       ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
     ])
-    return { modified: result.modifiedCount }
+    return { matched: result.matchedCount, modified: result.modifiedCount }
   }
 
   async remove(sel: Selection.Mutable) {
@@ -551,7 +551,7 @@ export class MongoDriver extends Driver {
         bulk.insert(this.unpatchVirtual(table, copy))
       }
       const result = await bulk.execute()
-      return { inserted: result.insertedCount + result.upsertedCount, modified: result.modifiedCount }
+      return { inserted: result.insertedCount + result.upsertedCount, matched: result.matchedCount, modified: result.modifiedCount }
     } else {
       const bulk = coll.initializeUnorderedBulkOp()
       const initial = model.create()
@@ -577,7 +577,7 @@ export class MongoDriver extends Driver {
         ])
       }
       const result = await bulk.execute()
-      return { inserted: result.insertedCount + result.upsertedCount, modified: result.modifiedCount }
+      return { inserted: result.insertedCount + result.upsertedCount, matched: result.matchedCount, modified: result.modifiedCount }
     }
   }
 }

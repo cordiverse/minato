@@ -538,7 +538,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
     const result = await this.query(`UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
-    return { modified: result.changedRows }
+    return { matched: result.affectedRows, modified: result.changedRows }
   }
 
   async remove(sel: Selection.Mutable) {
@@ -617,7 +617,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       `ON DUPLICATE KEY UPDATE ${update}`,
     ].join(' '))
     const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
-    return { inserted: records - result.changedRows, modified: result.affectedRows - records }
+    return { inserted: records - result.changedRows, matched: result.changedRows, modified: result.affectedRows - records }
   }
 }
 
