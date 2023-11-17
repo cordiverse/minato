@@ -182,6 +182,8 @@ class PostgresBuilder extends Builder {
       $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,
       $multiply: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' * ')})`,
 
+      $eq: this.binary('=', 'text'),
+
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::double precision, 0)`, undefined, 'double precision'),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`, undefined, 'double precision'),
       $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, 'double precision'),
@@ -207,10 +209,17 @@ class PostgresBuilder extends Builder {
     })
   }
 
-  protected binary(operator: string) {
+  protected binary(operator: string, eltype: string = 'double precision') {
     return ([left, right]) => {
-      return `(${this.parseEval(left, 'double precision')} ${operator} ${this.parseEval(right, 'double precision')})`
+      const type = this.getLiteralType(left) ?? this.getLiteralType(right) ?? eltype
+      return `(${this.parseEval(left, type)} ${operator} ${this.parseEval(right, type)})`
     }
+  }
+
+  private getLiteralType(expr: any) {
+    if (typeof expr === 'string') return 'text'
+    else if (typeof expr === 'number') return 'double precision'
+    else if (typeof expr === 'string') return 'boolean'
   }
 
   parseEval(expr: any, outtype: boolean | string = false): string {
@@ -286,7 +295,7 @@ class PostgresBuilder extends Builder {
 
   protected groupArray(value: string) {
     this.state.sqlType = 'json'
-    return `coalesce(jsonb_agg (${value}), '[]'::jsonb)`
+    return `coalesce(jsonb_agg(${value}), '[]'::jsonb)`
   }
 
   protected transformKey(key: string, fields: {}, prefix: string, fullKey: string) {
