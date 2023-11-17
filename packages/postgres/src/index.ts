@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, Modifier, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from '@minatojs/core'
 import { Builder } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
@@ -128,8 +128,7 @@ function transformArray(arr: any[]) {
 class PostgresBuilder extends Builder {
   protected $true = 'TRUE'
   protected $false = 'FALSE'
-  upsert = false
-  table = ''
+  upsertTable?: string
 
   constructor(public tables?: Dict<Model>, public config?: PostgresBuilderConfig) {
     super(tables)
@@ -153,15 +152,10 @@ class PostgresBuilder extends Builder {
       $regexFor: (key, value) => `${this.escape(value)} ~ ${key}`,
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        return `${key} IS NOT NULL AND ARRAY_LENGTH(${key}, 1) = ${value}`
-      },
-      $el: (key, value) => {
-        if (Array.isArray(value)) {
-          return `${key} && ARRAY['${value.map(v => v.replace(/'/g, "''")).join("','")}']::TEXT[]`
-        } else if (typeof value !== 'number' && typeof value !== 'string') {
-          throw new TypeError('query expr under $el is not supported')
+        if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+          return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
-          return `${key} && ARRAY['${value}']::TEXT[]`
+          return `${key} IS NOT NULL AND ARRAY_LENGTH(${key}, 1) = ${value}`
         }
       },
     }
@@ -195,7 +189,7 @@ class PostgresBuilder extends Builder {
   }
 
   protected parseFieldQuery(key: string, query) {
-    if (this.upsert) return super.parseFieldQuery(`${this.escapeId(this.table)}.${key}`, query)
+    if (this.upsertTable) return super.parseFieldQuery(`${this.escapeId(this.upsertTable)}.${key}`, query)
     return super.parseFieldQuery(key, query)
   }
 
@@ -203,9 +197,73 @@ class PostgresBuilder extends Builder {
     return `${key} ~ ${this.escape(typeof value === 'string' ? value : value.source)}`
   }
 
+  protected createElementQuery(key: string, value: any) {
+    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+    } else {
+      return `${key} && ARRAY['${value}']::TEXT[]`
+    }
+  }
+
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
+    if (!this.state.group && !nonaggr) {
+      const value = this.parseEval(expr, false)
+      return `(select ${aggr(this.escapeId('value'))} from jsonb_array_elements(${value}) ${randomId()})`
+    } else {
+      return super.createAggr(expr, aggr, nonaggr)
+    }
+  }
+
   protected transformJsonField(obj: string, path: string) {
     this.state.sqlType = 'json'
     return `jsonb_extract_path(${obj}, ${path.slice(1).replace('.', ',')})`
+  }
+
+  protected jsonLength(value: string) {
+    return `jsonb_array_length(${value})`
+  }
+
+  protected jsonContains(obj: string, value: string) {
+    return `(${obj} @> ${value})`
+  }
+
+  protected jsonUnquote(value: string, pure: boolean = false) {
+    if (!pure) this.state.sqlType = 'raw'
+    return value
+  }
+
+  protected jsonQuote(value: string, pure: boolean = false) {
+    if (pure) return `to_jsonb(${value})`
+    const res = this.state.sqlType === 'raw' ? `to_jsonb(${value})` : value
+    this.state.sqlType = 'json'
+    return res
+  }
+
+  protected groupObject(fields: any) {
+    const parse = (expr) => {
+      const value = this.parseEval(expr, false)
+      return this.state.sqlType === 'json' ? `to_jsonb(${value})` : `${value}`
+    }
+    const res = `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
+    this.state.sqlType = 'json'
+    return res
+  }
+
+  protected groupArray(value: string) {
+    this.state.sqlType = 'json'
+    return `coalesce(jsonb_agg (${value}), '[]'::jsonb)`
+  }
+
+  protected transformKey(key: string, fields: {}, prefix: string, fullKey: string) {
+    if (key in fields || !key.includes('.')) {
+      if (this.state.sqlTypes?.[key] || this.state.sqlTypes?.[fullKey]) {
+        this.state.sqlType = this.state.sqlTypes[key] || this.state.sqlTypes[fullKey]
+      }
+      return prefix + this.escapeId(key)
+    }
+    const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
+    const rest = key.slice(field.length + 1).split('.')
+    return this.transformJsonField(`${prefix}${this.escapeId(field)}`, rest.map(key => `.'${key}'`).join(''))
   }
 
   protected getRecursive(args: string | string[]) {
@@ -214,34 +272,20 @@ class PostgresBuilder extends Builder {
     }
     const [table, key] = args
     const fields = this.tables?.[table]?.fields || {}
-    if (fields[key]?.expr) {
-      return this.parseEvalExpr(fields[key]?.expr)
-    }
-
-    const prefix = (() => {
-      if (this.upsert && key in fields) {
-        return `${this.escapeId(this.tables![table].name)}.`
-      } else if (this.upsert) {
-        return `${this.escapeId(this.table)}.`
-      } else if (table === '_') {
-        return ''
-      } else if (this.config?.upsert) {
-        return `${this.escapeId(table)}.`
-      } else if (key in fields || (Object.keys(this.tables!).length === 1 && table in this.tables!)) {
-        return ''
+    const fkey = Object.keys(fields).find(field => key === field || key.startsWith(field + '.'))
+    if (fkey && fields[fkey]?.expr) {
+      if (key === fkey) {
+        return this.parseEvalExpr(fields[fkey]?.expr)
       } else {
-        return `${this.escapeId(table)}.`
+        const field = this.parseEvalExpr(fields[fkey]?.expr)
+        const rest = key.slice(fkey.length + 1).split('.')
+        return this.transformJsonField(`${field}`, rest.map(key => `.'${key}'`).join(''))
       }
-    })()
-
+    }
+    const prefix = this.upsertTable ? `${this.escapeId(this.tables?.[table]?.name ?? this.upsertTable)}.` : (!this.tables || table === '_' || key in fields
+    // the only table must be the main table
+    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`)
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
-  }
-
-  protected jsonQuote(value: string, pure: boolean = false) {
-    if (pure) return `to_jsonb(${value})`
-    const res = this.state.sqlType === 'raw' ? `to_jsonb(${value})` : value
-    this.state.sqlType = 'json'
-    return res
   }
 
   escapeId(value: string) {
@@ -257,18 +301,15 @@ class PostgresBuilder extends Builder {
     return super.escape(value, field)
   }
 
-  toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean, table?: string) {
+  toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
     const escaped = this.escapeId(key)
-    this.table = table!
     // update directly
-    // console.log(item, key)
     if (key in item) {
       if (!isEvalExpr(item[key]) && upsert) {
         return `excluded.${escaped}`
       } else if (isEvalExpr(item[key])) {
         return this.parseEval(item[key])
       } else {
-        // console.log(1, this.escape(item[key], field))
         return this.escape(item[key], field)
       }
     }
@@ -283,7 +324,7 @@ class PostgresBuilder extends Builder {
     }
 
     // update with json_set
-    const valueInit = this.upsert ? `coalesce(${this.escapeId(table!)}.${escaped}, '{}')::jsonb` : `coalesce(${escaped}, '{}')::jsonb`
+    const valueInit = this.upsertTable ? `coalesce(${this.escapeId(this.upsertTable)}.${escaped}, '{}')::jsonb` : `coalesce(${escaped}, '{}')::jsonb`
     let value = valueInit
 
     // json_set cannot create deeply nested property when non-exist
@@ -299,7 +340,7 @@ class PostgresBuilder extends Builder {
     }
 
     if (value === valueInit) {
-      return `${this.escapeId(table!)}.${escaped}`
+      return this.upsertTable ? `${this.escapeId(this.upsertTable)}.${escaped}` : escaped
     } else {
       return value
     }
@@ -412,7 +453,8 @@ export class PostgresDriver extends Driver {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
     const builder = new PostgresBuilder(tables)
-    builder.upsert = true
+    // builder.upsert = true
+    builder.upsertTable = table
 
     const merged = {}
     const insertion = data.map((item) => {
@@ -442,7 +484,7 @@ export class PostgresDriver extends Driver {
       const escaped = builder.escapeId(field)
       const branches: Dict<any[]> = {}
       data.forEach((item) => {
-        (branches[builder.toUpdateExpr(item, field, model.fields[field], true, table)] ??= []).push(item)
+        (branches[builder.toUpdateExpr(item, field, model.fields[field], true)] ??= []).push(item)
       })
 
       const entries = Object.entries(branches)
@@ -451,26 +493,20 @@ export class PostgresDriver extends Driver {
         .reverse()
 
       let value = 'CASE '
-      // let value = entries[0][1]
       for (let index = 0; index < entries.length; index++) {
-        // value = `(CASE WHEN (${entries[index][0]}) THEN (${entries[index][1]}) ELSE (${value}) END)`
         value += `WHEN (${entries[index][0]}) THEN (${entries[index][1]}) `
       }
       value += 'END'
       return `${escaped} = ${value}`
     }).join(', ')
 
-    try {
-      const result = await this.sql.unsafe(`
+    const result = await this.sql.unsafe(`
       INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
       VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
       ON CONFLICT (${keys.map(builder.escapeId).join(', ')})
       DO UPDATE SET ${update}
     `)
-    } catch (e) { logger.error(e) }
     return {}
-    // const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
-    // return { inserted: records - result.changedRows, modified: result.affectedRows - records }
   }
 
   _formatValues = (table: string, data: object, keys: readonly string[]) => {
@@ -478,46 +514,6 @@ export class PostgresDriver extends Driver {
       const field = this.database.tables[table]?.fields[key]
       return this.builder.escape(data[key], field)
     }).join(', ')
-  }
-
-  async upsert2(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<Driver.WriteResult> {
-    if (!data.length) return {}
-    const builder = new PostgresBuilder(sel.tables, { upsert: true })
-    const comma = this.sql.unsafe(',')
-
-    const sqls: {
-      expr: postgres.PendingQuery<any>[]
-      values: Dict<any>
-    }[] = []
-
-    for (const row of data) {
-      const expr: postgres.PendingQuery<any>[] = []
-      const values: Dict<any> = {}
-      for (const [key, value] of Object.entries(row)) {
-        if (!isEvalExpr(value)) {
-          if (isEvalExpr(value)) {
-            expr.push(this.sql.unsafe(`"${key}"=${builder.parseEval(value)}`))
-            values[key] = builder.escape(value, sel.tables[sel.table]?.fields[key])
-          } else {
-            expr.push(this.sql`${this.sql(key)}=${value}`)
-            values[key] = value
-          }
-          expr.push(comma)
-        }
-      }
-      expr.splice(-1, 1)
-      sqls.push({ expr, values })
-    }
-
-    const d = await Promise.all(sqls.map(sql => {
-      return this.sql`
-      INSERT INTO ${this.sql(sel.table)} ${this.sql(sql.values)}
-      ON CONFLICT (${this.sql(keys)})
-      DO UPDATE SET ${sql.expr}`
-    }))
-    console.log(d)
-    // postgres's upsert cannot distinguish between the quantities of modify and insert.
-    return {}
   }
 
   async get(sel: Selection.Immutable) {
@@ -604,33 +600,8 @@ export class PostgresDriver extends Driver {
       const escaped = builder.escapeId(field)
       return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
-    const result = await this.sql.unsafe(`UPDATE ${builder.escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
-    return {}
-  }
-
-  async set2(sel: Selection.Mutable, data: any): Promise<Driver.WriteResult> {
-    const builder = new PostgresBuilder(sel.tables)
-    const comma = this.sql.unsafe(',')
-    const query = builder.parseQuery(sel.query)
-    if (query === 'FALSE') return {}
-
-    const expr: postgres.PendingQuery<any>[] = []
-    for (const [key, value] of Object.entries(builder.dump(sel.model, data) as Dict<any>)) {
-      if (isEvalExpr(value)) {
-        expr.push(this.sql.unsafe(`"${key}"=${builder.parseEval(value)}`))
-      } else {
-        expr.push(this.sql`${this.sql(key)}=${value}`)
-      }
-      expr.push(comma)
-    }
-    expr.splice(-1, 1)
-
-    const { count } = await this.sql`
-      UPDATE ${this.sql(sel.table)} ${this.sql(sel.ref)}
-      SET ${expr}
-      WHERE ${this.sql.unsafe(query)}`
-
-    return { modified: count }
+    const result = await this.sql.unsafe(`UPDATE ${builder.escapeId(table)} ${ref} SET ${update} WHERE ${filter} RETURNING *`)
+    return { matched: result.length }
   }
 }
 
