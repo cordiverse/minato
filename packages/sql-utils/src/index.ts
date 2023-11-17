@@ -396,15 +396,11 @@ export class Builder {
     } else {
       const sqlTypes: Dict<SQLType> = {}
       prefix = Object.entries(table).map(([key, table]) => {
-        if (typeof table !== 'string') {
-          const t = `${this.get(table, true)} AS ${this.escapeId(key)}`
-          for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
-            sqlTypes[`${key}.${fieldKey}`] = fieldType
-          }
-          return t
-        } else {
-          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
+        const t = `${this.get(table, true)} AS ${this.escapeId(key)}`
+        for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
+          sqlTypes[`${key}.${fieldKey}`] = fieldType
         }
+        return t
       }).join(' JOIN ')
       this.state.sqlTypes = sqlTypes
       const filter = this.parseEval(args[0].having)
