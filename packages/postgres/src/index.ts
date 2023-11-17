@@ -135,7 +135,7 @@ class PostgresBuilder extends Builder {
 
     this.define<Date, string>({
       types: ['time'],
-      dump: date => formatTime(date),
+      dump: date => date ? formatTime(date) : null,
       load: str => {
         if (isNullable(str)) return str
         const date = new Date(0)
@@ -453,7 +453,6 @@ export class PostgresDriver extends Driver {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
     const builder = new PostgresBuilder(tables)
-    // builder.upsert = true
     builder.upsertTable = table
 
     const merged = {}
@@ -500,7 +499,7 @@ export class PostgresDriver extends Driver {
       return `${escaped} = ${value}`
     }).join(', ')
 
-    const result = await this.sql.unsafe(`
+    await this.sql.unsafe(`
       INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
       VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
       ON CONFLICT (${keys.map(builder.escapeId).join(', ')})
