@@ -395,7 +395,6 @@ export namespace PostgresDriver {
 export class PostgresDriver extends Driver {
   public sql!: postgres.Sql
   public config: PostgresDriver.Config
-  private builder: PostgresBuilder
 
   #counter = 0
 
@@ -409,7 +408,6 @@ export class PostgresDriver extends Driver {
       },
       ...config,
     }
-    this.builder = new PostgresBuilder()
   }
 
   async start() {
@@ -517,6 +515,12 @@ export class PostgresDriver extends Driver {
         return items.map(createFilter).join(' OR ')
       }
     }
+    const formatValues = (table: string, data: object, keys: readonly string[]) => {
+      return keys.map((key) => {
+        const field = this.database.tables[table]?.fields[key]
+        return builder.escape(data[key], field)
+      }).join(', ')
+    }
 
     const update = updateFields.map((field) => {
       const escaped = builder.escapeId(field)
@@ -540,19 +544,12 @@ export class PostgresDriver extends Driver {
 
     const result = await this.sql.unsafe(`
       INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
-      VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
+      VALUES (${insertion.map(item => formatValues(table, item, initFields)).join('), (')})
       ON CONFLICT (${keys.map(builder.escapeId).join(', ')})
       DO UPDATE SET ${update}, _pg_mtime = ${mtime}
       RETURNING _pg_mtime as rtime
     `)
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
-  }
-
-  _formatValues = (table: string, data: object, keys: readonly string[]) => {
-    return keys.map((key) => {
-      const field = this.database.tables[table]?.fields[key]
-      return this.builder.escape(data[key], field)
-    }).join(', ')
   }
 
   async get(sel: Selection.Immutable) {

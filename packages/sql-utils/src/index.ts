@@ -408,7 +408,7 @@ export class Builder {
       }).join(' JOIN ')
       this.state.sqlTypes = sqlTypes
       const filter = this.parseEval(args[0].having)
-      if (filter !== this.$true) prefix += ` ON ${filter}`
+      prefix += ` ON ${filter}`
     }
 
     const filter = this.parseQuery(query)
