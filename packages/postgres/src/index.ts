@@ -1,6 +1,6 @@
 import postgres from 'postgres'
-import { Dict, isNullable, makeArray, Time } from 'cosmokit'
-import { Database, Driver, Eval, Field, isEvalExpr, Model, Modifier, Selection } from '@minatojs/core'
+import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
+import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, Modifier, Selection } from '@minatojs/core'
 import { Builder } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
@@ -92,7 +92,7 @@ function type(field: Field & { autoInc?: boolean }) {
       def += ` DEFAULT ${transformArray(initial)}`
     }
   } else if (type === 'json') {
-    def += 'JSON'
+    def += 'JSONB'
     if (initial) def += ` DEFAULT '${JSON.stringify(initial)}'::JSONB` // TODO
   } else if (type === 'date') {
     def += 'DATE' // TODO: default
@@ -126,6 +126,11 @@ function transformArray(arr: any[]) {
 }
 
 class PostgresBuilder extends Builder {
+  protected $true = 'TRUE'
+  protected $false = 'FALSE'
+  upsert = false
+  table = ''
+
   constructor(public tables?: Dict<Model>, public config?: PostgresBuilderConfig) {
     super(tables)
 
@@ -169,48 +174,38 @@ class PostgresBuilder extends Builder {
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::integer, 0)`),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})::integer`),
+      $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`, value => {
+        if (this.state.sqlType === 'json') {
+          this.state.sqlType = 'raw'
+          return `${this.jsonLength(value)}`
+        } else {
+          this.state.sqlType = 'raw'
+          return `COALESCE(ARRAY_LENGTH(${value}, 1), 0)`
+        }
+      }),
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg)).join('||')}`,
     }
+
+    this.define<string[], any>({
+      types: ['list'],
+      dump: value => '{' + value.join(',') + '}',
+      load: value => value,
+    })
+  }
+
+  protected parseFieldQuery(key: string, query) {
+    if (this.upsert) return super.parseFieldQuery(`${this.escapeId(this.table)}.${key}`, query)
+    return super.parseFieldQuery(key, query)
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
     return `${key} ~ ${this.escape(typeof value === 'string' ? value : value.source)}`
   }
 
-  protected createMemberQuery(key: string, value: any[], notStr = '') {
-    if (!value.length) return notStr ? 'TRUE' : 'FALSE'
-    return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
-  }
-
-  protected logicalAnd(conditions: string[]) {
-    if (!conditions.length) return 'TRUE'
-    if (conditions.includes('FALSE')) return 'FALSE'
-    return conditions.join(' AND ')
-  }
-
-  protected logicalOr(conditions: string[]) {
-    if (!conditions.length) return 'FALSE'
-    if (conditions.includes('TRUE')) return 'TRUE'
-    return `(${conditions.join(' OR ')})`
-  }
-
-  suffix(modifier: Modifier) {
-    const { limit, offset, sort, group, having } = modifier
-    let sql = ''
-    if (group?.length) {
-      sql += ` GROUP BY ${group.map(this.escapeId).join(', ')}`
-      const filter = this.parseEval(having)
-      if (filter !== 'TRUE') sql += ` HAVING ${filter}`
-    }
-    if (sort.length) {
-      sql += ' ORDER BY ' + sort.map(([expr, dir]) => {
-        return `${this.parseEval(expr)} ${dir.toUpperCase()}`
-      }).join(', ')
-    }
-    if (limit < Infinity) sql += ' LIMIT ' + limit
-    if (offset > 0) sql += ' OFFSET ' + offset
-    return sql
+  protected transformJsonField(obj: string, path: string) {
+    this.state.sqlType = 'json'
+    return `jsonb_extract_path(${obj}, ${path.slice(1).replace('.', ',')})`
   }
 
   protected getRecursive(args: string | string[]) {
@@ -224,7 +219,11 @@ class PostgresBuilder extends Builder {
     }
 
     const prefix = (() => {
-      if (table === '_') {
+      if (this.upsert && key in fields) {
+        return `${this.escapeId(this.tables![table].name)}.`
+      } else if (this.upsert) {
+        return `${this.escapeId(this.table)}.`
+      } else if (table === '_') {
         return ''
       } else if (this.config?.upsert) {
         return `${this.escapeId(table)}.`
@@ -238,71 +237,11 @@ class PostgresBuilder extends Builder {
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
-  // sync from sql-utils
-  get(sel: Selection.Immutable, inline = false, group = false) {
-    const { args, table, query, ref, model } = sel
-
-    // get prefix
-    let prefix: string | undefined
-    if (typeof table === 'string') {
-      prefix = this.escapeId(table)
-      this.state.sqlTypes = Object.fromEntries(Object.entries(model.fields).map(([key, field]) => {
-        return [key, field!.type === 'json' ? 'json' : field!.type === 'list' ? 'list' : 'raw']
-      }))
-    } else if (table instanceof Selection) {
-      prefix = this.get(table, true)
-      if (!prefix) return
-    } else {
-      const sqlTypes = {}
-      prefix = Object.entries(table).map(([key, table]) => {
-        if (typeof table !== 'string') {
-          const t = `${this.get(table, true)} AS ${this.escapeId(key)}`
-          for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
-            sqlTypes[`${key}.${fieldKey}`] = fieldType
-          }
-          return t
-        } else {
-          return key === table ? this.escapeId(table) : `${this.escapeId(table)} AS ${this.escapeId(key)}`
-        }
-      }).join(' JOIN ')
-      this.state.sqlTypes = sqlTypes
-      const filter = this.parseEval(args[0].having)
-      if (filter !== 'TRUE') prefix += ` ON ${filter}`
-    }
-
-    const filter = this.parseQuery(query)
-    if (filter === 'FALSE') return
-
-    this.state.group = group || !!args[0].group
-    const sqlTypes = {}
-    const fields = args[0].fields ?? Object.fromEntries(Object
-      .entries(model.fields)
-      .filter(([, field]) => !field!.deprecated)
-      .map(([key]) => [key, { $: [ref, key] }]))
-    const keys = Object.entries(fields).map(([key, value]) => {
-      value = this.parseEval(value, false)
-      sqlTypes[key] = this.state.sqlType!
-      return this.escapeId(key) === value ? this.escapeId(key) : `${value} AS ${this.escapeId(key)}`
-    }).join(', ')
-
-    // get suffix
-    let suffix = this.suffix(args[0])
-    this.state.sqlTypes = sqlTypes
-
-    if (filter !== 'TRUE') {
-      suffix = ` WHERE ${filter}` + suffix
-    }
-
-    if (inline && !args[0].fields && !suffix) {
-      return (prefix.startsWith('(') && prefix.endsWith(')')) ? `${prefix} ${ref}` : prefix
-    }
-
-    if (!prefix.includes(' ') || prefix.startsWith('(')) {
-      suffix = ` ${ref}` + suffix
-    }
-
-    const result = `SELECT ${keys} FROM ${prefix}${suffix}`
-    return inline ? `(${result})` : result
+  protected jsonQuote(value: string, pure: boolean = false) {
+    if (pure) return `to_jsonb(${value})`
+    const res = this.state.sqlType === 'raw' ? `to_jsonb(${value})` : value
+    this.state.sqlType = 'json'
+    return res
   }
 
   escapeId(value: string) {
@@ -313,9 +252,57 @@ class PostgresBuilder extends Builder {
     if (value instanceof Date) {
       value = formatTime(value)
     } else if (!field && !!value && typeof value === 'object') {
-      return `json_extract_path(${this.quote(JSON.stringify(value))}, '$')`
+      return `${this.quote(JSON.stringify(value))}::jsonb`
     }
     return super.escape(value, field)
+  }
+
+  toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean, table?: string) {
+    const escaped = this.escapeId(key)
+    this.table = table!
+    // update directly
+    // console.log(item, key)
+    if (key in item) {
+      if (!isEvalExpr(item[key]) && upsert) {
+        return `excluded.${escaped}`
+      } else if (isEvalExpr(item[key])) {
+        return this.parseEval(item[key])
+      } else {
+        // console.log(1, this.escape(item[key], field))
+        return this.escape(item[key], field)
+      }
+    }
+
+    // prepare nested layout
+    const jsonInit = {}
+    for (const prop in item) {
+      if (!prop.startsWith(key + '.')) continue
+      const rest = prop.slice(key.length + 1).split('.')
+      if (rest.length === 1) continue
+      rest.reduce((obj, k) => obj[k] ??= {}, jsonInit)
+    }
+
+    // update with json_set
+    const valueInit = this.upsert ? `coalesce(${this.escapeId(table!)}.${escaped}, '{}')::jsonb` : `coalesce(${escaped}, '{}')::jsonb`
+    let value = valueInit
+
+    // json_set cannot create deeply nested property when non-exist
+    // therefore we merge a layout to it
+    if (Object.keys(jsonInit).length !== 0) {
+      value = `(${value} || jsonb ${this.quote(JSON.stringify(jsonInit))})`
+    }
+
+    for (const prop in item) {
+      if (!prop.startsWith(key + '.')) continue
+      const rest = prop.slice(key.length + 1).split('.')
+      value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${this.jsonQuote(this.parseEval(item[prop]), true)}, true)`
+    }
+
+    if (value === valueInit) {
+      return `${this.escapeId(table!)}.${escaped}`
+    } else {
+      return value
+    }
   }
 }
 
@@ -332,6 +319,7 @@ export namespace PostgresDriver {
 export class PostgresDriver extends Driver {
   public sql!: postgres.Sql
   public config: PostgresDriver.Config
+  private builder: PostgresBuilder
 
   constructor(database: Database, config: PostgresDriver.Config) {
     super(database)
@@ -343,6 +331,7 @@ export class PostgresDriver extends Driver {
       },
       ...config,
     }
+    this.builder = new PostgresBuilder()
   }
 
   async start() {
@@ -419,7 +408,79 @@ export class PostgresDriver extends Driver {
     })
   }
 
-  async upsert(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<Driver.WriteResult> {
+  async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
+    if (!data.length) return {}
+    const { model, table, tables, ref } = sel
+    const builder = new PostgresBuilder(tables)
+    builder.upsert = true
+
+    const merged = {}
+    const insertion = data.map((item) => {
+      Object.assign(merged, item)
+      return model.format(executeUpdate(model.create(), item, ref))
+    })
+    const initFields = Object.keys(model.fields).filter(key => !model.fields[key]?.deprecated)
+    const dataFields = [...new Set(Object.keys(merged).map((key) => {
+      return initFields.find(field => field === key || key.startsWith(field + '.'))!
+    }))]
+    let updateFields = difference(dataFields, keys)
+    if (!updateFields.length) updateFields = [dataFields[0]]
+
+    const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
+    const createMultiFilter = (items: any[]) => {
+      if (items.length === 1) {
+        return createFilter(items[0])
+      } else if (keys.length === 1) {
+        const key = keys[0]
+        return builder.parseQuery({ [key]: items.map(item => item[key]) })
+      } else {
+        return items.map(createFilter).join(' OR ')
+      }
+    }
+
+    const update = updateFields.map((field) => {
+      const escaped = builder.escapeId(field)
+      const branches: Dict<any[]> = {}
+      data.forEach((item) => {
+        (branches[builder.toUpdateExpr(item, field, model.fields[field], true, table)] ??= []).push(item)
+      })
+
+      const entries = Object.entries(branches)
+        .map(([expr, items]) => [createMultiFilter(items), expr])
+        .sort(([a], [b]) => a.length - b.length)
+        .reverse()
+
+      let value = 'CASE '
+      // let value = entries[0][1]
+      for (let index = 0; index < entries.length; index++) {
+        // value = `(CASE WHEN (${entries[index][0]}) THEN (${entries[index][1]}) ELSE (${value}) END)`
+        value += `WHEN (${entries[index][0]}) THEN (${entries[index][1]}) `
+      }
+      value += 'END'
+      return `${escaped} = ${value}`
+    }).join(', ')
+
+    try {
+      const result = await this.sql.unsafe(`
+      INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
+      VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
+      ON CONFLICT (${keys.map(builder.escapeId).join(', ')})
+      DO UPDATE SET ${update}
+    `)
+    } catch (e) { logger.error(e) }
+    return {}
+    // const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
+    // return { inserted: records - result.changedRows, modified: result.affectedRows - records }
+  }
+
+  _formatValues = (table: string, data: object, keys: readonly string[]) => {
+    return keys.map((key) => {
+      const field = this.database.tables[table]?.fields[key]
+      return this.builder.escape(data[key], field)
+    }).join(', ')
+  }
+
+  async upsert2(sel: Selection.Mutable, data: Dict<any>[], keys: string[]): Promise<Driver.WriteResult> {
     if (!data.length) return {}
     const builder = new PostgresBuilder(sel.tables, { upsert: true })
     const comma = this.sql.unsafe(',')
@@ -448,13 +509,13 @@ export class PostgresDriver extends Driver {
       sqls.push({ expr, values })
     }
 
-    await Promise.all(sqls.map(sql => {
+    const d = await Promise.all(sqls.map(sql => {
       return this.sql`
       INSERT INTO ${this.sql(sel.table)} ${this.sql(sql.values)}
       ON CONFLICT (${this.sql(keys)})
       DO UPDATE SET ${sql.expr}`
     }))
-
+    console.log(d)
     // postgres's upsert cannot distinguish between the quantities of modify and insert.
     return {}
   }
@@ -483,9 +544,10 @@ export class PostgresDriver extends Driver {
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>) {
     const builder = new PostgresBuilder(sel.tables)
-    const query = builder.parseEval(expr)
-    const sub = builder.get(sel.table as Selection, true)
-    const [data] = await this.sql.unsafe(`SELECT ${query} AS value FROM ${sub} "${sel.ref}"`)
+    const inner = builder.get(sel.table as Selection, true, true)
+    const output = builder.parseEval(expr, false)
+    const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
+    const [data] = await this.sql.unsafe(`SELECT ${output} AS value FROM ${inner} ${ref}`)
     return data?.value
   }
 
@@ -517,15 +579,36 @@ export class PostgresDriver extends Driver {
   }
 
   async create(sel: Selection.Mutable, data: any) {
+    const { table, model } = sel
     const builder = new PostgresBuilder(sel.tables)
-    data = builder.dump(sel.model, data)
-    const [row] = await this.sql`
-      INSERT INTO ${this.sql(sel.table)} ${this.sql(data)}
-      RETURNING *`
-    return row
+    const formatted = builder.dump(model, data)
+    const keys = Object.keys(formatted)
+    const [row] = await this.sql.unsafe(`
+      INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})
+      VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})
+      RETURNING *`)
+    return builder.load(model, row)
   }
 
-  async set(sel: Selection.Mutable, data: any): Promise<Driver.WriteResult> {
+  async set(sel: Selection.Mutable, data: {}) {
+    const { model, query, table, tables, ref } = sel
+    const builder = new PostgresBuilder(tables)
+    const filter = builder.parseQuery(query)
+    const { fields } = model
+    if (filter === '0') return {}
+    const updateFields = [...new Set(Object.keys(data).map((key) => {
+      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
+    }))]
+
+    const update = updateFields.map((field) => {
+      const escaped = builder.escapeId(field)
+      return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
+    }).join(', ')
+    const result = await this.sql.unsafe(`UPDATE ${builder.escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
+    return {}
+  }
+
+  async set2(sel: Selection.Mutable, data: any): Promise<Driver.WriteResult> {
     const builder = new PostgresBuilder(sel.tables)
     const comma = this.sql.unsafe(',')
     const query = builder.parseQuery(sel.query)
