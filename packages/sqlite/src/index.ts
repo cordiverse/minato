@@ -389,7 +389,7 @@ export class SQLiteDriver extends Driver {
     for (const row of data) {
       modified += this.#update(sel, primaryFields, updateFields, update, row)
     }
-    return { modified }
+    return { matched: data.length, modified }
   }
 
   #create(table: string, data: {}) {
@@ -412,7 +412,7 @@ export class SQLiteDriver extends Driver {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, ref } = sel
-    const result = { inserted: 0, modified: 0 }
+    const result = { inserted: 0, matched: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -429,6 +429,7 @@ export class SQLiteDriver extends Driver {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
           result.modified += this.#update(sel, keys, updateFields, item, row)
+          result.matched++
         } else {
           this.#create(table, executeUpdate(model.create(), item, ref))
           result.inserted++

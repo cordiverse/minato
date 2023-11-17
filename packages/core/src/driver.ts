@@ -27,6 +27,7 @@ export namespace Driver {
 
   export interface WriteResult {
     inserted?: number
+    matched?: number
     modified?: number
     removed?: number
   }
