@@ -95,7 +95,7 @@ function type(field: Field & { autoInc?: boolean }) {
     def += 'JSONB'
     if (initial) def += ` DEFAULT '${JSON.stringify(initial)}'::JSONB` // TODO
   } else if (type === 'date') {
-    def += 'DATE' // TODO: default
+    def += 'TIMESTAMP WITH TIME ZONE'
     if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else if (type === 'time') {
     def += 'TIME WITH TIME ZONE'
@@ -126,6 +126,7 @@ function transformArray(arr: any[]) {
 }
 
 class PostgresBuilder extends Builder {
+  // eslint-disable-next-line no-control-regex
   protected escapeRegExp = /[\0\b\t\n\r\x1a'\\]/g
   protected escapeMap = {
     '\0': '\\0',
@@ -137,6 +138,7 @@ class PostgresBuilder extends Builder {
     '\'': '\'\'',
     '\\': '\\\\',
   }
+
   protected $true = 'TRUE'
   protected $false = 'FALSE'
   upsertTable?: string
@@ -395,6 +397,8 @@ export class PostgresDriver extends Driver {
   public config: PostgresDriver.Config
   private builder: PostgresBuilder
 
+  #counter = 0
+
   constructor(database: Database, config: PostgresDriver.Config) {
     super(database)
 
@@ -450,7 +454,7 @@ export class PostgresDriver extends Driver {
     if (!columns?.length) {
       await this.sql`
         CREATE TABLE ${this.sql(name)}
-        (${this.sql.unsafe(create.map(f => `"${f.key}" ${f.def}`).join(','))},
+        (${this.sql.unsafe(create.map(f => `"${f.key}" ${f.def}`).join(','))}, _pg_mtime BIGINT,
         PRIMARY KEY(${this.sql(primary)}))`
       return
     }
@@ -488,6 +492,8 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(tables)
     builder.upsertTable = table
 
+    this.#counter = (this.#counter + 1) % 256
+    const mtime = Date.now() * 256 + this.#counter
     const merged = {}
     const insertion = data.map((item) => {
       Object.assign(merged, item)
@@ -531,13 +537,15 @@ export class PostgresDriver extends Driver {
       value += 'END'
       return `${escaped} = ${value}`
     }).join(', ')
-    await this.sql.unsafe(`
+
+    const result = await this.sql.unsafe(`
       INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
       VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
       ON CONFLICT (${keys.map(builder.escapeId).join(', ')})
-      DO UPDATE SET ${update}
+      DO UPDATE SET ${update}, _pg_mtime = ${mtime}
+      RETURNING _pg_mtime as rtime
     `)
-    return {}
+    return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
   }
 
   _formatValues = (table: string, data: object, keys: readonly string[]) => {
