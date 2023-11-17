@@ -126,6 +126,17 @@ function transformArray(arr: any[]) {
 }
 
 class PostgresBuilder extends Builder {
+  protected escapeRegExp = /[\0\b\t\n\r\x1a'\\]/g
+  protected escapeMap = {
+    '\0': '\\0',
+    '\b': '\\b',
+    '\t': '\\t',
+    '\n': '\\n',
+    '\r': '\\r',
+    '\x1a': '\\Z',
+    '\'': '\'\'',
+    '\\': '\\\\',
+  }
   protected $true = 'TRUE'
   protected $false = 'FALSE'
   upsertTable?: string
@@ -520,7 +531,6 @@ export class PostgresDriver extends Driver {
       value += 'END'
       return `${escaped} = ${value}`
     }).join(', ')
-
     await this.sql.unsafe(`
       INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
       VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})
