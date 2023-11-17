@@ -165,8 +165,14 @@ class PostgresBuilder extends Builder {
       $if: (args) => `(SELECT CASE WHEN ${this.parseEval(args[0])} THEN ${this.parseEval(args[1])} ELSE ${this.parseEval(args[2])} END)`,
       $ifNull: (args) => `coalesce(${args.map(arg => this.parseEval(arg)).join(', ')})`,
 
-      $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::integer, 0)`),
-      $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`),
+      // number
+      $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,
+      $multiply: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' * ')})`,
+
+      $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::double precision, 0)`, undefined, 'double precision'),
+      $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`, undefined, 'double precision'),
+      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, 'double precision'),
+      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, 'double precision'),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})::integer`),
       $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`, value => {
         if (this.state.sqlType === 'json') {
@@ -178,7 +184,7 @@ class PostgresBuilder extends Builder {
         }
       }),
 
-      $concat: (args) => `${args.map(arg => this.parseEval(arg)).join('||')}`,
+      $concat: (args) => `${args.map(arg => this.parseEval(arg, 'text')).join('||')}`,
     }
 
     this.define<string[], any>({
@@ -186,6 +192,20 @@ class PostgresBuilder extends Builder {
       dump: value => '{' + value.join(',') + '}',
       load: value => value,
     })
+  }
+
+  protected binary(operator: string) {
+    return ([left, right]) => {
+      return `(${this.parseEval(left, 'double precision')} ${operator} ${this.parseEval(right, 'double precision')})`
+    }
+  }
+
+  parseEval(expr: any, outtype: boolean | string = false): string {
+    this.state.sqlType = 'raw'
+    if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
+      return this.escape(expr)
+    }
+    return outtype ? this.jsonUnquote(this.parseEvalExpr(expr), false, typeof outtype === 'string' ? outtype : undefined) : this.parseEvalExpr(expr)
   }
 
   protected parseFieldQuery(key: string, query) {
@@ -205,10 +225,10 @@ class PostgresBuilder extends Builder {
     }
   }
 
-  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
+  protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, eltype?: string) {
     if (!this.state.group && !nonaggr) {
       const value = this.parseEval(expr, false)
-      return `(select ${aggr(this.escapeId('value'))} from jsonb_array_elements(${value}) ${randomId()})`
+      return `(select ${aggr(this.jsonUnquote(this.escapeId('value'), true, eltype))} from jsonb_array_elements(${value}) ${randomId()})`
     } else {
       return super.createAggr(expr, aggr, nonaggr)
     }
@@ -227,9 +247,11 @@ class PostgresBuilder extends Builder {
     return `(${obj} @> ${value})`
   }
 
-  protected jsonUnquote(value: string, pure: boolean = false) {
-    if (!pure) this.state.sqlType = 'raw'
-    return value
+  protected jsonUnquote(value: string, pure: boolean = false, type?: string) {
+    if (pure && type) return `(jsonb_build_object('v', ${value})->>'v')::${type}`
+    const res = type && this.state.sqlType === 'json' ? `(jsonb_build_object('v', ${value})->>'v')::${type}` : value
+    this.state.sqlType = 'raw'
+    return res
   }
 
   protected jsonQuote(value: string, pure: boolean = false) {
