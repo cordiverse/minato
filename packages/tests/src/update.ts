@@ -215,6 +215,19 @@ namespace OrmOperations {
       ])
       await expect(database.get('temp3', {})).to.eventually.have.deep.members(table)
     })
+
+    it('multi condition on composite primary', async () => {
+      const table = await setup(database, 'temp3', bazTable)
+      table[1].value = 'bb'
+      table[2].value = 'cc'
+      table.push({ ida: 114, idb: '514', value: 'baz' })
+      await database.upsert('temp3', row => [
+        { ida: 2, idb: 'a', value: 'bb' },
+        { ida: 1, idb: 'b', value: 'cc' },
+        { ida: 114, idb: '514', value: $.concat(row.value, 'baz') },
+      ])
+      await expect(database.get('temp3', {})).to.eventually.have.deep.members(table)
+    })
   }
 
   export const remove = function Remove(database: Database<Tables>) {

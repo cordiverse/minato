@@ -48,7 +48,7 @@ interface PostgresBuilderConfig {
   upsert?: boolean
 }
 
-function type(field: Field & { autoInc?: boolean }) {
+function getTypeDef(field: Field & { autoInc?: boolean }) {
   let { type, length, precision, scale, initial, autoInc } = field
   let def = ''
   if (['primary', 'unsigned', 'integer'].includes(type)) {
@@ -146,19 +146,6 @@ class PostgresBuilder extends Builder {
   constructor(public tables?: Dict<Model>, public config?: PostgresBuilderConfig) {
     super(tables)
 
-    this.define<Date, string>({
-      types: ['time'],
-      dump: date => date ? formatTime(date) : null,
-      load: str => {
-        if (isNullable(str)) return str
-        const date = new Date(0)
-        const parsed = timeRegex.exec(str)
-        if (!parsed) throw Error(`unexpected time value: ${str}`)
-        date.setHours(+parsed[1], +parsed[2], +parsed[3])
-        return date
-      },
-    })
-
     this.queryOperators = {
       ...this.queryOperators,
       $regex: (key, value) => this.createRegExpQuery(key, value),
@@ -201,6 +188,19 @@ class PostgresBuilder extends Builder {
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg, 'text')).join('||')}`,
     }
+
+    this.define<Date, string>({
+      types: ['time'],
+      dump: date => date ? formatTime(date) : null,
+      load: str => {
+        if (isNullable(str)) return str
+        const date = new Date(0)
+        const parsed = timeRegex.exec(str)
+        if (!parsed) throw Error(`unexpected time value: ${str}`)
+        date.setHours(+parsed[1], +parsed[2], +parsed[3])
+        return date
+      },
+    })
 
     this.define<string[], any>({
       types: ['list'],
@@ -446,7 +446,7 @@ export class PostgresDriver extends Driver {
 
       let def: string | undefined
       if (!column) {
-        def = type(Object.assign({
+        def = getTypeDef(Object.assign({
           primary: isPrimary,
           autoInc: isPrimary && table.autoInc,
         }, field))
@@ -474,7 +474,7 @@ export class PostgresDriver extends Driver {
 
     if (create?.length) {
       await this.sql.unsafe(
-        `ALTER TABLE "${name}" ${rename.map(f => `ADD "${f.key}" ${f.def}`).join(',')}`,
+        `ALTER TABLE "${name}" ${create.map(f => `ADD "${f.key}" ${f.def}`).join(',')}`,
       )
     }
 
