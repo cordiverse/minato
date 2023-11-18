@@ -413,7 +413,7 @@ export class PostgresDriver extends Driver {
     this.config = {
       onnotice: () => { },
       debug(_, query, parameters) {
-        logger.debug('> %s\n parameters: %o', query, parameters)
+        logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
       },
       ...config,
     }
@@ -425,6 +425,13 @@ export class PostgresDriver extends Driver {
 
   async stop() {
     await this.sql.end()
+  }
+
+  async query(sql: string) {
+    return await this.sql.unsafe(sql).catch(e => {
+      logger.warn('> %s', sql)
+      throw e
+    })
   }
 
   async prepare(name: string) {
@@ -493,6 +500,94 @@ export class PostgresDriver extends Driver {
     })
   }
 
+  async drop(table?: string) {
+    if (table) {
+      await this.sql`DROP TABLE IF EXISTS "${this.sql(table)}" CASCADE`
+      return
+    }
+    const tables: TableInfo[] = await this.sql`
+      SELECT *
+      FROM information_schema.tables
+      WHERE table_schema = 'public'`
+    if (!tables.length) return
+    await this.sql`DROP TABLE IF EXISTS ${this.sql(tables.map(t => t.table_name))} CASCADE`
+  }
+
+  async stats(): Promise<Partial<Driver.Stats>> {
+    const tables = await this.sql`
+      SELECT *
+      FROM information_schema.tables
+      WHERE table_schema = 'public'`
+    const tableStats = await this.query(
+      tables.map(({ table_name: name }) => {
+        return `SELECT '${name}' AS name,
+          pg_total_relation_size('${name}') AS size,
+          COUNT(*) AS count FROM ${name}`
+      }).join(' UNION '),
+    ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
+
+    return {
+      size: tableStats.reduce((p, c) => p += c[1].size, 0),
+      tables: Object.fromEntries(tableStats),
+    }
+  }
+
+  async get(sel: Selection.Immutable) {
+    const builder = new PostgresBuilder(sel.tables)
+    const query = builder.get(sel)
+    if (!query) return []
+    return this.query(query).then(data => {
+      return data.map(row => builder.load(sel.model, row))
+    })
+  }
+
+  async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>) {
+    const builder = new PostgresBuilder(sel.tables)
+    const inner = builder.get(sel.table as Selection, true, true)
+    const output = builder.parseEval(expr, false)
+    const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
+    const [data] = await this.query(`SELECT ${output} AS value FROM ${inner} ${ref}`)
+    return data?.value
+  }
+
+  async set(sel: Selection.Mutable, data: {}) {
+    const { model, query, table, tables, ref } = sel
+    const builder = new PostgresBuilder(tables)
+    const filter = builder.parseQuery(query)
+    const { fields } = model
+    if (filter === '0') return {}
+    const updateFields = [...new Set(Object.keys(data).map((key) => {
+      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
+    }))]
+
+    const update = updateFields.map((field) => {
+      const escaped = builder.escapeId(field)
+      return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
+    }).join(', ')
+    const result = await this.query(`UPDATE ${builder.escapeId(table)} ${ref} SET ${update} WHERE ${filter} RETURNING *`)
+    return { matched: result.length }
+  }
+
+  async remove(sel: Selection.Mutable): Promise<Driver.WriteResult> {
+    const builder = new PostgresBuilder(sel.tables)
+    const query = builder.parseQuery(sel.query)
+    if (query === 'FALSE') return {}
+    const { count } = await this.query(`DELETE FROM ${sel.table} WHERE ${query}`)
+    return { removed: count }
+  }
+
+  async create(sel: Selection.Mutable, data: any) {
+    const { table, model } = sel
+    const builder = new PostgresBuilder(sel.tables)
+    const formatted = builder.dump(model, data)
+    const keys = Object.keys(formatted)
+    const [row] = await this.query(`
+      INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})
+      VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})
+      RETURNING *`)
+    return builder.load(model, row)
+  }
+
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
@@ -551,7 +646,7 @@ export class PostgresDriver extends Driver {
       return `${escaped} = ${value}`
     }).join(', ')
 
-    const result = await this.sql.unsafe(`
+    const result = await this.query(`
       INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
       VALUES (${insertion.map(item => formatValues(table, item, initFields)).join('), (')})
       ON CONFLICT (${keys.map(builder.escapeId).join(', ')})
@@ -559,94 +654,6 @@ export class PostgresDriver extends Driver {
       RETURNING _pg_mtime as rtime
     `)
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
-  }
-
-  async get(sel: Selection.Immutable) {
-    const builder = new PostgresBuilder(sel.tables)
-    const query = builder.get(sel)
-    if (!query) return []
-    return this.sql.unsafe(query).then(data => {
-      return data.map(row => builder.load(sel.model, row))
-    })
-  }
-
-  async drop(table?: string) {
-    if (table) {
-      await this.sql`DROP TABLE IF EXISTS "${this.sql(table)}" CASCADE`
-      return
-    }
-    const tables: TableInfo[] = await this.sql`
-      SELECT *
-      FROM information_schema.tables
-      WHERE table_schema = 'public'`
-    if (!tables.length) return
-    await this.sql`DROP TABLE IF EXISTS ${this.sql(tables.map(t => t.table_name))} CASCADE`
-  }
-
-  async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>) {
-    const builder = new PostgresBuilder(sel.tables)
-    const inner = builder.get(sel.table as Selection, true, true)
-    const output = builder.parseEval(expr, false)
-    const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
-    const [data] = await this.sql.unsafe(`SELECT ${output} AS value FROM ${inner} ${ref}`)
-    return data?.value
-  }
-
-  async remove(sel: Selection.Mutable): Promise<Driver.WriteResult> {
-    const builder = new PostgresBuilder(sel.tables)
-    const query = builder.parseQuery(sel.query)
-    if (query === 'FALSE') return {}
-    const { count } = await this.sql.unsafe(`DELETE FROM ${sel.table} WHERE ${query}`)
-    return { removed: count }
-  }
-
-  async stats(): Promise<Partial<Driver.Stats>> {
-    const tables = await this.sql`
-      SELECT *
-      FROM information_schema.tables
-      WHERE table_schema = 'public'`
-    const tableStats = await this.sql.unsafe(
-      tables.map(({ table_name: name }) => {
-        return `SELECT '${name}' AS name,
-          pg_total_relation_size('${name}') AS size,
-          COUNT(*) AS count FROM ${name}`
-      }).join(' UNION '),
-    ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
-
-    return {
-      size: tableStats.reduce((p, c) => p += c[1].size, 0),
-      tables: Object.fromEntries(tableStats),
-    }
-  }
-
-  async create(sel: Selection.Mutable, data: any) {
-    const { table, model } = sel
-    const builder = new PostgresBuilder(sel.tables)
-    const formatted = builder.dump(model, data)
-    const keys = Object.keys(formatted)
-    const [row] = await this.sql.unsafe(`
-      INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})
-      VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})
-      RETURNING *`)
-    return builder.load(model, row)
-  }
-
-  async set(sel: Selection.Mutable, data: {}) {
-    const { model, query, table, tables, ref } = sel
-    const builder = new PostgresBuilder(tables)
-    const filter = builder.parseQuery(query)
-    const { fields } = model
-    if (filter === '0') return {}
-    const updateFields = [...new Set(Object.keys(data).map((key) => {
-      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
-    }))]
-
-    const update = updateFields.map((field) => {
-      const escaped = builder.escapeId(field)
-      return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
-    }).join(', ')
-    const result = await this.sql.unsafe(`UPDATE ${builder.escapeId(table)} ${ref} SET ${update} WHERE ${filter} RETURNING *`)
-    return { matched: result.length }
   }
 }
 
