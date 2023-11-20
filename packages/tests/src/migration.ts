@@ -20,6 +20,53 @@ interface Tables {
 }
 
 function MigrationTests(database: Database<Tables>) {
+  it('alter field', async () => {
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'string(64)',
+    })
+
+    await database.upsert('qux', [
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'string(64)',
+      number: 'unsigned',
+    })
+
+    await database.upsert('qux', [
+      { id: 1, text: 'foo', number: 100 },
+      { id: 2, text: 'bar', number: 200 },
+    ])
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo', number: 100 },
+      { id: 2, text: 'bar', number: 200 },
+    ])
+
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'string(64)',
+    })
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+  })
+
   it('should migrate field', async () => {
     Reflect.deleteProperty(database.tables, 'qux')
 

@@ -127,8 +127,7 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
   operators[`$${key}`] = (args, data) => {
     const left = executeEval(data, args[0])
     const right = executeEval(data, args[1])
-    if (isNullable(left) || isNullable(right)) return true
-    return callback(left.valueOf(), right.valueOf())
+    return callback(left?.valueOf(), right?.valueOf())
   }
   return (...args: any) => Eval(key, args) as any
 }

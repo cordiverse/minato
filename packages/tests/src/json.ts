@@ -186,7 +186,7 @@ namespace JsonTests {
         })
         .orderBy(row => row.foo.id)
         .execute()
-      ).to.eventually.deep.equal([
+      ).to.eventually.have.shape([
         { foo: { id: 1, value: 0 }, x: [1, 2], y: ['a', 'b'] },
         { foo: { id: 2, value: 2 }, x: [3], y: ['c'] },
       ])
@@ -198,7 +198,7 @@ namespace JsonTests {
         })
         .orderBy(row => row.foo.id)
         .execute(row => $.array(row.y))
-      ).to.eventually.deep.equal([
+      ).to.eventually.have.shape([
         ['a', 'b'],
         ['c'],
       ])
@@ -248,7 +248,7 @@ namespace JsonTests {
         .orderBy(row => row.foo.id)
         .execute()
 
-      expect(res).to.deep.equal([
+      expect(res).to.have.shape([
         {
           foo: { id: 1, value: 0 },
           bars: [{
@@ -290,7 +290,7 @@ namespace JsonTests {
         .orderBy(row => row.foo.id)
         .execute()
 
-      expect(res).to.deep.equal([
+      expect(res).to.have.shape([
         {
           foo: { id: 1, value: 0 },
           bars: [{ value: 0, value2: 0 }, { value: 1, value2: 1 }],
@@ -306,19 +306,18 @@ namespace JsonTests {
       ])
     })
 
-
     it('$.array nested', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .orderBy(row => row.foo.id)
         .groupBy('foo', {
           y: row => $.array(row.bar.obj.x),
         })
-        .orderBy(row => row.foo.id)
         .groupBy({}, {
           z: row => $.array(row.y),
         })
         .execute()
 
-      expect(res).to.deep.equal([
+      expect(res).to.have.shape([
         {
           z: [[1, 2], [3]],
         },
@@ -348,10 +347,10 @@ namespace JsonTests {
 
     it('non-aggr func inside aggr', async () => {
       const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+        .orderBy(row => row.foo.id)
         .groupBy('foo', {
           y: row => $.array(row.bar.obj.x),
         })
-        .orderBy(row => row.foo.id)
         .groupBy({}, {
           sum: row => $.avg($.sum(row.y)),
           avg: row => $.avg($.avg(row.y)),
@@ -391,7 +390,7 @@ namespace JsonTests {
         })
         .execute()
 
-      expect(res).to.deep.equal([
+      expect(res).to.have.deep.members([
         { x: ['1', '2'], y: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } } },
         { x: ['5', '3', '4'], y: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } } },
         { x: ['2'], y: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } } },

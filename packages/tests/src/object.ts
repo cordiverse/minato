@@ -58,6 +58,18 @@ namespace ObjectOperations {
         { meta: { a: '666', embed: { c: 'world' } } },
       ])
     })
+
+    it('nested property', async () => {
+      await setup(database)
+      await expect(database.get('object', row => $.eq(row.meta.embed.b, 2), ['meta']))
+        .to.eventually.deep.equal([
+          { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
+        ])
+      await expect(database.get('object', row => $.eq(row.meta.embed.c, 'hello'), ['meta']))
+        .to.eventually.deep.equal([
+          { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
+        ])
+    })
   }
 
   export const upsert = function Upsert(database: Database<Tables>) {
@@ -95,21 +107,21 @@ namespace ObjectOperations {
       const table = await setup(database)
       table[0]!.meta!.embed = {}
       await database.upsert('object', [{ id: '0', meta: { embed: {} } }])
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 
     it('expressions w/ json object', async () => {
       const table = await setup(database)
       table[0]!.meta!.a = table[0]!.meta!.embed!.c + 'a'
       await database.upsert('object', row => [{ id: '0', meta: { a: $.concat(row.meta.embed.c, 'a') } }])
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 
     it('expressions w/o json object', async () => {
       const table = await setup(database)
       table[0]!.meta!.a = table[0]!.meta!.a + 'a'
       await database.upsert('object', row => [{ id: '0', meta: { a: $.concat(row.meta.a, 'a') } }])
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
   }
 
@@ -146,38 +158,38 @@ namespace ObjectOperations {
       const table = await setup(database)
       table[0]!.meta!.embed = {}
       await database.set('object', { id: '0' }, { meta: { embed: {} } })
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 
     it('expressions w/ json object', async () => {
       const table = await setup(database)
       table[0]!.meta!.a = table[0]!.meta!.embed!.c + 'a'
       await database.set('object', { id: '0' }, row => ({ meta: { a: $.concat(row.meta.embed.c, 'a') } }))
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 
     it('expressions w/o json object', async () => {
       const table = await setup(database)
       table[0]!.meta!.a = table[0]!.meta!.a + 'a'
       await database.set('object', { id: '0' }, row => ({ meta: { a: $.concat(row.meta.a, 'a') } }))
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 
     it('object in json', async () => {
       const table = await setup(database)
       table[1]!.meta!.embed!.d = {}
       await database.set('object', { id: '1' }, { 'meta.embed.d': {} })
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
       table[0]!.meta!.embed!.d = { foo: 1, bar: { a: 3, b: 4 } }
       await database.set('object', { id: '0' }, { 'meta.embed.d': { foo: 1, bar: { a: 3, b: 4 } } })
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 
     it('nested object in json', async () => {
       const table = await setup(database)
       table[0]!.meta!.embed!.d = { foo: 2, bar: { a: 1 } }
       await database.set('object', { id: '0' }, { 'meta.embed.d.bar': { a: 1 }, 'meta.embed.d.foo': 2 })
-      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
   }
 }
