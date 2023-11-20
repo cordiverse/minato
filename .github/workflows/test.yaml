@@ -16,7 +16,7 @@ jobs:
           - mysql:5.7
           - mysql:8.0
           - mariadb:10.5
-        node-version: [16, 18, 20]
+        node-version: [18, 20]
 
     services:
       mysql:
@@ -99,7 +99,7 @@ jobs:
         mongo-image:
           - mongo:6.0
           - mongo:latest
-        node-version: [16, 18, 20]
+        node-version: [18, 20]
 
     services:
       mongo:
@@ -135,7 +135,7 @@ jobs:
       fail-fast: false
       matrix:
         driver-name: [sqlite, memory]
-        node-version: [16, 18, 20]
+        node-version: [18, 20]
 
     steps:
       - name: Check out
