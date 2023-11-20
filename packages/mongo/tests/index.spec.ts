@@ -23,5 +23,9 @@ describe('@minatojs/driver-mongo', () => {
     logger.level = 2
   })
 
-  test(database)
+  test(database, process.argv.includes('--enable-transaction-abort') ? {} : {
+    transaction: {
+      abort: false
+    }
+  })
 })

@@ -87,13 +87,13 @@ jobs:
           name: codecov
 
   mongo-replica:
-    name: mongo-replica-${{ matrix.mongo-version }} (${{ matrix.node-version }})
+    name: mongo-replica:${{ matrix.mongo-version }} (${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        mongodb-version:
+        mongo-version:
           - latest
         node-version: [16, 18, 20]
 
@@ -107,13 +107,13 @@ jobs:
       - name: Set up MongoDB
         uses: supercharge/mongodb-github-action@1.10.0
         with:
-          mongodb-version: ${{ matrix.mongodb-version }}
+          mongodb-version: ${{ matrix.mongo-version }}
           mongodb-replica-set: test-rs
           mongodb-port: 27017
       - name: Install
         run: yarn
       - name: Unit Test
-        run: yarn test:json mongo
+        run: yarn test:json mongo --enable-transaction-abort
       - name: Report Coverage
         uses: codecov/codecov-action@v3
         with:
