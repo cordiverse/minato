@@ -8,7 +8,11 @@
     "lib",
     "src"
   ],
-  "author": "Shigma <shigma10826@gmail.com>",
+  "author": "Seidko <seidko.coding@gmail.com>",
+  "contributors": [
+    "Hieuzest <girkirin@hotmail.com>",
+    "Seidko <seidko.coding@gmail.com>"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
