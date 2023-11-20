@@ -192,7 +192,7 @@ export class Database<S = any> {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
     const [table, callback] = typeof arg === 'string' ? [arg, ...args] : [null, arg, ...args]
     const driver = this.getDriver(table)
-    await driver.withTransaction(async (session) => {
+    return await driver.withTransaction(async (session) => {
       const database = new Proxy(this, {
         get(target, p, receiver) {
           if (p === 'drivers') return { default: session }

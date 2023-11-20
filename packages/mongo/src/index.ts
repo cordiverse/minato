@@ -590,7 +590,16 @@ export class MongoDriver extends Driver {
           else return Reflect.get(target, p, receiver)
         },
       })
-      await session.withTransaction(async () => callback(driver))
+      await session.withTransaction(async () => callback(driver)).catch(async e => {
+        if (e instanceof MongoError && e.code === 20 && e.message.includes('Transaction numbers')) {
+          logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
+Convert to replicaSet to enable the feature.
+See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
+          await callback(this)
+          return
+        }
+        throw e
+      })
     })
   }
 }

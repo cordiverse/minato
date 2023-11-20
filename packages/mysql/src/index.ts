@@ -634,8 +634,9 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
             else return Reflect.get(target, p, receiver)
           },
         })
-        conn.beginTransaction()
-        callback(driver).then(() => resolve(conn.commit()), (e) => (conn.rollback(), reject(e)))
+        conn.beginTransaction(() => callback(driver)
+          .then(() => conn.commit(() => resolve(null)), (e) => conn.rollback(() => reject(e)))
+          .finally(() => conn.release()))
       })
     })
   }
