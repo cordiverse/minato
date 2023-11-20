@@ -443,7 +443,7 @@ export class SQLiteDriver extends Driver {
 
   async withTransaction(callback: (session: Driver) => Promise<void>) {
     if (this._transactionTask) await this._transactionTask
-    return this._transactionTask = new Promise((resolve, reject) => {
+    return this._transactionTask = new Promise<void>((resolve, reject) => {
       this.#run('BEGIN TRANSACTION')
       callback(this).then(() => resolve(this.#run('COMMIT')), (e) => (this.#run('ROLLBACK'), reject(e)))
     })

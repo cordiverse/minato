@@ -622,7 +622,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   }
 
   async withTransaction(callback: (session: Driver) => Promise<void>) {
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       this.pool.getConnection((err, conn) => {
         if (err) {
           logger.warn('getConnection failed: ', err)
@@ -635,7 +635,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
           },
         })
         conn.beginTransaction(() => callback(driver)
-          .then(() => conn.commit(() => resolve(null)), (e) => conn.rollback(() => reject(e)))
+          .then(() => conn.commit(() => resolve()), (e) => conn.rollback(() => reject(e)))
           .finally(() => conn.release()))
       })
     })
