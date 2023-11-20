@@ -245,7 +245,7 @@ export abstract class Driver {
   abstract remove(sel: Selection.Mutable): Promise<Driver.WriteResult>
   abstract create(sel: Selection.Mutable, data: any): Promise<any>
   abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
-  abstract withTransaction(callback: (driver: Driver) => Promise<void>): Promise<any>
+  abstract withTransaction(callback: (driver: Driver) => Promise<void>): Promise<void>
 
   constructor(public database: Database) {}
 
