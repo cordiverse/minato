@@ -48,6 +48,47 @@ jobs:
           files: ./coverage/coverage-final.json
           name: codecov
 
+  postgres:
+    name: ${{ matrix.postgres-image }} (${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres-image:
+          - postgres:16.1
+          - postgres:15.5
+          - postgres:14.10
+        node-version: [16, 18, 20]
+
+    services:
+      postgres:
+        image: ${{ matrix.postgres-image }}
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: koishi@114514
+          POSTGRES_USER: koishi
+          POSTGRES_DB: test
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install
+        run: yarn
+      - name: Unit Test
+        run: yarn test:json postgres
+      - name: Report Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/coverage-final.json
+          name: codecov
+
   mongo:
     name: ${{ matrix.mongo-image }} (${{ matrix.node-version }})
     runs-on: ubuntu-latest
