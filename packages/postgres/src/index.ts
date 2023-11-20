@@ -44,10 +44,6 @@ interface FieldInfo {
   def?: string
 }
 
-interface PostgresBuilderConfig {
-  upsert?: boolean
-}
-
 function getTypeDef(field: Field & { autoInc?: boolean }) {
   let { type, length, precision, scale, initial, autoInc } = field
   let def = ''
@@ -141,9 +137,8 @@ class PostgresBuilder extends Builder {
 
   protected $true = 'TRUE'
   protected $false = 'FALSE'
-  upsertTable?: string
 
-  constructor(public tables?: Dict<Model>, public config?: PostgresBuilderConfig) {
+  constructor(public tables?: Dict<Model>) {
     super(tables)
 
     this.queryOperators = {
@@ -209,6 +204,10 @@ class PostgresBuilder extends Builder {
     })
   }
 
+  upsert(table: string) {
+    this.modifiedTable = table
+  }
+
   protected binary(operator: string, eltype: string = 'double precision') {
     return ([left, right]) => {
       const type = this.getLiteralType(left) ?? this.getLiteralType(right) ?? eltype
@@ -228,11 +227,6 @@ class PostgresBuilder extends Builder {
       return this.escape(expr)
     }
     return outtype ? this.jsonUnquote(this.parseEvalExpr(expr), false, typeof outtype === 'string' ? outtype : undefined) : this.parseEvalExpr(expr)
-  }
-
-  protected parseFieldQuery(key: string, query) {
-    if (this.upsertTable) return super.parseFieldQuery(`${this.escapeId(this.upsertTable)}.${key}`, query)
-    return super.parseFieldQuery(key, query)
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
@@ -298,42 +292,12 @@ class PostgresBuilder extends Builder {
     return `coalesce(jsonb_agg(${value}), '[]'::jsonb)`
   }
 
-  protected transformKey(key: string, fields: {}, prefix: string, fullKey: string) {
-    if (key in fields || !key.includes('.')) {
-      if (this.state.sqlTypes?.[key] || this.state.sqlTypes?.[fullKey]) {
-        this.state.sqlType = this.state.sqlTypes[key] || this.state.sqlTypes[fullKey]
-      }
-      return prefix + this.escapeId(key)
-    }
-    const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
-    const rest = key.slice(field.length + 1).split('.')
-    return this.transformJsonField(`${prefix}${this.escapeId(field)}`, rest.map(key => `.'${key}'`).join(''))
-  }
-
-  protected getRecursive(args: string | string[]) {
-    if (typeof args === 'string') {
-      return this.getRecursive(['_', args])
-    }
-    const [table, key] = args
-    const fields = this.tables?.[table]?.fields || {}
-    const fkey = Object.keys(fields).find(field => key === field || key.startsWith(field + '.'))
-    if (fkey && fields[fkey]?.expr) {
-      if (key === fkey) {
-        return this.parseEvalExpr(fields[fkey]?.expr)
-      } else {
-        const field = this.parseEvalExpr(fields[fkey]?.expr)
-        const rest = key.slice(fkey.length + 1).split('.')
-        return this.transformJsonField(`${field}`, rest.map(key => `.'${key}'`).join(''))
-      }
-    }
-    const prefix = this.upsertTable ? `${this.escapeId(this.tables?.[table]?.name ?? this.upsertTable)}.` : (!this.tables || table === '_' || key in fields
-    // the only table must be the main table
-    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`)
-    return this.transformKey(key, fields, prefix, `${table}.${key}`)
-  }
-
   escapeId(value: string) {
     return '"' + value.replace(/"/g, '""') + '"'
+  }
+
+  escapeKey(value: string) {
+    return `'${value}'`
   }
 
   escape(value: any, field?: Field<any>) {
@@ -368,7 +332,7 @@ class PostgresBuilder extends Builder {
     }
 
     // update with json_set
-    const valueInit = this.upsertTable ? `coalesce(${this.escapeId(this.upsertTable)}.${escaped}, '{}')::jsonb` : `coalesce(${escaped}, '{}')::jsonb`
+    const valueInit = this.modifiedTable ? `coalesce(${this.escapeId(this.modifiedTable)}.${escaped}, '{}')::jsonb` : `coalesce(${escaped}, '{}')::jsonb`
     let value = valueInit
 
     // json_set cannot create deeply nested property when non-exist
@@ -384,7 +348,7 @@ class PostgresBuilder extends Builder {
     }
 
     if (value === valueInit) {
-      return this.upsertTable ? `${this.escapeId(this.upsertTable)}.${escaped}` : escaped
+      return this.modifiedTable ? `${this.escapeId(this.modifiedTable)}.${escaped}` : escaped
     } else {
       return value
     }
@@ -592,7 +556,7 @@ export class PostgresDriver extends Driver {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
     const builder = new PostgresBuilder(tables)
-    builder.upsertTable = table
+    builder.upsert(table)
 
     this.#counter = (this.#counter + 1) % 256
     const mtime = Date.now() * 256 + this.#counter

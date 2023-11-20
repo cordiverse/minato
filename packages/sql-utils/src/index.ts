@@ -39,6 +39,7 @@ export class Builder {
   protected state: State = {}
   protected $true = '1'
   protected $false = '0'
+  protected modifiedTable?: string
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -259,6 +260,7 @@ export class Builder {
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
     const conditions: string[] = []
+    if (this.modifiedTable) key = `${this.escapeId(this.modifiedTable)}.${key}`
 
     // query shorthand
     if (Array.isArray(query)) {
@@ -325,7 +327,7 @@ export class Builder {
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
-    return this.transformJsonField(`${prefix}${this.escapeId(field)}`, rest.map(key => `."${key}"`).join(''))
+    return this.transformJsonField(`${prefix}${this.escapeId(field)}`, rest.map(key => `.${this.escapeKey(key)}`).join(''))
   }
 
   protected getRecursive(args: string | string[]) {
@@ -341,17 +343,13 @@ export class Builder {
       } else {
         const field = this.parseEvalExpr(fields[fkey]?.expr)
         const rest = key.slice(fkey.length + 1).split('.')
-        return this.transformJsonField(`${field}`, rest.map(key => `."${key}"`).join(''))
+        return this.transformJsonField(`${field}`, rest.map(key => `.${this.escapeKey(key)}`).join(''))
       }
     }
-    const prefix = !this.tables || table === '_' || key in fields
+    const prefix = this.modifiedTable ? `${this.escapeId(this.tables?.[table]?.name ?? this.modifiedTable)}.` : (!this.tables || table === '_' || key in fields
     // the only table must be the main table
-    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`
+    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`)
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
-  }
-
-  escapeId(value: string) {
-    return escapeId(value)
   }
 
   parseEval(expr: any, unquote: boolean = true): string {
@@ -486,6 +484,14 @@ export class Builder {
       default:
         return this.quote(value)
     }
+  }
+
+  escapeId(value: string) {
+    return escapeId(value)
+  }
+
+  escapeKey(value: string) {
+    return `"${value}"`
   }
 
   stringify(value: any, field?: Field) {
