@@ -1,4 +1,4 @@
-import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoError } from 'mongodb'
+import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
@@ -9,7 +9,7 @@ const logger = new Logger('mongo')
 const tempKey = '__temp_minato_mongo__'
 
 export namespace MongoDriver {
-  export interface Config {
+  export interface Config extends MongoClientOptions {
     username?: string
     password?: string
     protocol?: string
@@ -78,7 +78,9 @@ export class MongoDriver extends Driver {
 
   async start() {
     const url = this.config.uri || this.connectionStringFromConfig()
-    this.client = await MongoClient.connect(url)
+    this.client = await MongoClient.connect(url, pick(this.config, [
+      'writeConcern',
+    ]))
     this.db = this.client.db(this.config.database)
   }
 

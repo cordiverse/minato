@@ -31,13 +31,13 @@
     "postgresql"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.5.0"
+    "@minatojs/core": "^2.6.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^1.7.0"
+    "@minatojs/tests": "^1.8.0"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^4.1.0",
+    "@minatojs/sql-utils": "^4.2.0",
     "cosmokit": "^1.5.1",
     "postgres": "^3.4.0",
     "reggol": "^1.6.3"
