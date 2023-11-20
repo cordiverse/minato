@@ -1,5 +1,5 @@
 import { createPool, format } from '@vlasky/mysql'
-import type { OkPacket, Pool, PoolConfig } from 'mysql'
+import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, RuntimeError, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
@@ -221,6 +221,7 @@ export class MySQLDriver extends Driver {
   public config: MySQLDriver.Config
   public sql: MySQLBuilder
 
+  private session?: PoolConnection
   private _compat: Compat = {}
   private _queryTasks: QueryTask[] = []
 
@@ -439,7 +440,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const error = new Error()
     return new Promise((resolve, reject) => {
       if (debug) logger.debug('> %s', sql)
-      this.pool.query(sql, (err: Error, results) => {
+      ;(this.session ?? this.pool).query(sql, (err: Error, results) => {
         if (!err) return resolve(results)
         logger.warn('> %s', sql)
         if (err['code'] === 'ER_DUP_ENTRY') {
@@ -453,7 +454,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   queue<T = any>(sql: string, values?: any): Promise<T> {
     sql = format(sql, values)
-    if (!this.config.multipleStatements) {
+    if (this.session || !this.config.multipleStatements) {
       return this.query(sql)
     }
 
@@ -618,6 +619,25 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     ].join(' '))
     const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
     return { inserted: records - result.changedRows, matched: result.changedRows, modified: result.affectedRows - records }
+  }
+
+  async withTransaction(callback: (session: Driver) => Promise<void>) {
+    return new Promise((resolve, reject) => {
+      this.pool.getConnection((err, conn) => {
+        if (err) {
+          logger.warn('getConnection failed: ', err)
+          return
+        }
+        const driver = new Proxy(this, {
+          get(target, p, receiver) {
+            if (p === 'session') return conn
+            else return Reflect.get(target, p, receiver)
+          },
+        })
+        conn.beginTransaction()
+        callback(driver).then(() => resolve(conn.commit()), (e) => (conn.rollback(), reject(e)))
+      })
+    })
   }
 }
 
