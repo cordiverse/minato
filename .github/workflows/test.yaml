@@ -154,7 +154,7 @@ jobs:
       - name: Install
         run: yarn
       - name: Unit Test
-        run: yarn test:json mongo --enable-transaction-abort
+        run: yarn test:json mongo --+transaction.abort
       - name: Report Coverage
         uses: codecov/codecov-action@v3
         with:

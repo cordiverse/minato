@@ -19,6 +19,15 @@ type Unit<T> = ((database: Database, options?: UnitOptions<T>) => void) & {
   [K in keyof T as Exclude<K, Keywords>]: Unit<T[K]>
 }
 
+function setValue(obj: any, path: string, value: any) {
+  if (path.includes('.')) {
+    const index = path.indexOf('.')
+    setValue(obj[path.slice(0, index)] ??= {}, path.slice(index + 1), value)
+  } else {
+    obj[path] = value
+  }
+}
+
 function createUnit<T>(target: T, root = false): Unit<T> {
   const test: any = (database: Database, options: any = {}) => {
     function callback() {
@@ -31,6 +40,9 @@ function createUnit<T>(target: T, root = false): Unit<T> {
         test[key](database, options[key])
       }
     }
+
+    process.argv.filter(x => x.startsWith('--+')).map(x => x.slice(3)).forEach(x => setValue(options, x, true))
+    process.argv.filter(x => x.startsWith('---')).map(x => x.slice(3)).forEach(x => setValue(options, x, false))
 
     const title = target['name']
     if (!root && title) {
