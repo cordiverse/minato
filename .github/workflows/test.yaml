@@ -59,7 +59,7 @@ jobs:
           - postgres:16.1
           - postgres:15.5
           - postgres:14.10
-        node-version: [16, 18, 20]
+        node-version: [18, 20]
 
     services:
       postgres:
@@ -136,7 +136,7 @@ jobs:
       matrix:
         mongo-version:
           - latest
-        node-version: [16, 18, 20]
+        node-version: [18, 20]
 
     steps:
       - name: Check out

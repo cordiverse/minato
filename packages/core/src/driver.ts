@@ -61,7 +61,7 @@ type JoinCallback2<S, U extends Dict<TableLike<S>>> = (args: {
   [K in keyof U]: Row<TableType<S, U[K]>>
 }) => Eval.Expr<boolean>
 
-const kTransaction = Symbol('minato.transaction')
+const kTransaction = Symbol('transaction')
 
 export class Database<S = any> {
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
@@ -186,8 +186,8 @@ export class Database<S = any> {
     return await sel._action('upsert', upsert, keys).execute()
   }
 
-  async withTransaction(callback: (database: Database) => Promise<void>): Promise<void>
-  async withTransaction(table: string, callback: (database: Database) => Promise<void>): Promise<void>
+  async withTransaction(callback: (database: Database<S>) => Promise<void>): Promise<void>
+  async withTransaction<T extends Keys<S>>(table: T, callback: (database: Database<S>) => Promise<void>): Promise<void>
   async withTransaction(arg: any, ...args: any[]) {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
     const [table, callback] = typeof arg === 'string' ? [arg, ...args] : [null, arg, ...args]
@@ -195,8 +195,8 @@ export class Database<S = any> {
     return await driver.withTransaction(async (session) => {
       const database = new Proxy(this, {
         get(target, p, receiver) {
-          if (p === 'drivers') return { default: session }
           if (p === kTransaction) return true
+          else if (p === 'getDriver') return () => session
           else return Reflect.get(target, p, receiver)
         },
       })
