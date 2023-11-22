@@ -113,7 +113,11 @@ namespace ObjectOperations {
     it('expressions w/ json object', async () => {
       const table = await setup(database)
       table[0]!.meta!.a = table[0]!.meta!.embed!.c + 'a'
-      await database.upsert('object', row => [{ id: '0', meta: { a: $.concat(row.meta.embed.c, 'a') } }])
+      table[1]!.meta!.embed!.b = 1
+      await database.upsert('object', row => [
+        { id: '0', meta: { a: $.concat(row.meta.embed.c, 'a') } },
+        { id: '1', 'meta.embed.b': $.add($.ifNull(row.meta.embed.b, 0), 1) },
+      ])
       await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 

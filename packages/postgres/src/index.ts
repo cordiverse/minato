@@ -158,8 +158,14 @@ class PostgresBuilder extends Builder {
 
     this.evalOperators = {
       ...this.evalOperators,
-      $if: (args) => `(SELECT CASE WHEN ${this.parseEval(args[0])} THEN ${this.parseEval(args[1])} ELSE ${this.parseEval(args[2])} END)`,
-      $ifNull: (args) => `coalesce(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+      $if: (args) => {
+        const type = this.getLiteralType(args[1]) ?? this.getLiteralType(args[2]) ?? 'text'
+        return `(SELECT CASE WHEN ${this.parseEval(args[0], 'boolean')} THEN ${this.parseEval(args[1], type)} ELSE ${this.parseEval(args[2], type)} END)`
+      },
+      $ifNull: (args) => {
+        const type = args.map(this.getLiteralType).find(x => x) ?? 'text'
+        return `coalesce(${args.map(arg => this.parseEval(arg, type)).join(', ')})`
+      },
 
       // number
       $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,

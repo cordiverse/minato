@@ -56,9 +56,9 @@ jobs:
       fail-fast: false
       matrix:
         postgres-image:
-          - postgres:16.1
-          - postgres:15.5
-          - postgres:14.10
+          - postgres:16
+          - postgres:15
+          - postgres:14
         node-version: [18, 20]
 
     services:
