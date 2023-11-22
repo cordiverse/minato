@@ -15,11 +15,11 @@ const logger = new Logger('mysql')
 
 const DEFAULT_DATE = new Date('1970-01-01')
 
-function getIntegerType(length = 11) {
-  if (length <= 4) return 'tinyint'
-  if (length <= 6) return 'smallint'
-  if (length <= 9) return 'mediumint'
-  if (length <= 11) return 'int'
+function getIntegerType(length = 4) {
+  if (length <= 1) return 'tinyint'
+  if (length <= 2) return 'smallint'
+  if (length <= 3) return 'mediumint'
+  if (length <= 4) return 'int'
   return 'bigint'
 }
 
@@ -31,9 +31,13 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'time': return type
     case 'timestamp': return 'datetime(3)'
     case 'boolean': return 'bit'
-    case 'integer': return getIntegerType(length)
+    case 'integer':
+      if ((length || 0) > 8) logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+      return getIntegerType(length)
     case 'primary':
-    case 'unsigned': return `${getIntegerType(length)} unsigned`
+    case 'unsigned':
+      if ((length || 0) > 8) logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+      return `${getIntegerType(length)} unsigned`
     case 'decimal': return `decimal(${precision}, ${scale}) unsigned`
     case 'char': return `char(${length || 255})`
     case 'string': return `varchar(${length || 255})`

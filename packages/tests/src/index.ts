@@ -41,8 +41,8 @@ function createUnit<T>(target: T, root = false): Unit<T> {
       }
     }
 
-    process.argv.filter(x => x.startsWith('--+')).map(x => x.slice(3)).forEach(x => setValue(options, x, true))
-    process.argv.filter(x => x.startsWith('---')).map(x => x.slice(3)).forEach(x => setValue(options, x, false))
+    process.argv.filter(x => x.startsWith('--+')).forEach(x => setValue(options, x.slice(3), true))
+    process.argv.filter(x => x.startsWith('---')).forEach(x => setValue(options, x.slice(3), false))
 
     const title = target['name']
     if (!root && title) {
