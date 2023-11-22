@@ -52,15 +52,14 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
   let { type, length, precision, scale, initial, autoInc } = field
   let def = ''
   if (['primary', 'unsigned', 'integer'].includes(type)) {
-    length ||= 11
+    length ||= 4
     if (precision) def += `NUMERIC(${precision}, ${scale ?? 0})`
-    else if (autoInc) {
-      if (length <= 6) def += 'SERIAL'
-      else if (length <= 11) def += 'SMALLSERIAL'
-      else def += 'BIGSERIAL'
-    } else if (length <= 6) def += 'SMALLINT'
-    else if (length <= 11) def += 'INTEGER'
-    else def += 'BIGINT'
+    else if (length <= 2) def += autoInc ? 'SMALLSERIAL' : 'SMALLINT'
+    else if (length <= 4) def += autoInc ? 'SERIAL' : 'INTEGER'
+    else {
+      if (length > 8) logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+      def += autoInc ? 'BIGSERIAL' : 'BIGINT'
+    }
 
     if (!isNullable(initial) && !autoInc) def += ` DEFAULT ${initial}`
   } else if (type === 'decimal') {
