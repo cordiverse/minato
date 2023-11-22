@@ -44,21 +44,23 @@ interface FieldInfo {
   def?: string
 }
 
+function escapeId(value: string) {
+  return '"' + value.replace(/"/g, '""') + '"'
+}
+
 function getTypeDef(field: Field & { autoInc?: boolean }) {
   let { type, length, precision, scale, initial, autoInc } = field
   let def = ''
   if (['primary', 'unsigned', 'integer'].includes(type)) {
-    length ||= 4
+    length ||= 11
     if (precision) def += `NUMERIC(${precision}, ${scale ?? 0})`
     else if (autoInc) {
-      if (length <= 2) def += 'SERIAL'
-      else if (length <= 4) def += 'SMALLSERIAL'
-      else if (length <= 8) def += 'BIGSERIAL'
-      else throw new Error(`unsupported type: ${type}`)
-    } else if (length <= 2) def += 'SMALLINT'
-    else if (length <= 4) def += 'INTEGER'
-    else if (length <= 8) def += 'BIGINT'
-    else new Error(`unsupported type: ${type}`)
+      if (length <= 6) def += 'SERIAL'
+      else if (length <= 11) def += 'SMALLSERIAL'
+      else def += 'BIGSERIAL'
+    } else if (length <= 6) def += 'SMALLINT'
+    else if (length <= 11) def += 'INTEGER'
+    else def += 'BIGINT'
 
     if (!isNullable(initial) && !autoInc) def += ` DEFAULT ${initial}`
   } else if (type === 'decimal') {
@@ -292,9 +294,7 @@ class PostgresBuilder extends Builder {
     return `coalesce(jsonb_agg(${value}), '[]'::jsonb)`
   }
 
-  escapeId(value: string) {
-    return '"' + value.replace(/"/g, '""') + '"'
-  }
+  escapeId = escapeId
 
   escapeKey(value: string) {
     return `'${value}'`
@@ -486,7 +486,7 @@ export class PostgresDriver extends Driver {
       tables.map(({ table_name: name }) => {
         return `SELECT '${name}' AS name,
           pg_total_relation_size('${name}') AS size,
-          COUNT(*) AS count FROM ${name}`
+          COUNT(*) AS count FROM ${escapeId(name)}`
       }).join(' UNION '),
     ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
 
