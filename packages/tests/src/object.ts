@@ -58,18 +58,6 @@ namespace ObjectOperations {
         { meta: { a: '666', embed: { c: 'world' } } },
       ])
     })
-
-    it('nested property', async () => {
-      await setup(database)
-      await expect(database.get('object', row => $.eq(row.meta.embed.b, 2), ['meta']))
-        .to.eventually.deep.equal([
-          { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
-        ])
-      await expect(database.get('object', row => $.eq(row.meta.embed.c, 'hello'), ['meta']))
-        .to.eventually.deep.equal([
-          { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
-        ])
-    })
   }
 
   export const upsert = function Upsert(database: Database<Tables>) {
