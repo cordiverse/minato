@@ -368,7 +368,8 @@ export class PostgresDriver extends Driver {
   public sql!: postgres.Sql
   public config: PostgresDriver.Config
 
-  #counter = 0
+  private session?: postgres.TransactionSql
+  private _counter = 0
 
   constructor(database: Database, config: PostgresDriver.Config) {
     super(database)
@@ -391,7 +392,7 @@ export class PostgresDriver extends Driver {
   }
 
   async query(sql: string) {
-    return await this.sql.unsafe(sql).catch(e => {
+    return await (this.session ?? this.sql).unsafe(sql).catch(e => {
       logger.warn('> %s', sql)
       throw e
     })
@@ -557,8 +558,8 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(tables)
     builder.upsert(table)
 
-    this.#counter = (this.#counter + 1) % 256
-    const mtime = Date.now() * 256 + this.#counter
+    this._counter = (this._counter + 1) % 256
+    const mtime = Date.now() * 256 + this._counter
     const merged = {}
     const insertion = data.map((item) => {
       Object.assign(merged, item)
@@ -617,6 +618,20 @@ export class PostgresDriver extends Driver {
       RETURNING _pg_mtime as rtime
     `)
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
+  }
+
+  async withTransaction(callback: (session: Driver) => Promise<void>) {
+    return await this.sql.begin(async (conn) => {
+      const driver = new Proxy(this, {
+        get(target, p, receiver) {
+          if (p === 'session') return conn
+          else return Reflect.get(target, p, receiver)
+        },
+      })
+
+      await callback(driver)
+      await conn.unsafe(`COMMIT`)
+    })
   }
 }
 

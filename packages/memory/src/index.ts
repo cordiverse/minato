@@ -171,6 +171,14 @@ export class MemoryDriver extends Driver {
     this.$save(table)
     return result
   }
+
+  async withTransaction(callback: (session: Driver) => Promise<void>) {
+    const data = clone(this.#store)
+    await callback(this).then(undefined, (e) => {
+      this.#store = data
+      throw e
+    })
+  }
 }
 
 export default MemoryDriver
