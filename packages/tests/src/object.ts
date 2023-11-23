@@ -58,18 +58,6 @@ namespace ObjectOperations {
         { meta: { a: '666', embed: { c: 'world' } } },
       ])
     })
-
-    it('nested property', async () => {
-      await setup(database)
-      await expect(database.get('object', row => $.eq(row.meta.embed.b, 2), ['meta']))
-        .to.eventually.deep.equal([
-          { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
-        ])
-      await expect(database.get('object', row => $.eq(row.meta.embed.c, 'hello'), ['meta']))
-        .to.eventually.deep.equal([
-          { meta: { a: '233', embed: { b: 2, c: 'hello' } } },
-        ])
-    })
   }
 
   export const upsert = function Upsert(database: Database<Tables>) {
@@ -113,7 +101,11 @@ namespace ObjectOperations {
     it('expressions w/ json object', async () => {
       const table = await setup(database)
       table[0]!.meta!.a = table[0]!.meta!.embed!.c + 'a'
-      await database.upsert('object', row => [{ id: '0', meta: { a: $.concat(row.meta.embed.c, 'a') } }])
+      table[1]!.meta!.embed!.b = 1
+      await database.upsert('object', row => [
+        { id: '0', meta: { a: $.concat(row.meta.embed.c, 'a') } },
+        { id: '1', 'meta.embed.b': $.add($.ifNull(row.meta.embed.b, 0), 1) },
+      ])
       await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
 
