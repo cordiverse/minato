@@ -1,5 +1,5 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
-import { Dict, isNullable, makeArray, noop, omit, pick } from 'cosmokit'
+import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
 import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
@@ -445,7 +445,7 @@ export class MongoDriver extends Driver {
     const coll = this.db.collection(table)
 
     const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
-    const $set = transformer.eval(update)
+    const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
     const $unset = Object.entries($set)
       .filter(([_, value]) => typeof value === 'object')
       .map(([key, _]) => key)
@@ -563,7 +563,7 @@ export class MongoDriver extends Driver {
       for (const update of data) {
         const query = this.transformQuery(pick(update, keys), table)!
         const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
-        const $set = transformer.eval(update)
+        const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)
