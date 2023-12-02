@@ -219,6 +219,7 @@ export class Database<S = any> {
   }
 
   async stats() {
+    await this.prepared()
     const stats: Driver.Stats = { size: 0, tables: {} }
     await Promise.all(Object.values(this.drivers).map(async (driver) => {
       const { size = 0, tables } = await driver.stats()

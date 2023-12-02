@@ -129,8 +129,10 @@ namespace OrmOperations {
       const table = await setup(database, 'temp2', barTable)
       const data = table.find(bar => bar.timestamp)!
       data.list = ['2', '3', '3']
+      data.text = `$'"%~\``
       const magicIds = table.slice(2, 4).map((data) => {
         data.list = ['2', '3', '3']
+        data.text = `$'"%~\``
         return data.id
       })
       await expect(database.set('temp2', {
@@ -138,7 +140,7 @@ namespace OrmOperations {
           { id: magicIds },
           { timestamp: magicBorn },
         ],
-      }, { list: ['2', '3', '3'] })).to.eventually.have.shape({ matched: 3 })
+      }, { list: ['2', '3', '3'], text: `$'"%~\`` })).to.eventually.have.shape({ matched: 3 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -218,11 +220,11 @@ namespace OrmOperations {
 
     it('multi condition on composite primary', async () => {
       const table = await setup(database, 'temp3', bazTable)
-      table[1].value = 'bb'
+      table[1].value = `$'"%~\``
       table[2].value = 'cc'
       table.push({ ida: 114, idb: '514', value: 'baz' })
       await database.upsert('temp3', row => [
-        { ida: 2, idb: 'a', value: 'bb' },
+        { ida: 2, idb: 'a', value: `$'"%~\`` },
         { ida: 1, idb: 'b', value: 'cc' },
         { ida: 114, idb: '514', value: $.concat(row.value, 'baz') },
       ])
