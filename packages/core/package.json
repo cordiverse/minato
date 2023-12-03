@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/core",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "description": "Type Driven Database Framework",
   "main": "lib/index.cjs",
   "module": "lib/index.mjs",

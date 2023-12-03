@@ -30,7 +30,7 @@
     "builder"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.6.0"
+    "@minatojs/core": "^2.7.0"
   },
   "dependencies": {
     "cosmokit": "^1.5.1"
