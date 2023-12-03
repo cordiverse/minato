@@ -552,7 +552,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const filter = builder.parseQuery(query)
     if (filter === '0') return {}
     const result = await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
-    return { removed: result.affectedRows }
+    return { matched: result.affectedRows, removed: result.affectedRows }
   }
 
   async create(sel: Selection.Mutable, data: {}) {

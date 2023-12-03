@@ -346,7 +346,7 @@ export class SQLiteDriver extends Driver {
     const filter = this.sql.parseQuery(query)
     if (filter === '0') return {}
     const result = this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this.#get(`SELECT changes() AS count`))
-    return { removed: result.count }
+    return { matched: result.count, removed: result.count }
   }
 
   async get(sel: Selection.Immutable) {

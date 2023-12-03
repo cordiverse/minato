@@ -538,12 +538,12 @@ export class PostgresDriver extends Driver {
     return { matched: result.length }
   }
 
-  async remove(sel: Selection.Mutable): Promise<Driver.WriteResult> {
+  async remove(sel: Selection.Mutable) {
     const builder = new PostgresBuilder(sel.tables)
     const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return {}
     const { count } = await this.query(`DELETE FROM ${sel.table} WHERE ${query}`)
-    return { removed: count }
+    return { matched: count, removed: count }
   }
 
   async create(sel: Selection.Mutable, data: any) {

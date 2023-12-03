@@ -465,7 +465,7 @@ export class MongoDriver extends Driver {
     const filter = this.transformQuery(query, table)
     if (!filter) return {}
     const result = await this.db.collection(table).deleteMany(filter, { session: this.session })
-    return { removed: result.deletedCount }
+    return { matched: result.deletedCount, removed: result.deletedCount }
   }
 
   private shouldEnsurePrimary(table: string) {

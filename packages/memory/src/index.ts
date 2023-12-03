@@ -125,7 +125,8 @@ export class MemoryDriver extends Driver {
     const data = this.table(table)
     this.#store[table] = data.filter(row => !executeQuery(row, query, ref))
     this.$save(table)
-    return { removed: data.length - this.#store[table].length }
+    const count = data.length - this.#store[table].length
+    return { removed: count, matched: count }
   }
 
   async create(sel: Selection.Mutable, data: any) {
