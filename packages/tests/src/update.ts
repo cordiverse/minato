@@ -11,6 +11,7 @@ interface Bar {
   timestamp?: Date
   date?: Date
   time?: Date
+  bigtext?: string
 }
 
 interface Baz {
@@ -34,6 +35,7 @@ function OrmOperations(database: Database<Tables>) {
     timestamp: 'timestamp',
     date: 'date',
     time: 'time',
+    bigtext: 'text',
   }, {
     autoInc: true,
   })
@@ -122,6 +124,12 @@ namespace OrmOperations {
       expect(ids.map(id => id - min + 1)).shape([1, 2, 3, 4, 5])
       await database.remove('temp2', {})
     })
+
+    it('enormous field', async () => {
+      const row = { id: 100, bigtext: Array(1000000).fill('a').join('') }
+      await database.create('temp2', row)
+      await expect(database.get('temp2', 100)).to.eventually.have.nested.property('0.bigtext', row.bigtext)
+    })
   }
 
   export const set = function Set(database: Database<Tables>) {
@@ -160,6 +168,13 @@ namespace OrmOperations {
         num: $.multiply(2, row.id),
       }))
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    })
+
+    it('enormous field', async () => {
+      const row = await database.create('temp2', {})
+      row.bigtext = Array(1000000).fill('a').join('')
+      await database.set('temp2', row.id, { bigtext: row.bigtext })
+      await expect(database.get('temp2', row.id)).to.eventually.have.nested.property('0.bigtext', row.bigtext)
     })
   }
 
@@ -230,18 +245,25 @@ namespace OrmOperations {
       ])
       await expect(database.get('temp3', {})).to.eventually.have.deep.members(table)
     })
+
+    it('enormous field', async () => {
+      const row = await database.create('temp2', {})
+      row.bigtext = Array(1000000).fill('a').join('')
+      await database.upsert('temp2', [row])
+      await expect(database.get('temp2', row.id)).to.eventually.have.nested.property('0.bigtext', row.bigtext)
+    })
   }
 
   export const remove = function Remove(database: Database<Tables>) {
     it('basic support', async () => {
       await setup(database, 'temp3', bazTable)
-      await expect(database.remove('temp3', { ida: 1, idb: 'a' })).to.eventually.deep.equal({ removed: 1 })
+      await expect(database.remove('temp3', { ida: 1, idb: 'a' })).to.eventually.have.shape({ matched: 1 })
       await expect(database.get('temp3', {})).eventually.length(3)
-      await expect(database.remove('temp3', { ida: 1, idb: 'b', value: 'b' })).to.eventually.deep.equal({ removed: 0 })
+      await expect(database.remove('temp3', { ida: 1, idb: 'b', value: 'b' })).to.eventually.have.shape({ matched: 0 })
       await expect(database.get('temp3', {})).eventually.length(3)
-      await expect(database.remove('temp3', { idb: 'b' })).to.eventually.deep.equal({ removed: 2 })
+      await expect(database.remove('temp3', { idb: 'b' })).to.eventually.have.shape({ matched: 2 })
       await expect(database.get('temp3', {})).eventually.length(1)
-      await expect(database.remove('temp3', {})).to.eventually.deep.equal({ removed: 1 })
+      await expect(database.remove('temp3', {})).to.eventually.have.shape({ matched: 1 })
       await expect(database.get('temp3', {})).eventually.length(0)
     })
 

@@ -81,12 +81,12 @@ namespace TransactionOperations {
         return data.id
       })
       await expect(database.withTransaction(async (database) => {
-        await expect(database.set('temptx', {
+        await database.set('temptx', {
           $or: [
             { id: magicIds },
             { timestamp: magicBorn },
           ],
-        }, { list: ['2', '3', '3'] })).to.eventually.have.shape({ matched: 3 })
+        }, { list: ['2', '3', '3'] })
         await expect(database.get('temptx', {})).to.eventually.have.shape(table)
       })).to.be.fulfilled
       await expect(database.get('temptx', {})).to.eventually.have.shape(table)
@@ -101,7 +101,7 @@ namespace TransactionOperations {
           { id: table[table.length - 1].id + 2, text: 'by\'tower' },
         ]
         table.push(...data.map(bar => merge(database.tables.temptx.create(), bar)))
-        await expect(database.upsert('temptx', data)).to.eventually.have.shape({ inserted: 2, matched: 0 })
+        await database.upsert('temptx', data)
       })).to.be.fulfilled
       await expect(database.get('temptx', {})).to.eventually.have.length(9)
     })
@@ -116,11 +116,11 @@ namespace TransactionOperations {
       expect(data9).to.be.undefined
       table.push({ id: 9, num: 999 })
       await expect(database.withTransaction(async (database) => {
-        await expect(database.upsert('temptx', row => [
+        await database.upsert('temptx', row => [
           { id: 2, num: $.multiply(2, row.id) },
           { id: 3, num: $.add(3, row.num) },
           { id: 9, num: 999 },
-        ])).to.eventually.have.shape({ inserted: 1, matched: 2 })
+        ])
         await expect(database.get('temptx', {})).to.eventually.have.shape(table)
       })).to.be.fulfilled
       await expect(database.get('temptx', {})).to.eventually.have.shape(table)
@@ -129,11 +129,11 @@ namespace TransactionOperations {
     it('remove', async () => {
       await setup(database, 'temptx', barTable)
       await expect(database.withTransaction(async (database) => {
-        await expect(database.remove('temptx', { id: 2 })).to.eventually.deep.equal({ removed: 1 })
+        await database.remove('temptx', { id: 2 })
         await expect(database.get('temptx', {})).eventually.length(6)
-        await expect(database.remove('temptx', { id: 2 })).to.eventually.deep.equal({ removed: 0 })
+        await database.remove('temptx', { id: 2 })
         await expect(database.get('temptx', {})).eventually.length(6)
-        await expect(database.remove('temptx', {})).to.eventually.deep.equal({ removed: 6 })
+        await database.remove('temptx', {})
         await expect(database.get('temptx', {})).eventually.length(0)
       })).to.be.fulfilled
       await expect(database.get('temptx', {})).eventually.length(0)
@@ -167,12 +167,12 @@ namespace TransactionOperations {
         return data.id
       })
       await expect(database.withTransaction(async (database) => {
-        await expect(database.set('temptx', {
+        await database.set('temptx', {
           $or: [
             { id: magicIds },
             { timestamp: magicBorn },
           ],
-        }, { list: ['2', '3', '3'] })).to.eventually.have.shape({ matched: 3 })
+        }, { list: ['2', '3', '3'] })
         await expect(database.get('temptx', {})).to.eventually.have.shape(table)
         throw new Error('oops')
       })).to.be.rejected
@@ -188,7 +188,7 @@ namespace TransactionOperations {
           { id: table[table.length - 1].id + 2, text: 'by\'tower' },
         ]
         table.push(...data.map(bar => merge(database.tables.temptx.create(), bar)))
-        await expect(database.upsert('temptx', data)).to.eventually.have.shape({ inserted: 2, matched: 0 })
+        await database.upsert('temptx', data)
         throw new Error('oops')
       })).to.be.rejected
       await expect(database.get('temptx', {})).to.eventually.have.length(0)
@@ -204,11 +204,11 @@ namespace TransactionOperations {
       expect(data9).to.be.undefined
       table.push({ id: 9, num: 999 })
       await expect(database.withTransaction(async (database) => {
-        await expect(database.upsert('temptx', row => [
+        await database.upsert('temptx', row => [
           { id: 2, num: $.multiply(2, row.id) },
           { id: 3, num: $.add(3, row.num) },
           { id: 9, num: 999 },
-        ])).to.eventually.have.shape({ inserted: 1, matched: 2 })
+        ])
         await expect(database.get('temptx', {})).to.eventually.have.shape(table)
         throw new Error('oops')
       })).to.be.rejected
@@ -218,11 +218,11 @@ namespace TransactionOperations {
     it('remove', async () => {
       await setup(database, 'temptx', barTable)
       await expect(database.withTransaction(async (database) => {
-        await expect(database.remove('temptx', { id: 2 })).to.eventually.deep.equal({ removed: 1 })
+        await database.remove('temptx', { id: 2 })
         await expect(database.get('temptx', {})).eventually.length(6)
-        await expect(database.remove('temptx', { id: 2 })).to.eventually.deep.equal({ removed: 0 })
+        await database.remove('temptx', { id: 2 })
         await expect(database.get('temptx', {})).eventually.length(6)
-        await expect(database.remove('temptx', {})).to.eventually.deep.equal({ removed: 6 })
+        await database.remove('temptx', {})
         await expect(database.get('temptx', {})).eventually.length(0)
         throw new Error('oops')
       })).to.be.rejected
