@@ -372,10 +372,10 @@ export class SQLiteDriver extends Driver {
     const modified = !deepEqual(clone(data), executeUpdate(data, update, ref))
     if (!modified) return 0
     const row = this.sql.dump(model, data)
-    const assignment = updateFields.map((key) => `${escapeId(key)} = ${this.sql.escape(row[key])}`).join(',')
+    const assignment = updateFields.map((key) => `${escapeId(key)} = ?`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
-    this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`)
+    this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key]))
     return 1
   }
 
@@ -398,8 +398,8 @@ export class SQLiteDriver extends Driver {
     const model = this.model(table)
     data = this.sql.dump(model, data)
     const keys = Object.keys(data)
-    const sql = `INSERT INTO ${escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${keys.map(key => this.sql.escape(data[key])).join(', ')})`
-    return this.#run(sql, [], () => this.#get(`SELECT last_insert_rowid() AS id`))
+    const sql = `INSERT INTO ${escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${Array(keys.length).fill('?').join(', ')})`
+    return this.#run(sql, keys.map(key => data[key]), () => this.#get(`SELECT last_insert_rowid() AS id`))
   }
 
   async create(sel: Selection.Mutable, data: {}) {

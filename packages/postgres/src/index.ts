@@ -78,7 +78,7 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
     def += `VARCHAR(${length || 255})`
     if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'text') {
-    def += `VARCHAR(${length || 65535})`
+    def += `TEXT`
     if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'boolean') {
     def += 'BOOLEAN'
