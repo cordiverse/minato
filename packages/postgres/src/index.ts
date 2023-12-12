@@ -175,8 +175,8 @@ class PostgresBuilder extends Builder {
 
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::double precision, 0)`, undefined, 'double precision'),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`, undefined, 'double precision'),
-      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, 'double precision'),
-      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, 'double precision'),
+      $min: (expr) => this.createAggr(expr, value => `min(${value})`, undefined, 'double precision'),
+      $max: (expr) => this.createAggr(expr, value => `max(${value})`, undefined, 'double precision'),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})::integer`),
       $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`, value => {
         if (this.state.sqlType === 'json') {

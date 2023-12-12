@@ -91,8 +91,8 @@ export namespace Eval {
     // aggregation / json
     sum: Aggr<number, number>
     avg: Aggr<number, number>
-    max: Aggr<number, number>
-    min: Aggr<number, number>
+    max: Aggr<number, number> & Aggr<Date, Date>
+    min: Aggr<number, number> & Aggr<Date, Date>
     count(value: Any<false>): Expr<number, true>
     length(value: Any<false>): Expr<number, true>
     size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
@@ -184,11 +184,11 @@ Eval.avg = unary('avg', (expr, table) => {
   }
 })
 Eval.max = unary('max', (expr, table) => Array.isArray(table)
-  ? Math.max(...table.map(data => executeAggr(expr, data)))
-  : Math.max(...Array.from<number>(executeEval(table, expr))))
+  ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x > y ? x : y, -Infinity)
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity))
 Eval.min = unary('min', (expr, table) => Array.isArray(table)
-  ? Math.min(...table.map(data => executeAggr(expr, data)))
-  : Math.min(...Array.from<number>(executeEval(table, expr))))
+  ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x < y ? x : y, Infinity)
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size)
 defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).length

@@ -21,7 +21,7 @@ export interface Transformer<S = any, T = any> {
   load: (value: T, initial?: S) => S | null
 }
 
-type SQLType = 'raw' | 'json' | 'list'
+type SQLType = 'raw' | 'json' | 'list' | 'date' | 'time' | 'timestamp'
 
 interface State {
   sqlType?: SQLType
@@ -128,8 +128,8 @@ export class Builder {
       // aggregation
       $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})`),
-      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
-      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
+      $min: (expr) => this.createAggr(expr, value => `min(${value})`),
+      $max: (expr) => this.createAggr(expr, value => `max(${value})`),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
       $length: (expr) => this.createAggr(expr, value => `count(${value})`, value => {
         if (this.state.sqlType === 'json') {
@@ -232,13 +232,13 @@ export class Builder {
       this.state.group = false
       const value = aggr(this.parseEval(expr, false))
       this.state.group = true
-      this.state.sqlType = 'raw'
+      // pass through sqlType of elements for variant types
+      // ok to pass json on raw since mysql can treat them properly
       return value
     } else {
       const value = this.parseEval(expr, false)
       const res = nonaggr ? nonaggr(value)
         : `(select ${aggr(`json_unquote(${this.escapeId('value')})`)} from json_table(${value}, '$[*]' columns (value json path '$')) ${randomId()})`
-      this.state.sqlType = 'raw'
       return res
     }
   }
@@ -386,7 +386,11 @@ export class Builder {
     if (typeof table === 'string') {
       prefix = this.escapeId(table)
       this.state.sqlTypes = Object.fromEntries(Object.entries(model.fields).map(([key, field]) => {
-        return [key, field!.type === 'json' ? 'json' : field!.type === 'list' ? 'list' : 'raw']
+        let sqlType: SQLType = 'raw'
+        if (field!.type === 'json') sqlType = 'json'
+        else if (field!.type === 'list') sqlType = 'list'
+        else if (Field.date.includes(field!.type)) sqlType = field!.type as SQLType
+        return [key, sqlType]
       }))
     } else if (table instanceof Selection) {
       prefix = this.get(table, true)

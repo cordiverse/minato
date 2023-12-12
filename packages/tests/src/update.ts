@@ -281,6 +281,30 @@ namespace OrmOperations {
       await expect(database.stats()).to.eventually.ok
     })
   }
+
+  export const misc = function Misc(database: Database<Tables>) {
+    it('date type', async () => {
+      const table = await setup(database, 'temp2', barTable)
+
+      await expect(database.select('temp2')
+        .groupBy('id', { ts: row => $.max(row.timestamp) })
+        .where({ id: 5 })
+        .execute()
+      ).to.eventually.have.shape([{ ts: table[4].timestamp }])
+
+      await expect(database.select('temp2')
+        .groupBy('id', { ts: row => $.max(row.date) })
+        .where({ id: 6 })
+        .execute()
+      ).to.eventually.have.shape([{ ts: table[5].date }])
+
+      await expect(database.select('temp2')
+        .groupBy('id', { ts: row => $.max(row.time) })
+        .where({ id: 7 })
+        .execute()
+      ).to.eventually.have.shape([{ ts: table[6].time }])
+    })
+  }
 }
 
 export default OrmOperations
