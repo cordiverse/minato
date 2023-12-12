@@ -260,7 +260,7 @@ namespace OrmOperations {
         { ida: 10, idb: 'a', value: 'e' },
         { ida: 11, idb: 'b', value: 'f' },
         { ida: 12, idb: 'c', value: 'd' },
-      ], ['value'])).to.eventually.have.shape({ inserted: 2, matched: 1 })
+      ], ['value'] as any)).to.eventually.have.shape({ inserted: 2, matched: 1 })
     })
   }
 
