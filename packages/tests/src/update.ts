@@ -285,24 +285,9 @@ namespace OrmOperations {
   export const misc = function Misc(database: Database<Tables>) {
     it('date type', async () => {
       const table = await setup(database, 'temp2', barTable)
-
-      await expect(database.select('temp2')
-        .groupBy('id', { ts: row => $.max(row.timestamp) })
-        .where({ id: 5 })
-        .execute()
-      ).to.eventually.have.shape([{ ts: table[4].timestamp }])
-
-      await expect(database.select('temp2')
-        .groupBy('id', { ts: row => $.max(row.date) })
-        .where({ id: 6 })
-        .execute()
-      ).to.eventually.have.shape([{ ts: table[5].date }])
-
-      await expect(database.select('temp2')
-        .groupBy('id', { ts: row => $.max(row.time) })
-        .where({ id: 7 })
-        .execute()
-      ).to.eventually.have.shape([{ ts: table[6].time }])
+      await expect(database.eval('temp2', row => $.max(row.timestamp))).to.eventually.deep.eq(table[4].timestamp)
+      await expect(database.eval('temp2', row => $.max(row.date))).to.eventually.deep.eq(table[5].date)
+      await expect(database.eval('temp2', row => $.max(row.time))).to.eventually.deep.eq(table[6].time)
     })
   }
 }

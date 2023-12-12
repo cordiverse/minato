@@ -517,7 +517,7 @@ export class PostgresDriver extends Driver {
     const output = builder.parseEval(expr, false)
     const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
     const [data] = await this.query(`SELECT ${output} AS value FROM ${inner} ${ref}`)
-    return data?.value
+    return builder.load(data?.value)
   }
 
   async set(sel: Selection.Mutable, data: {}) {
