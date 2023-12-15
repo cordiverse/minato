@@ -676,6 +676,7 @@ export class PostgresDriver extends Driver {
     const formatValues = (table: string, data: object, keys: readonly string[]) => {
       return keys.map((key) => {
         const field = this.database.tables[table]?.fields[key]
+        if (model.autoInc && model.primary === key && !data[key]) return 'default'
         return builder.escape(data[key], field)
       }).join(', ')
     }
