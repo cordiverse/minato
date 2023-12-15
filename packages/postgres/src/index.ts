@@ -601,7 +601,7 @@ export class PostgresDriver extends Driver {
     const output = builder.parseEval(expr, false)
     const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
     const [data] = await this.query(`SELECT ${output} AS value FROM ${inner} ${ref}`)
-    return data?.value
+    return builder.load(data?.value)
   }
 
   async set(sel: Selection.Mutable, data: {}) {
@@ -676,6 +676,7 @@ export class PostgresDriver extends Driver {
     const formatValues = (table: string, data: object, keys: readonly string[]) => {
       return keys.map((key) => {
         const field = this.database.tables[table]?.fields[key]
+        if (model.autoInc && model.primary === key && !data[key]) return 'default'
         return builder.escape(data[key], field)
       }).join(', ')
     }
