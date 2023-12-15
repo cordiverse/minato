@@ -148,6 +148,10 @@ export class Model<S = any> {
       const date = new Date(0)
       date.setHours(value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds())
       return date
+    } else if (this.fields[key]?.type === 'date') {
+      const date = new Date(value)
+      date.setHours(0, 0, 0, 0)
+      return date
     }
     return value
   }
@@ -157,7 +161,7 @@ export class Model<S = any> {
     Object.entries(source).map(([key, value]) => {
       key = prefix + key
       if (fields.includes(key)) {
-        result[key] = value
+        result[key] = this.resolveValue(key, value)
         return
       }
       const field = fields.find(field => key.startsWith(field + '.'))

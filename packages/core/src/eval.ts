@@ -88,11 +88,14 @@ export namespace Eval {
     or: Multi<boolean, boolean>
     not: Unary<boolean, boolean>
 
+    // typecast
+    number: Unary<any, number>
+
     // aggregation / json
     sum: Aggr<number, number>
     avg: Aggr<number, number>
-    max: Aggr<number, number>
-    min: Aggr<number, number>
+    max: Aggr<number, number> & Aggr<Date, Date>
+    min: Aggr<number, number> & Aggr<Date, Date>
     count(value: Any<false>): Expr<number, true>
     length(value: Any<false>): Expr<number, true>
     size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
@@ -172,6 +175,12 @@ Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, ar
 Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg)))
 Eval.not = unary('not', (value, data) => !executeEval(data, value))
 
+// typecast
+Eval.number = unary('number', (arg, data) => {
+  const value = executeEval(data, arg)
+  return value instanceof Date ? Math.floor(value.valueOf() / 1000) : Number(value)
+})
+
 // aggregation
 Eval.sum = unary('sum', (expr, table) => Array.isArray(table)
   ? table.reduce<number>((prev, curr) => prev + executeAggr(expr, curr), 0)
@@ -184,11 +193,11 @@ Eval.avg = unary('avg', (expr, table) => {
   }
 })
 Eval.max = unary('max', (expr, table) => Array.isArray(table)
-  ? Math.max(...table.map(data => executeAggr(expr, data)))
-  : Math.max(...Array.from<number>(executeEval(table, expr))))
+  ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x > y ? x : y, -Infinity)
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity))
 Eval.min = unary('min', (expr, table) => Array.isArray(table)
-  ? Math.min(...table.map(data => executeAggr(expr, data)))
-  : Math.min(...Array.from<number>(executeEval(table, expr))))
+  ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x < y ? x : y, Infinity)
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size)
 defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).length

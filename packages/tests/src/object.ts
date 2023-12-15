@@ -183,6 +183,14 @@ namespace ObjectOperations {
       await database.set('object', { id: '0' }, { 'meta.embed.d.bar': { a: 1 }, 'meta.embed.d.foo': 2 })
       await expect(database.get('object', {})).to.eventually.have.deep.members(table)
     })
+
+    it('$.number in json', async () => {
+      const table = await setup(database)
+      table[0]!.meta!.embed!.b = 233
+      table[1]!.meta!.embed!.b = 666
+      await database.set('object', {}, row => ({ 'meta.embed.b':  $.number(row.meta.a)}))
+      await expect(database.get('object', {})).to.eventually.have.deep.members(table)
+    })
   }
 }
 

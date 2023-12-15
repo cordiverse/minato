@@ -119,8 +119,8 @@ class MySQLBuilder extends Builder {
 
     this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
-    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, value => `(0+minato_cfunc_min(${value}))`)
-    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, value => `(0+minato_cfunc_max(${value}))`)
+    this.evalOperators.$min = (expr) => this.createAggr(expr, value => `min(${value})`, undefined, value => `minato_cfunc_min(${value})`)
+    this.evalOperators.$max = (expr) => this.createAggr(expr, value => `max(${value})`, undefined, value => `minato_cfunc_max(${value})`)
 
     this.define<string[], string>({
       types: ['list'],
@@ -132,6 +132,20 @@ class MySQLBuilder extends Builder {
       types: ['json'],
       dump: value => JSON.stringify(value),
       load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
+
+    this.define<Date, any>({
+      types: ['time'],
+      dump: value => value,
+      load: (value) => {
+        if (!value || typeof value === 'object') return value
+        const time = new Date(DEFAULT_DATE)
+        const [h, m, s] = value.split(':')
+        time.setHours(parseInt(h))
+        time.setMinutes(parseInt(m))
+        time.setSeconds(parseInt(s))
+        return time
+      },
     })
   }
 
@@ -153,9 +167,7 @@ class MySQLBuilder extends Builder {
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
     if (!this.state.group && compat && (this.compat.mysql57 || this.compat.maria)) {
-      const value = compat(this.parseEval(expr, false))
-      this.state.sqlType = 'raw'
-      return value
+      return compat(this.parseEval(expr, false))
     } else {
       return super.createAggr(expr, aggr, nonaggr)
     }

@@ -21,7 +21,7 @@ export interface Transformer<S = any, T = any> {
   load: (value: T, initial?: S) => S | null
 }
 
-type SQLType = 'raw' | 'json' | 'list'
+type SQLType = 'raw' | 'json' | 'list' | 'date' | 'time' | 'timestamp'
 
 interface State {
   sqlType?: SQLType
@@ -40,6 +40,8 @@ export class Builder {
   protected $true = '1'
   protected $false = '0'
   protected modifiedTable?: string
+
+  private readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
 
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
@@ -125,11 +127,21 @@ export class Builder {
       $in: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ''),
       $nin: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ' NOT'),
 
+      // typecast
+      $number: (arg) => {
+        const value = this.parseEval(arg)
+        const res = this.state.sqlType === 'raw' ? `(0+${value})`
+          : this.state.sqlType === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
+            : `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))`
+        this.state.sqlType = 'raw'
+        return res
+      },
+
       // aggregation
       $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})`),
-      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`),
-      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`),
+      $min: (expr) => this.createAggr(expr, value => `min(${value})`),
+      $max: (expr) => this.createAggr(expr, value => `max(${value})`),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
       $length: (expr) => this.createAggr(expr, value => `count(${value})`, value => {
         if (this.state.sqlType === 'json') {
@@ -215,16 +227,20 @@ export class Builder {
 
   protected jsonUnquote(value: string, pure: boolean = false) {
     if (pure) return `json_unquote(${value})`
-    const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
-    this.state.sqlType = 'raw'
-    return res
+    if (this.state.sqlType === 'json') {
+      this.state.sqlType = 'raw'
+      return `json_unquote(${value})`
+    }
+    return value
   }
 
   protected jsonQuote(value: string, pure: boolean = false) {
     if (pure) return `cast(${value} as json)`
-    const res = this.state.sqlType === 'raw' ? `cast(${value} as json)` : value
-    this.state.sqlType = 'json'
-    return res
+    if (this.state.sqlType !== 'json') {
+      this.state.sqlType = 'json'
+      return `cast(${value} as json)`
+    }
+    return value
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
@@ -232,13 +248,13 @@ export class Builder {
       this.state.group = false
       const value = aggr(this.parseEval(expr, false))
       this.state.group = true
-      this.state.sqlType = 'raw'
+      // pass through sqlType of elements for variant types
+      // ok to pass json on raw since mysql can treat them properly
       return value
     } else {
       const value = this.parseEval(expr, false)
       const res = nonaggr ? nonaggr(value)
         : `(select ${aggr(`json_unquote(${this.escapeId('value')})`)} from json_table(${value}, '$[*]' columns (value json path '$')) ${randomId()})`
-      this.state.sqlType = 'raw'
       return res
     }
   }
@@ -386,7 +402,11 @@ export class Builder {
     if (typeof table === 'string') {
       prefix = this.escapeId(table)
       this.state.sqlTypes = Object.fromEntries(Object.entries(model.fields).map(([key, field]) => {
-        return [key, field!.type === 'json' ? 'json' : field!.type === 'list' ? 'list' : 'raw']
+        let sqlType: SQLType = 'raw'
+        if (field!.type === 'json') sqlType = 'json'
+        else if (field!.type === 'list') sqlType = 'list'
+        else if (Field.date.includes(field!.type)) sqlType = field!.type as SQLType
+        return [key, sqlType]
       }))
     } else if (table instanceof Selection) {
       prefix = this.get(table, true)

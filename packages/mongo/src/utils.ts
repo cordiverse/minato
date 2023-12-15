@@ -126,6 +126,21 @@ export class Transformer {
       return { $not: { $in: expr.$nin.map(val => this.eval(val, group)) } }
     }
 
+    if (expr.$number) {
+      const value = this.eval(expr.$number)
+      return {
+        $switch: {
+          branches: [
+            {
+              case: { $eq: [{ $type: value }, 'date'] },
+              then: { $floor: { $divide: [{ $toLong: value }, 1000] } },
+            },
+          ],
+          default: { $toDouble: value },
+        },
+      }
+    }
+
     return valueMap(expr as any, (value) => {
       if (Array.isArray(value)) {
         return value.map(val => this.eval(val, group))

@@ -212,10 +212,18 @@ class PostgresBuilder extends Builder {
 
       $eq: this.binary('=', 'text'),
 
+      $number: (arg) => {
+        const value = this.parseEval(arg)
+        const res = this.state.sqlType === 'raw' ? `${value}::double precision`
+          : `extract(epoch from ${value})::integer`
+        this.state.sqlType = 'raw'
+        return res
+      },
+
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::double precision, 0)`, undefined, 'double precision'),
       $avg: (expr) => this.createAggr(expr, value => `avg(${value})::double precision`, undefined, 'double precision'),
-      $min: (expr) => this.createAggr(expr, value => `(0+min(${value}))`, undefined, 'double precision'),
-      $max: (expr) => this.createAggr(expr, value => `(0+max(${value}))`, undefined, 'double precision'),
+      $min: (expr) => this.createAggr(expr, value => `min(${value})`, undefined, 'double precision'),
+      $max: (expr) => this.createAggr(expr, value => `max(${value})`, undefined, 'double precision'),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})::integer`),
       $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`, value => {
         if (this.state.sqlType === 'json') {
@@ -232,7 +240,7 @@ class PostgresBuilder extends Builder {
 
     this.define<Date, string>({
       types: ['time'],
-      dump: date => date ? formatTime(date) : null,
+      dump: date => date ? (typeof date === 'string' ? date : formatTime(date)) : null,
       load: str => {
         if (isNullable(str)) return str
         const date = new Date(0)
@@ -311,16 +319,20 @@ class PostgresBuilder extends Builder {
 
   protected jsonUnquote(value: string, pure: boolean = false, type?: string) {
     if (pure && type) return `(jsonb_build_object('v', ${value})->>'v')::${type}`
-    const res = type && this.state.sqlType === 'json' ? `(jsonb_build_object('v', ${value})->>'v')::${type}` : value
-    this.state.sqlType = 'raw'
-    return res
+    if (this.state.sqlType === 'json') {
+      this.state.sqlType = 'raw'
+      return `(jsonb_build_object('v', ${value})->>'v')::${type}`
+    }
+    return value
   }
 
   protected jsonQuote(value: string, pure: boolean = false) {
     if (pure) return `to_jsonb(${value})`
-    const res = this.state.sqlType === 'raw' ? `to_jsonb(${value})` : value
-    this.state.sqlType = 'json'
-    return res
+    if (this.state.sqlType !== 'json') {
+      this.state.sqlType = 'json'
+      return `to_jsonb(${value})`
+    }
+    return value
   }
 
   protected groupObject(fields: any) {
