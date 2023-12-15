@@ -17,8 +17,24 @@ interface ColumnInfo {
   is_nullable: string
   data_type: string
   character_maximum_length: number
+  numeric_precision: number
+  numeric_scale: number
   is_identity: string
   is_updatable: string
+}
+
+interface ConstraintInfo {
+  constraint_catalog: string
+  constraint_schema: string
+  constraint_name: string
+  table_catalog: string
+  table_schema: string
+  table_name: string
+  constraint_type: string
+  is_deferrable: string
+  initially_deferred: string
+  enforced: string
+  nulls_distinct: string
 }
 
 interface TableInfo {
@@ -36,14 +52,6 @@ interface TableInfo {
   commit_action: null
 }
 
-interface FieldInfo {
-  key: string
-  names: string[]
-  field?: Field
-  column?: ColumnInfo | undefined
-  def?: string
-}
-
 function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
 }
@@ -53,56 +61,87 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
   let def = ''
   if (['primary', 'unsigned', 'integer'].includes(type)) {
     length ||= 4
-    if (precision) def += `NUMERIC(${precision}, ${scale ?? 0})`
-    else if (length <= 2) def += autoInc ? 'SMALLSERIAL' : 'SMALLINT'
-    else if (length <= 4) def += autoInc ? 'SERIAL' : 'INTEGER'
+    if (precision) def += `numeric(${precision}, ${scale ?? 0})`
+    else if (length <= 2) def += autoInc ? 'smallserial' : 'smallint'
+    else if (length <= 4) def += autoInc ? 'serial' : 'integer'
     else {
       if (length > 8) logger.warn(`type ${type}(${length}) exceeds the max supported length`)
-      def += autoInc ? 'BIGSERIAL' : 'BIGINT'
+      def += autoInc ? 'bigserial' : 'bigint'
     }
-
     if (!isNullable(initial) && !autoInc) def += ` DEFAULT ${initial}`
   } else if (type === 'decimal') {
-    def += `DECIMAL(${precision}, ${scale})`
+    def += `numeric(${precision}, ${scale})`
     if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'float') {
-    def += 'REAL'
+    def += 'real'
     if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'double') {
-    def += 'DOUBLE PRECISION'
+    def += 'double precision'
     if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'char') {
-    def += `VARCHAR(${length || 64}) `
+    def += `varchar(${length || 64}) `
     if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'string') {
-    def += `VARCHAR(${length || 255})`
+    def += `varchar(${length || 255})`
     if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'text') {
-    def += `TEXT`
+    def += `text`
     if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
   } else if (type === 'boolean') {
-    def += 'BOOLEAN'
+    def += 'boolean'
     if (!isNullable(initial)) def += ` DEFAULT ${initial}`
   } else if (type === 'list') {
-    def += 'TEXT[]'
+    def += 'text[]'
     if (initial) {
       def += ` DEFAULT ${transformArray(initial)}`
     }
   } else if (type === 'json') {
-    def += 'JSONB'
+    def += 'jsonb'
     if (initial) def += ` DEFAULT '${JSON.stringify(initial)}'::JSONB` // TODO
   } else if (type === 'date') {
-    def += 'TIMESTAMP WITH TIME ZONE'
+    def += 'timestamp with time zone'
     if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else if (type === 'time') {
-    def += 'TIME WITH TIME ZONE'
+    def += 'time with time zone'
     if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else if (type === 'timestamp') {
-    def += 'TIMESTAMP WITH TIME ZONE'
+    def += 'timestamp with time zone'
     if (initial) def += ` DEFAULT ${formatTime(initial)}`
   } else throw new Error(`unsupported type: ${type}`)
 
   return def
+}
+
+function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, def: string) {
+  const typename = def.split(/[ (]/)[0]
+  if (field.autoInc) return false
+  if (['unsigned', 'integer'].includes(field.type)) {
+    if (column.data_type !== typename) return true
+  } else if (typename === 'text[]') {
+    if (column.data_type !== 'ARRAY') return true
+  } else if (Field.date.includes(field.type)) {
+    if (column.data_type !== def) return true
+  } else if (typename === 'varchar') {
+    if (column.data_type !== 'character varying') return true
+  } else if (typename !== column.data_type) return true
+  switch (field.type) {
+    case 'integer':
+    case 'unsigned':
+    case 'char':
+      return !!field.length && !!column.character_maximum_length && column.character_maximum_length !== field.length
+    case 'decimal':
+      return column.numeric_precision !== field.precision || column.numeric_scale !== field.scale
+    case 'string':
+    case 'text':
+    case 'list':
+    case 'json':
+      return false
+    default: return false
+  }
+}
+
+function createIndex(keys: string | string[]) {
+  return makeArray(keys).map(escapeId).join(', ')
 }
 
 function formatTime(time: Date) {
@@ -371,8 +410,9 @@ export namespace PostgresDriver {
 }
 
 export class PostgresDriver extends Driver {
-  public sql!: postgres.Sql
+  public postgres!: postgres.Sql
   public config: PostgresDriver.Config
+  public sql: PostgresBuilder
 
   private session?: postgres.TransactionSql
   private _counter = 0
@@ -387,107 +427,151 @@ export class PostgresDriver extends Driver {
       },
       ...config,
     }
+
+    this.sql = new PostgresBuilder()
   }
 
   async start() {
-    this.sql = postgres(this.config)
+    this.postgres = postgres(this.config)
   }
 
   async stop() {
-    await this.sql.end()
+    await this.postgres.end()
   }
 
-  async query(sql: string) {
-    return await (this.session ?? this.sql).unsafe(sql).catch(e => {
+  async query<T extends any[] = any[]>(sql: string): Promise<postgres.RowList<T>> {
+    return await (this.session ?? this.postgres).unsafe<T>(sql).catch(e => {
       logger.warn('> %s', sql)
       throw e
     })
   }
 
   async prepare(name: string) {
-    const columns: ColumnInfo[] = await this.sql`
-      SELECT *
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-      AND table_name = ${name}`
+    const [columns, constraints] = await Promise.all([
+      this.query<ColumnInfo[]>(`
+        SELECT *
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = ${this.sql.escape(name)}`),
+      this.query<ConstraintInfo[]>(`
+        SELECT *
+        FROM information_schema.table_constraints
+        WHERE table_schema = 'public'
+        AND table_name = ${this.sql.escape(name)}`),
+    ])
+
     const table = this.model(name)
-    const { fields } = table
-    const primary = makeArray(table.primary)
+    const { primary, foreign } = table
+    const fields = { ...table.fields }
+    const unique = [...table.unique]
+    const create: string[] = []
+    const update: string[] = []
+    const rename: string[] = []
 
-    const create: FieldInfo[] = []
-    const rename: FieldInfo[] = []
-    Object.entries(fields).forEach(([key, field]) => {
-      const names = [key].concat(field?.legacy ?? [])
-      const column = columns?.find(c => names.includes(c.column_name))
-      const isPrimary = primary.includes(key)
-
-      let def: string | undefined
-      if (!column) {
-        def = getTypeDef(Object.assign({
-          primary: isPrimary,
-          autoInc: isPrimary && table.autoInc,
-        }, field))
+    // field definitions
+    for (const key in fields) {
+      const { deprecated } = fields[key]!
+      if (deprecated) continue
+      const legacy = [key, ...fields[key]!.legacy || []]
+      const column = columns.find(info => legacy.includes(info.column_name))
+      let shouldUpdate = column?.column_name !== key
+      const field = Object.assign({ autoInc: primary.includes(key) && table.autoInc }, fields[key]!)
+      const typedef = getTypeDef(field)
+      if (column && !shouldUpdate) {
+        shouldUpdate = isDefUpdated(field, column, typedef)
       }
 
-      const info = { key, field, names, column, def }
-
-      if (!column) create.push(info)
-      else if (key !== column.column_name) rename.push(info)
-    })
-
-    if (!columns?.length) {
-      await this.sql`
-        CREATE TABLE ${this.sql(name)}
-        (${this.sql.unsafe(create.map(f => `"${f.key}" ${f.def}`).join(','))}, _pg_mtime BIGINT,
-        PRIMARY KEY(${this.sql(primary)}))`
-      return
+      if (!column) {
+        create.push(`${escapeId(key)} ${typedef}`)
+      } else if (shouldUpdate) {
+        if (column.column_name !== key) rename.push(`RENAME ${escapeId(column.column_name)} TO ${escapeId(key)}`)
+        const [ctype, cdefault] = typedef.split('DEFAULT')
+        update.push(`ALTER ${escapeId(key)} TYPE ${ctype}`)
+        if (cdefault) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${cdefault}`)
+      }
     }
 
-    if (rename?.length) {
-      await this.sql.unsafe(
-        rename.map(f => `ALTER TABLE "${name}" RENAME "${f.column?.column_name}" TO "${f.key}"`).join(';'),
-      )
+    // index definitions
+    if (!columns.length) {
+      create.push(`PRIMARY KEY (${createIndex(primary)})`)
+      for (const key in foreign) {
+        const [table, key2] = foreign[key]!
+        create.push(`FOREIGN KEY (${escapeId(key)}) REFERENCES ${escapeId(table)} (${escapeId(key2)})`)
+      }
     }
 
-    if (create?.length) {
-      await this.sql.unsafe(
-        `ALTER TABLE "${name}" ${create.map(f => `ADD "${f.key}" ${f.def}`).join(',')}`,
-      )
+    for (const key of unique) {
+      let oldIndex: ConstraintInfo | undefined
+      let shouldUpdate = false
+      const oldKeys = makeArray(key).map((key) => {
+        const legacy = [key, ...fields[key]!.legacy || []]
+        const column = columns.find(info => legacy.includes(info.column_name))
+        if (column?.column_name !== key) shouldUpdate = true
+        return column?.column_name
+      })
+      if (oldKeys.every(Boolean)) {
+        const name = `unique:${table.name}:` + oldKeys.join('+')
+        oldIndex = constraints.find(info => info.constraint_name === name)
+      }
+      const name = `unique:${table.name}:` + makeArray(key).join('+')
+      if (!oldIndex) {
+        create.push(`CONSTRAINT ${escapeId(name)} UNIQUE (${createIndex(key)})`)
+      } else if (shouldUpdate) {
+        create.push(`CONSTRAINT ${escapeId(name)} UNIQUE (${createIndex(key)})`)
+        update.push(`DROP CONSTRAINT ${escapeId(oldIndex.constraint_name)}`)
+      }
     }
 
-    const drop: string[] = []
+    if (!columns.length) {
+      logger.info('auto creating table %c', name)
+      return this.query<any>(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}, _pg_mtime BIGINT)`)
+    }
+
+    const operations = [
+      ...create.map(def => 'ADD ' + def),
+      ...update,
+    ]
+    if (operations.length) {
+      // https://www.postgresql.org/docs/current/sql-altertable.html
+      logger.info('auto updating table %c', name)
+      if (rename.length) {
+        await Promise.all(rename.map(op => this.query(`ALTER TABLE ${escapeId(name)} ${op}`)))
+      }
+      await this.query(`ALTER TABLE ${escapeId(name)} ${operations.join(', ')}`)
+    }
+
+    // migrate deprecated fields (do not await)
+    const dropKeys: string[] = []
     this.migrate(name, {
       error: logger.warn,
-      before: keys => keys.every(key => columns.some(c => c.column_name === key)),
-      after: keys => drop.push(...keys),
+      before: keys => keys.every(key => columns.some(info => info.column_name === key)),
+      after: keys => dropKeys.push(...keys),
       finalize: async () => {
-        if (!drop.length) return
+        if (!dropKeys.length) return
         logger.info('auto migrating table %c', name)
-        await this.sql`
-          ALTER TABLE ${this.sql(name)}
-          ${this.sql.unsafe(drop.map(key => `DROP "${key}"`).join(', '))}`
+        await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
       },
     })
   }
 
   async drop(table?: string) {
     if (table) {
-      await this.sql`DROP TABLE IF EXISTS "${this.sql(table)}" CASCADE`
+      await this.query(`DROP TABLE IF EXISTS ${escapeId(table)} CASCADE`)
       return
     }
-    const tables: TableInfo[] = await this.sql`
+    const tables: TableInfo[] = await this.query(`
       SELECT *
       FROM information_schema.tables
-      WHERE table_schema = 'public'`
+      WHERE table_schema = 'public'`)
     if (!tables.length) return
-    await this.sql`DROP TABLE IF EXISTS ${this.sql(tables.map(t => t.table_name))} CASCADE`
+    await this.query(`DROP TABLE IF EXISTS ${tables.map(t => escapeId(t.table_name)).join(',')} CASCADE`)
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
-    const tables = await this.sql`
+    const tables = await this.query(`
       SELECT *
       FROM information_schema.tables
-      WHERE table_schema = 'public'`
+      WHERE table_schema = 'public'`)
     const tableStats = await this.query(
       tables.map(({ table_name: name }) => {
         return `SELECT '${name}' AS name,
@@ -627,7 +711,7 @@ export class PostgresDriver extends Driver {
   }
 
   async withTransaction(callback: (session: Driver) => Promise<void>) {
-    return await this.sql.begin(async (conn) => {
+    return await this.postgres.begin(async (conn) => {
       const driver = new Proxy(this, {
         get(target, p, receiver) {
           if (p === 'session') return conn
