@@ -299,6 +299,21 @@ namespace OrmOperations {
       await expect(database.eval('temp2', row => $.max(row.date))).to.eventually.deep.eq(table[5].date)
       await expect(database.eval('temp2', row => $.max(row.time))).to.eventually.deep.eq(table[6].time)
     })
+
+    it('$.number on date types', async () => {
+      await setup(database, 'temp2', barTable)
+      const date = new Date('1970-02-02 12:00:00')
+      const table = [
+        { num: 191, timestamp: date },
+        { num: 192, date: date },
+        { num: 193, time: date },
+      ]
+      await database.upsert('temp2', table)
+      await expect(database.eval('temp2', row => $.array($.number(row.timestamp)), { num: 191 })).to.eventually.deep.equal([+date / 1000])
+      date.setHours(0, 0, 0, 0)
+      await expect(database.eval('temp2', row => $.array($.number(row.date)), { num: 192 })).to.eventually.deep.equal([+date / 1000])
+      await expect(database.eval('temp2', row => $.array($.number(row.time)), { num: 193 })).to.eventually.deep.equal([14400])
+    })
   }
 }
 

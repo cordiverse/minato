@@ -41,6 +41,8 @@ export class Builder {
   protected $false = '0'
   protected modifiedTable?: string
 
+  private readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
+
   constructor(public tables?: Dict<Model>) {
     this.queryOperators = {
       // logical
@@ -124,6 +126,16 @@ export class Builder {
       // membership
       $in: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ''),
       $nin: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ' NOT'),
+
+      // typecast
+      $number: (arg) => {
+        const value = this.parseEval(arg)
+        const res = this.state.sqlType === 'raw' ? `cast(${value} as double)`
+          : this.state.sqlType === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
+            : `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))`
+        this.state.sqlType = 'raw'
+        return res
+      },
 
       // aggregation
       $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),
@@ -215,16 +227,20 @@ export class Builder {
 
   protected jsonUnquote(value: string, pure: boolean = false) {
     if (pure) return `json_unquote(${value})`
-    const res = this.state.sqlType === 'json' ? `json_unquote(${value})` : value
-    this.state.sqlType = 'raw'
-    return res
+    if (this.state.sqlType === 'json') {
+      this.state.sqlType = 'raw'
+      return `json_unquote(${value})`
+    }
+    return value
   }
 
   protected jsonQuote(value: string, pure: boolean = false) {
     if (pure) return `cast(${value} as json)`
-    const res = this.state.sqlType === 'raw' ? `cast(${value} as json)` : value
-    this.state.sqlType = 'json'
-    return res
+    if (this.state.sqlType !== 'json') {
+      this.state.sqlType = 'json'
+      return `cast(${value} as json)`
+    }
+    return value
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {

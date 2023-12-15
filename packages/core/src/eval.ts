@@ -88,6 +88,9 @@ export namespace Eval {
     or: Multi<boolean, boolean>
     not: Unary<boolean, boolean>
 
+    // typecast
+    number: Unary<any, number>
+
     // aggregation / json
     sum: Aggr<number, number>
     avg: Aggr<number, number>
@@ -171,6 +174,12 @@ Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(d
 Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, arg)))
 Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg)))
 Eval.not = unary('not', (value, data) => !executeEval(data, value))
+
+// typecast
+Eval.number = unary('number', (arg, data) => {
+  const value = executeEval(data, arg)
+  return value instanceof Date ? Math.floor(value.valueOf() / 1000) : Number(value)
+})
 
 // aggregation
 Eval.sum = unary('sum', (expr, table) => Array.isArray(table)

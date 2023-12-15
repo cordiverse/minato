@@ -61,6 +61,13 @@ class SQLiteBuilder extends Builder {
         return `iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
       }
     })
+    this.evalOperators.$number = (arg) => {
+      const value = this.parseEval(arg)
+      const res = this.state.sqlType === 'raw' ? `cast(${this.parseEval(arg)} as double)`
+        : `cast(${value} / 1000 as integer)`
+      this.state.sqlType = 'raw'
+      return res
+    }
 
     this.define<boolean, number>({
       types: ['boolean'],
