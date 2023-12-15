@@ -312,7 +312,7 @@ namespace OrmOperations {
       await expect(database.eval('temp2', row => $.array($.number(row.timestamp)), { num: 191 })).to.eventually.deep.equal([+date / 1000])
       date.setHours(0, 0, 0, 0)
       await expect(database.eval('temp2', row => $.array($.number(row.date)), { num: 192 })).to.eventually.deep.equal([+date / 1000])
-      await expect(database.eval('temp2', row => $.array($.number(row.time)), { num: 193 })).to.eventually.deep.equal([14400])
+      await expect(database.eval('temp2', row => $.array($.number(row.time)), { num: 193 })).to.eventually.deep.equal([43200 + date.getTimezoneOffset() * 60])
     })
   }
 }

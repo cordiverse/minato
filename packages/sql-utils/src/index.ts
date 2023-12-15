@@ -130,7 +130,7 @@ export class Builder {
       // typecast
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const res = this.state.sqlType === 'raw' ? `cast(${value} as double)`
+        const res = this.state.sqlType === 'raw' ? `(0+${value})`
           : this.state.sqlType === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
             : `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))`
         this.state.sqlType = 'raw'
