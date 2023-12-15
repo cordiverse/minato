@@ -46,6 +46,7 @@ function OrmOperations(database: Database<Tables>) {
     value: 'string',
   }, {
     primary: ['ida', 'idb'],
+    unique: ['value'],
   })
 }
 
@@ -251,6 +252,15 @@ namespace OrmOperations {
       row.bigtext = Array(1000000).fill('a').join('')
       await database.upsert('temp2', [row])
       await expect(database.get('temp2', row.id)).to.eventually.have.nested.property('0.bigtext', row.bigtext)
+    })
+
+    it('with unique', async () => {
+      await setup(database, 'temp3', bazTable)
+      await expect(database.upsert('temp3', [
+        { ida: 10, idb: 'a', value: 'e' },
+        { ida: 11, idb: 'b', value: 'f' },
+        { ida: 12, idb: 'c', value: 'd' },
+      ], ['value'] as any)).to.eventually.have.shape({ inserted: 2, matched: 1 })
     })
   }
 
