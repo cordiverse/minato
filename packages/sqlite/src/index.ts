@@ -288,10 +288,10 @@ export class SQLiteDriver extends Driver {
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
       stmt.free()
-      logger.debug('> %s', sql)
+      logger.debug('> %s', sql, params)
       return result
     } catch (e) {
-      logger.warn('> %s', sql)
+      logger.warn('> %s', sql, params)
       throw e
     }
   }
@@ -375,7 +375,7 @@ export class SQLiteDriver extends Driver {
     const assignment = updateFields.map((key) => `${escapeId(key)} = ?`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
-    this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key]))
+    this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key] ?? null))
     return 1
   }
 
@@ -399,7 +399,7 @@ export class SQLiteDriver extends Driver {
     data = this.sql.dump(model, data)
     const keys = Object.keys(data)
     const sql = `INSERT INTO ${escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${Array(keys.length).fill('?').join(', ')})`
-    return this.#run(sql, keys.map(key => data[key]), () => this.#get(`SELECT last_insert_rowid() AS id`))
+    return this.#run(sql, keys.map(key => data[key] ?? null), () => this.#get(`SELECT last_insert_rowid() AS id`))
   }
 
   async create(sel: Selection.Mutable, data: {}) {
