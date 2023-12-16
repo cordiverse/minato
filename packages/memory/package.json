@@ -26,10 +26,10 @@
     "memory"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.7.0"
+    "@minatojs/core": "^2.8.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^1.8.1"
+    "@minatojs/tests": "^1.8.3"
   },
   "dependencies": {
     "cosmokit": "^1.5.1"
