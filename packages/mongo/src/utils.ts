@@ -115,15 +115,17 @@ export class Transformer {
       $number: (arg, group) => {
         const value = this.eval(arg, group)
         return {
-          $switch: {
-            branches: [
-              {
-                case: { $eq: [{ $type: value }, 'date'] },
-                then: { $floor: { $divide: [{ $toLong: value }, 1000] } },
-              },
-            ],
-            default: { $toDouble: value },
-          },
+          $ifNull: [{
+            $switch: {
+              branches: [
+                {
+                  case: { $eq: [{ $type: value }, 'date'] },
+                  then: { $floor: { $divide: [{ $toLong: value }, 1000] } },
+                },
+              ],
+              default: { $toDouble: value },
+            },
+          }, 0],
         }
       },
     }

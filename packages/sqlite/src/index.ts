@@ -68,7 +68,7 @@ class SQLiteBuilder extends Builder {
       const res = this.state.sqlType === 'raw' ? `cast(${this.parseEval(arg)} as double)`
         : `cast(${value} / 1000 as integer)`
       this.state.sqlType = 'raw'
-      return res
+      return `ifnull(${res}, 0)`
     }
 
     this.define<boolean, number>({

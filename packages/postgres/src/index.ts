@@ -222,7 +222,7 @@ class PostgresBuilder extends Builder {
         const res = this.state.sqlType === 'raw' ? `${value}::double precision`
           : `extract(epoch from ${value})::integer`
         this.state.sqlType = 'raw'
-        return res
+        return `coalesce(${res}, 0)`
       },
 
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::double precision, 0)`, undefined, 'double precision'),
