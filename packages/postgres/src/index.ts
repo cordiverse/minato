@@ -213,8 +213,9 @@ class PostgresBuilder extends Builder {
         const dividend = this.parseEval(left, 'double precision'), divisor = this.parseEval(right, 'double precision')
         return `${dividend} - (${divisor} * floor(${dividend} / ${divisor}))`
       },
-      $log: ([left, right]) => right === undefined ? `ln(${this.parseEval(left, 'double precision')})`
-        : `ln(${this.parseEval(right, 'double precision')}) / ln(${this.parseEval(left, 'double precision')})`,
+      $log: ([left, right]) => isNullable(right)
+        ? `ln(${this.parseEval(left, 'double precision')})`
+        : `ln(${this.parseEval(left, 'double precision')}) / ln(${this.parseEval(right, 'double precision')})`,
       $random: () => `random()`,
 
       $eq: this.binary('=', 'text'),

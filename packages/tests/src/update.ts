@@ -330,7 +330,7 @@ namespace OrmOperations {
       await expect(database.eval('temp2', row => $.max($.round(row.double)), table[0].id)).to.eventually.deep.eq(Math.round(table[0].double))
       await expect(database.eval('temp2', row => $.max($.exp(row.double)), table[0].id)).to.eventually.deep.eq(Math.exp(table[0].double))
       await expect(database.eval('temp2', row => $.max($.log(row.double)), table[0].id)).to.eventually.deep.eq(Math.log(table[0].double))
-      await expect(database.eval('temp2', row => $.max($.floor($.log(3, row.double))), table[0].id)).to.eventually.deep.eq(Math.floor(Math.log(table[0].double) / Math.log(3)))
+      await expect(database.eval('temp2', row => $.max($.floor($.log(row.double, 3))), table[0].id)).to.eventually.deep.eq(Math.floor(Math.log(table[0].double) / Math.log(3)))
       await expect(database.eval('temp2', row => $.max($.floor($.pow(row.double, row.num))), table[0].id))
         .to.eventually.deep.eq(Math.floor(Math.pow(table[0].double, table[0].num)))
     })

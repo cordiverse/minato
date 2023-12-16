@@ -114,7 +114,7 @@ export class Builder {
       $ceil: (arg) => `ceil(${this.parseEval(arg)})`,
       $round: (arg) => `round(${this.parseEval(arg)})`,
       $exp: (arg) => `exp(${this.parseEval(arg)})`,
-      $log: (args) => `log(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+      $log: (args) => `log(${args.filter(x => !isNullable(x)).map(arg => this.parseEval(arg)).reverse().join(', ')})`,
       $power: (args) => `power(${args.map(arg => this.parseEval(arg)).join(', ')})`,
       $random: () => `rand()`,
 
