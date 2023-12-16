@@ -73,7 +73,8 @@ export namespace Eval {
     ceil: Unary<number, number>
     round: Unary<number, number>
     exp: Unary<number, number>
-    ln: Unary<number, number>
+    log<A extends boolean>(x: Term<number, A>): Expr<number, A>
+    log<A extends boolean>(base: Term<number, A>, x: Term<number, A>): Expr<number, A>
     pow: Binary<number, number>
     power: Binary<number, number>
     random(): Expr<number, false>
@@ -174,7 +175,8 @@ Eval.floor = unary('floor', (arg, data) => Math.floor(executeEval(data, arg)))
 Eval.ceil = unary('ceil', (arg, data) => Math.ceil(executeEval(data, arg)))
 Eval.round = unary('round', (arg, data) => Math.round(executeEval(data, arg)))
 Eval.exp = unary('exp', (arg, data) => Math.exp(executeEval(data, arg)))
-Eval.ln = unary('ln', (arg, data) => Math.log(executeEval(data, arg)))
+Eval.log = multary('log', ([left, right], data) => right === undefined ? Math.log(executeEval(data, left))
+  : Math.log(executeEval(data, right)) / Math.log(executeEval(data, left)))
 Eval.pow = Eval.power = multary('power', ([left, right], data) => Math.pow(executeEval(data, left), executeEval(data, right)))
 Eval.random = () => Eval('random', {})
 operators.$random = () => Math.random()

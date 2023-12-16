@@ -109,6 +109,8 @@ export class Transformer {
       $nin: (arg, group) => ({ $not: { $in: arg.map(val => this.eval(val, group)) } }),
 
       $modulo: (arg, group) => ({ $mod: arg.map(val => this.eval(val, group)) }),
+      $log: ([left, right], group) => right === undefined ? { $ln: this.eval(left, group) }
+        : { $log: [this.eval(right, group), this.eval(left, group)] },
       $power: (arg, group) => ({ $pow: arg.map(val => this.eval(val, group)) }),
       $random: (arg, group) => ({ $rand: {} }),
 

@@ -53,7 +53,8 @@ class SQLiteBuilder extends Builder {
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
     this.evalOperators.$modulo = ([left, right]) => `modulo(${this.parseEval(left)}, ${this.parseEval(right)})`
-    this.evalOperators.$ln = (arg) => `log(${this.parseEval(arg)})`
+    this.evalOperators.$log = ([left, right]) => right === undefined ? `log(${this.parseEval(left)})`
+      : `log(${this.parseEval(right)}) / log(${this.parseEval(left)})`
     this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => {
       if (this.state.sqlType === 'json') {
         this.state.sqlType = 'raw'
