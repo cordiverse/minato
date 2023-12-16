@@ -220,7 +220,7 @@ class PostgresBuilder extends Builder {
       $number: (arg) => {
         const value = this.parseEval(arg)
         const res = this.state.sqlType === 'raw' ? `${value}::double precision`
-          : `extract(epoch from ${value})::integer`
+          : `extract(epoch from ${value})::bigint`
         this.state.sqlType = 'raw'
         return `coalesce(${res}, 0)`
       },
@@ -441,6 +441,14 @@ export class PostgresDriver extends Driver {
       onnotice: () => { },
       debug(_, query, parameters) {
         logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
+      },
+      transform: {
+        value: {
+          from: (value, column) => {
+            if (column.type === 20) return Number(value)
+            return value
+          },
+        },
       },
       ...config,
     }
