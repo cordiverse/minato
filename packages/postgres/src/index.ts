@@ -209,6 +209,11 @@ class PostgresBuilder extends Builder {
       // number
       $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,
       $multiply: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' * ')})`,
+      $modulo: ([left, right]) => {
+        const dividend = this.parseEval(left, 'double precision'), divisor = this.parseEval(right, 'double precision')
+        return `${dividend} - (${divisor} * floor(${dividend} / ${divisor}))`
+      },
+      $random: () => `random()`,
 
       $eq: this.binary('=', 'text'),
 

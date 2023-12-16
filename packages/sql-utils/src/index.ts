@@ -106,6 +106,17 @@ export class Builder {
       $multiply: (args) => `(${args.map(arg => this.parseEval(arg)).join(' * ')})`,
       $subtract: this.binary('-'),
       $divide: this.binary('/'),
+      $modulo: this.binary('%'),
+
+      // mathemetic
+      $abs: (arg) => `abs(${this.parseEval(arg)})`,
+      $floor: (arg) => `floor(${this.parseEval(arg)})`,
+      $ceil: (arg) => `ceil(${this.parseEval(arg)})`,
+      $round: (arg) => `round(${this.parseEval(arg)})`,
+      $exp: (arg) => `exp(${this.parseEval(arg)})`,
+      $ln: (arg) => `ln(${this.parseEval(arg)})`,
+      $power: (args) => `power(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+      $random: () => `rand()`,
 
       // string
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,

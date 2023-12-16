@@ -98,6 +98,14 @@ namespace SelectionTests {
         { id: 1, value: 0 },
       ])
     })
+
+    it('random', async () => {
+      await expect(database.select('foo').orderBy(row => $.random()).execute(['id'])).to.eventually.have.deep.members([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+      ])
+    })
   }
 
   export function project(database: Database<Tables>) {

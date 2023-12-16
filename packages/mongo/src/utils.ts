@@ -126,8 +126,20 @@ export class Transformer {
       return { $not: { $in: expr.$nin.map(val => this.eval(val, group)) } }
     }
 
+    if (expr.$modulo) {
+      return { $mod: expr.$modulo.map(val => this.eval(val, group)) }
+    }
+
+    if (expr.$power) {
+      return { $pow: expr.$power.map(val => this.eval(val, group)) }
+    }
+
+    if (expr.$random) {
+      return { $rand: {} }
+    }
+
     if (expr.$number) {
-      const value = this.eval(expr.$number)
+      const value = this.eval(expr.$number, group)
       return {
         $switch: {
           branches: [
