@@ -106,6 +106,17 @@ export class Builder {
       $multiply: (args) => `(${args.map(arg => this.parseEval(arg)).join(' * ')})`,
       $subtract: this.binary('-'),
       $divide: this.binary('/'),
+      $modulo: this.binary('%'),
+
+      // mathemetic
+      $abs: (arg) => `abs(${this.parseEval(arg)})`,
+      $floor: (arg) => `floor(${this.parseEval(arg)})`,
+      $ceil: (arg) => `ceil(${this.parseEval(arg)})`,
+      $round: (arg) => `round(${this.parseEval(arg)})`,
+      $exp: (arg) => `exp(${this.parseEval(arg)})`,
+      $log: (args) => `log(${args.filter(x => !isNullable(x)).map(arg => this.parseEval(arg)).reverse().join(', ')})`,
+      $power: (args) => `power(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+      $random: () => `rand()`,
 
       // string
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,
@@ -134,7 +145,7 @@ export class Builder {
           : this.state.sqlType === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
             : `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))`
         this.state.sqlType = 'raw'
-        return res
+        return `ifnull(${res}, 0)`
       },
 
       // aggregation

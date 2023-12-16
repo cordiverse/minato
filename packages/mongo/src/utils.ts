@@ -1,5 +1,5 @@
 import { Dict, isNullable, valueMap } from 'cosmokit'
-import { isComparable, Query, Selection } from '@minatojs/core'
+import { Eval, isComparable, Query, Selection } from '@minatojs/core'
 import { Filter, FilterOperators } from 'mongodb'
 
 function createFieldFilter(query: Query.FieldQuery, key: string) {
@@ -72,14 +72,66 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   return result
 }
 
+export type ExtractUnary<T> = T extends [infer U] ? U : T
+
+export type EvalOperators = {
+  [K in keyof Eval.Static as `$${K}`]?: (expr: ExtractUnary<Parameters<Eval.Static[K]>>, group?: object) => any
+} & { $: (expr: any, group?: object) => any }
+
 const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count', '$length', '$array']
 
 export class Transformer {
   private counter = 0
+  private evalOperators: EvalOperators
   public walkedKeys: string[]
 
   constructor(public virtualKey?: string, public lookup?: boolean, public recursivePrefix: string = '$') {
     this.walkedKeys = []
+
+    this.evalOperators = {
+      $: (arg, group) => {
+        if (typeof arg === 'string') {
+          this.walkedKeys.push(this.getActualKey(arg))
+          return this.recursivePrefix + this.getActualKey(arg)
+        } else if (this.lookup) {
+          this.walkedKeys.push(arg[0] + '.' + this.getActualKey(arg[1]))
+          return this.recursivePrefix + arg[0] + '.' + this.getActualKey(arg[1])
+        } else {
+          this.walkedKeys.push(this.getActualKey(arg[1]))
+          return this.recursivePrefix + this.getActualKey(arg[1])
+        }
+      },
+      $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
+      $array: (arg, group) => this.transformEvalExpr(arg),
+      $object: (arg, group) => this.transformEvalExpr(arg),
+
+      $length: (arg, group) => ({ $size: this.eval(arg, group) }),
+      $nin: (arg, group) => ({ $not: { $in: arg.map(val => this.eval(val, group)) } }),
+
+      $modulo: (arg, group) => ({ $mod: arg.map(val => this.eval(val, group)) }),
+      $log: ([left, right], group) => isNullable(right)
+        ? { $ln: this.eval(left, group) }
+        : { $log: [this.eval(left, group), this.eval(right, group)] },
+      $power: (arg, group) => ({ $pow: arg.map(val => this.eval(val, group)) }),
+      $random: (arg, group) => ({ $rand: {} }),
+
+      $number: (arg, group) => {
+        const value = this.eval(arg, group)
+        return {
+          $ifNull: [{
+            $switch: {
+              branches: [
+                {
+                  case: { $eq: [{ $type: value }, 'date'] },
+                  then: { $floor: { $divide: [{ $toLong: value }, 1000] } },
+                },
+              ],
+              default: { $toDouble: value },
+            },
+          }, 0],
+        }
+      },
+    }
   }
 
   public createKey() {
@@ -97,47 +149,9 @@ export class Transformer {
       return { $literal: expr }
     }
 
-    if (expr.$) {
-      if (typeof expr.$ === 'string') {
-        this.walkedKeys.push(this.getActualKey(expr.$))
-        return this.recursivePrefix + this.getActualKey(expr.$)
-      } else if (this.lookup) {
-        this.walkedKeys.push(expr.$[0] + '.' + this.getActualKey(expr.$[1]))
-        return this.recursivePrefix + expr.$[0] + '.' + this.getActualKey(expr.$[1])
-      } else {
-        this.walkedKeys.push(this.getActualKey(expr.$[1]))
-        return this.recursivePrefix + this.getActualKey(expr.$[1])
-      }
-    }
-
-    if (expr.$if) {
-      return { $cond: expr.$if.map(val => this.eval(val, group)) }
-    }
-
-    if (expr.$object || expr.$array) {
-      return this.transformEvalExpr(expr.$object || expr.$array)
-    }
-
-    if (expr.$length) {
-      return { $size: this.eval(expr.$length) }
-    }
-
-    if (expr.$nin) {
-      return { $not: { $in: expr.$nin.map(val => this.eval(val, group)) } }
-    }
-
-    if (expr.$number) {
-      const value = this.eval(expr.$number)
-      return {
-        $switch: {
-          branches: [
-            {
-              case: { $eq: [{ $type: value }, 'date'] },
-              then: { $floor: { $divide: [{ $toLong: value }, 1000] } },
-            },
-          ],
-          default: { $toDouble: value },
-        },
+    for (const key in expr) {
+      if (this.evalOperators[key]) {
+        return this.evalOperators[key](expr[key], group)
       }
     }
 

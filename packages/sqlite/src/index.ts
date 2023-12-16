@@ -52,6 +52,10 @@ class SQLiteBuilder extends Builder {
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
+    this.evalOperators.$modulo = ([left, right]) => `modulo(${this.parseEval(left)}, ${this.parseEval(right)})`
+    this.evalOperators.$log = ([left, right]) => isNullable(right)
+      ? `log(${this.parseEval(left)})`
+      : `log(${this.parseEval(left)}) / log(${this.parseEval(right)})`
     this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => {
       if (this.state.sqlType === 'json') {
         this.state.sqlType = 'raw'
@@ -66,7 +70,7 @@ class SQLiteBuilder extends Builder {
       const res = this.state.sqlType === 'raw' ? `cast(${this.parseEval(arg)} as double)`
         : `cast(${value} / 1000 as integer)`
       this.state.sqlType = 'raw'
-      return res
+      return `ifnull(${res}, 0)`
     }
 
     this.define<boolean, number>({
@@ -275,6 +279,8 @@ export class SQLiteDriver extends Driver {
     }
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
     this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
+    this.db.create_function('modulo', (left, right) => left % right)
+    this.db.create_function('rand', () => Math.random())
   }
 
   #joinKeys(keys?: string[]) {

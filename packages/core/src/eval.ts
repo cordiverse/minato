@@ -64,6 +64,19 @@ export namespace Eval {
     subtract: Binary<number, number>
     div: Binary<number, number>
     divide: Binary<number, number>
+    mod: Binary<number, number>
+    modulo: Binary<number, number>
+
+    // mathematic
+    abs: Unary<number, number>
+    floor: Unary<number, number>
+    ceil: Unary<number, number>
+    round: Unary<number, number>
+    exp: Unary<number, number>
+    log<A extends boolean>(x: Term<number, A>, base?: Term<number, A>): Expr<number, A>
+    pow: Binary<number, number>
+    power: Binary<number, number>
+    random(): Expr<number, false>
 
     // comparison
     eq: Multi<Comparable, boolean>
@@ -116,7 +129,7 @@ operators['$'] = getRecursive
 type UnaryCallback<T> = T extends (value: infer R) => Eval.Expr<infer S> ? (value: R, data: any[]) => S : never
 function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval.Static[K]>): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return (value: any) => Eval(key, value) as any
+  return ((value: any) => Eval(key, value)) as any
 }
 
 type MultivariateCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S> ? (args: R, data: any) => S : never
@@ -153,6 +166,18 @@ Eval.add = multary('add', (args, data) => args.reduce<number>((prev, curr) => pr
 Eval.mul = Eval.multiply = multary('multiply', (args, data) => args.reduce<number>((prev, curr) => prev * executeEval(data, curr), 1))
 Eval.sub = Eval.subtract = multary('subtract', ([left, right], data) => executeEval(data, left) - executeEval(data, right))
 Eval.div = Eval.divide = multary('divide', ([left, right], data) => executeEval(data, left) / executeEval(data, right))
+Eval.mod = Eval.modulo = multary('modulo', ([left, right], data) => executeEval(data, left) % executeEval(data, right))
+
+// mathematic
+Eval.abs = unary('abs', (arg, data) => Math.abs(executeEval(data, arg)))
+Eval.floor = unary('floor', (arg, data) => Math.floor(executeEval(data, arg)))
+Eval.ceil = unary('ceil', (arg, data) => Math.ceil(executeEval(data, arg)))
+Eval.round = unary('round', (arg, data) => Math.round(executeEval(data, arg)))
+Eval.exp = unary('exp', (arg, data) => Math.exp(executeEval(data, arg)))
+Eval.log = multary('log', ([left, right], data) => Math.log(executeEval(data, left)) / Math.log(executeEval(data, right ?? Math.E)))
+Eval.pow = Eval.power = multary('power', ([left, right], data) => Math.pow(executeEval(data, left), executeEval(data, right)))
+Eval.random = () => Eval('random', {})
+operators.$random = () => Math.random()
 
 // comparison
 Eval.eq = comparator('eq', (left, right) => left === right)

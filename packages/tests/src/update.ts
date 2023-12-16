@@ -6,6 +6,7 @@ interface Bar {
   id: number
   text?: string
   num?: number
+  double?: number
   bool?: boolean
   list?: string[]
   timestamp?: Date
@@ -30,6 +31,7 @@ function OrmOperations(database: Database<Tables>) {
     id: 'unsigned',
     text: 'string',
     num: 'integer',
+    double: 'double',
     bool: 'boolean',
     list: 'list',
     timestamp: 'timestamp',
@@ -313,6 +315,29 @@ namespace OrmOperations {
       date.setHours(0, 0, 0, 0)
       await expect(database.eval('temp2', row => $.array($.number(row.date)), { num: 192 })).to.eventually.deep.equal([+date / 1000])
       await expect(database.eval('temp2', row => $.array($.number(row.time)), { num: 193 })).to.eventually.deep.equal([43200 + date.getTimezoneOffset() * 60])
+      await expect(database.eval('temp2', row => $.min($.number(row.timestamp)))).to.eventually.deep.equal(0)
+    })
+
+    it('math functions', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      table[0].double = 123.45
+      table[0].num = 6
+      await database.set('temp2', table[0].id, { double: table[0].double, num: table[0].num })
+      await expect(database.eval('temp2', row => $.max($.abs($.sub(0, row.double))), table[0].id)).to.eventually.deep.eq(table[0].double)
+      await expect(database.eval('temp2', row => $.max($.mod(row.double, row.num)), table[0].id)).to.eventually.deep.eq(table[0].double % table[0].num)
+      await expect(database.eval('temp2', row => $.max($.ceil(row.double)), table[0].id)).to.eventually.deep.eq(Math.ceil(table[0].double))
+      await expect(database.eval('temp2', row => $.max($.floor(row.double)), table[0].id)).to.eventually.deep.eq(Math.floor(table[0].double))
+      await expect(database.eval('temp2', row => $.max($.round(row.double)), table[0].id)).to.eventually.deep.eq(Math.round(table[0].double))
+      await expect(database.eval('temp2', row => $.max($.exp(row.double)), table[0].id)).to.eventually.deep.eq(Math.exp(table[0].double))
+      await expect(database.eval('temp2', row => $.max($.log(row.double)), table[0].id)).to.eventually.deep.eq(Math.log(table[0].double))
+      await expect(database.eval('temp2', row => $.max($.floor($.log(row.double, 3))), table[0].id)).to.eventually.deep.eq(Math.floor(Math.log(table[0].double) / Math.log(3)))
+      await expect(database.eval('temp2', row => $.max($.floor($.pow(row.double, row.num))), table[0].id))
+        .to.eventually.deep.eq(Math.floor(Math.pow(table[0].double, table[0].num)))
+    })
+
+    it('$.random', async () => {
+      await setup(database, 'temp2', barTable)
+      await expect(database.eval('temp2', row => $.max($.random()))).to.eventually.gt(0).lt(1)
     })
   }
 }
