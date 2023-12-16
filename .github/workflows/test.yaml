@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install
-        run: yarn
+        run: yarn --no-immutable
       - name: Unit Test
         run: yarn test:json mysql
       - name: Report Coverage
@@ -79,7 +79,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install
-        run: yarn
+        run: yarn --no-immutable
       - name: Unit Test
         run: yarn test:json postgres
       - name: Report Coverage
@@ -117,7 +117,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install
-        run: yarn
+        run: yarn --no-immutable
       - name: Unit Test
         run: yarn test:json mongo
       - name: Report Coverage
@@ -152,7 +152,7 @@ jobs:
           mongodb-replica-set: test-rs
           mongodb-port: 27017
       - name: Install
-        run: yarn
+        run: yarn --no-immutable
       - name: Unit Test
         run: yarn test:json mongo --+transaction.abort
       - name: Report Coverage
@@ -180,7 +180,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install
-        run: yarn
+        run: yarn --no-immutable
       - name: Unit Test
         run: yarn test:json ${{ matrix.driver-name }}
       - name: Report Coverage
