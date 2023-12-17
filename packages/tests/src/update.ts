@@ -163,6 +163,14 @@ namespace OrmOperations {
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
+    it('noop', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      await database.set('temp2', {}, {})
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+      await database.set('temp2', {}, { text: undefined })
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    })
+
     it('using expressions', async () => {
       const table = await setup(database, 'temp2', barTable)
       table[1].num = table[1].id * 2
