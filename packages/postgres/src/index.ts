@@ -128,10 +128,10 @@ function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, 
     case 'integer':
     case 'unsigned':
     case 'char':
+    case 'string':
       return !!field.length && !!column.character_maximum_length && column.character_maximum_length !== field.length
     case 'decimal':
       return column.numeric_precision !== field.precision || column.numeric_scale !== field.scale
-    case 'string':
     case 'text':
     case 'list':
     case 'json':
@@ -596,14 +596,16 @@ export class PostgresDriver extends Driver {
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
-    const tables = await this.query(`
+    const names = Object.keys(this.database.tables)
+    const tables = (await this.query<TableInfo[]>(`
       SELECT *
       FROM information_schema.tables
-      WHERE table_schema = 'public'`)
+      WHERE table_schema = 'public'`))
+      .map(t => t.table_name).filter(name => names.includes(name))
     const tableStats = await this.query(
-      tables.map(({ table_name: name }) => {
+      tables.map(name => {
         return `SELECT '${name}' AS name,
-          pg_total_relation_size('${name}') AS size,
+          pg_total_relation_size('${escapeId(name)}') AS size,
           COUNT(*) AS count FROM ${escapeId(name)}`
       }).join(' UNION '),
     ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
