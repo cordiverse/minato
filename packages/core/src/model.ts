@@ -160,6 +160,7 @@ export class Model<S = any> {
     const fields = Object.keys(this.fields)
     Object.entries(source).map(([key, value]) => {
       key = prefix + key
+      if (value === undefined) return
       if (fields.includes(key)) {
         result[key] = this.resolveValue(key, value)
         return

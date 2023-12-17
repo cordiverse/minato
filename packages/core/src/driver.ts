@@ -154,7 +154,9 @@ export class Database<S = any> {
     if (primary.some(key => key in update)) {
       throw new TypeError(`cannot modify primary key`)
     }
-    return await sel._action('set', sel.model.format(update)).execute()
+    update = sel.model.format(update)
+    if (Object.keys(update).length === 0) return {}
+    return await sel._action('set', update).execute()
   }
 
   async remove<T extends Keys<S>>(table: T, query: Query<S[T]>): Promise<Driver.WriteResult> {
