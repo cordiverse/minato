@@ -128,10 +128,10 @@ function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, 
     case 'integer':
     case 'unsigned':
     case 'char':
+    case 'string':
       return !!field.length && !!column.character_maximum_length && column.character_maximum_length !== field.length
     case 'decimal':
       return column.numeric_precision !== field.precision || column.numeric_scale !== field.scale
-    case 'string':
     case 'text':
     case 'list':
     case 'json':
