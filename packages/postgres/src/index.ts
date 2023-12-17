@@ -603,7 +603,7 @@ export class PostgresDriver extends Driver {
     const tableStats = await this.query(
       tables.map(({ table_name: name }) => {
         return `SELECT '${name}' AS name,
-          pg_total_relation_size('${name}') AS size,
+          pg_total_relation_size('${escapeId(name)}') AS size,
           COUNT(*) AS count FROM ${escapeId(name)}`
       }).join(' UNION '),
     ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
