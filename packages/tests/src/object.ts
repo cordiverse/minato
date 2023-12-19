@@ -194,12 +194,13 @@ namespace ObjectOperations {
   }
 
   export const misc = function Misc(database: Database<Tables>) {
-    it('join selections w/ json', async () => {
+    it('join selections with dot fields', async () => {
       await setup(database)
+      await database.set('object', '1', { "meta.embed.b": 3 })
       await expect(database.join({
-        x: 'object',
-        y: 'object',
-      }).execute()).to.eventually.have.length(4)
+        x: database.select('object').where(row => $.lt(row.meta.embed.b, 100)),
+        y: database.select('object').where(row => $.lt(row.meta.embed.b, 100)),
+      }).execute(row => $.sum(1))).to.eventually.deep.equal(4)
     })
   }
 }

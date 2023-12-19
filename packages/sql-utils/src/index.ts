@@ -33,6 +33,7 @@ interface State {
   sqlType?: SQLType
   sqlTypes?: Dict<SQLType>
   group?: boolean
+  innerTables?: Dict<Model>
 }
 
 export class Builder {
@@ -382,6 +383,13 @@ export class Builder {
     const prefix = this.modifiedTable ? `${this.escapeId(this.tables?.[table]?.name ?? this.modifiedTable)}.` : (!this.tables || table === '_' || key in fields
     // the only table must be the main table
     || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`)
+
+    if (!(table in (this.tables || {})) && (table in (this.state.innerTables || {}))) {
+      const fields = this.state.innerTables?.[table]?.fields || {}
+      return (fields[key]?.expr) ? this.parseEvalExpr(fields[key]?.expr)
+        : this.transformKey(key, fields, `${this.escapeId(table)}.`, `${table}.${key}`)
+    }
+
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
@@ -430,6 +438,10 @@ export class Builder {
     } else {
       const sqlTypes: Dict<SQLType> = {}
       const joins: string[] = Object.entries(table).map(([key, table]) => {
+        this.state.innerTables ??= {}
+        this.state.innerTables[key] = table.model
+        this.state.innerTables[table.ref] = table.model
+
         const t = `${this.get(table, true, false, false)} AS ${this.escapeId(key)}`
         for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
           sqlTypes[`${key}.${fieldKey}`] = fieldType
