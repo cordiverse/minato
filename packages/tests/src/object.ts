@@ -188,8 +188,18 @@ namespace ObjectOperations {
       const table = await setup(database)
       table[0]!.meta!.embed!.b = 233
       table[1]!.meta!.embed!.b = 666
-      await database.set('object', {}, row => ({ 'meta.embed.b':  $.number(row.meta.a)}))
+      await database.set('object', {}, row => ({ 'meta.embed.b': $.number(row.meta.a) }))
       await expect(database.get('object', {})).to.eventually.have.deep.members(table)
+    })
+  }
+
+  export const misc = function Misc(database: Database<Tables>) {
+    it('join selections w/ json', async () => {
+      await setup(database)
+      await expect(database.join({
+        x: 'object',
+        y: 'object',
+      }).execute()).to.eventually.have.length(4)
     })
   }
 }

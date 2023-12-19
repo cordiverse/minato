@@ -5,6 +5,12 @@ export function escapeId(value: string) {
   return '`' + value + '`'
 }
 
+export function isBracketed(value: string) {
+  return value.startsWith('(') && value.endsWith(')') && Array.from(value).slice(1).reduce((count, char) =>
+    char === '(' ? count + 1 : char === ')' ? count - 1 : count === 0 ? -Infinity : count
+  , 1) === 0
+}
+
 export type QueryOperators = {
   [K in keyof Query.FieldExpr]?: (key: string, value: NonNullable<Query.FieldExpr[K]>) => string
 }
@@ -405,9 +411,8 @@ export class Builder {
     return sql
   }
 
-  get(sel: Selection.Immutable, inline = false, group = false) {
+  get(sel: Selection.Immutable, inline = false, group = false, addref = true) {
     const { args, table, query, ref, model } = sel
-
     // get prefix
     let prefix: string | undefined
     if (typeof table === 'string') {
@@ -424,13 +429,14 @@ export class Builder {
       if (!prefix) return
     } else {
       const sqlTypes: Dict<SQLType> = {}
-      prefix = Object.entries(table).map(([key, table]) => {
-        const t = `${this.get(table, true)} AS ${this.escapeId(key)}`
+      const joins: string[] = Object.entries(table).map(([key, table]) => {
+        const t = `${this.get(table, true, false, false)} AS ${this.escapeId(key)}`
         for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
           sqlTypes[`${key}.${fieldKey}`] = fieldType
         }
         return t
-      }).join(' JOIN ')
+      })
+      prefix = joins[0] + joins.slice(1, -1).map(join => ` JOIN ${join} ON ${this.$true}`).join(' ') + ` JOIN ` + joins.at(-1)
       this.state.sqlTypes = sqlTypes
       const filter = this.parseEval(args[0].having)
       prefix += ` ON ${filter}`
@@ -460,10 +466,10 @@ export class Builder {
     }
 
     if (inline && !args[0].fields && !suffix) {
-      return (prefix.startsWith('(') && prefix.endsWith(')')) ? `${prefix} ${ref}` : prefix
+      return (addref && isBracketed(prefix)) ? `${prefix} ${ref}` : prefix
     }
 
-    if (!prefix.includes(' ') || prefix.startsWith('(')) {
+    if (!prefix.includes(' ') || isBracketed(prefix)) {
       suffix = ` ${ref}` + suffix
     }
 

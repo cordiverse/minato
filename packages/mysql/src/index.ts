@@ -2,7 +2,7 @@ import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, RuntimeError, Selection } from '@minatojs/core'
-import { Builder, escapeId } from '@minatojs/sql-utils'
+import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
 declare module 'mysql' {
@@ -535,7 +535,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const builder = new MySQLBuilder(sel.tables, this._compat)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
-    const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
+    const ref = isBracketed(inner) ? sel.ref : ''
     const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${ref}`)
     return builder.load(data.value)
   }
