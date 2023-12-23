@@ -6,9 +6,7 @@ export function escapeId(value: string) {
 }
 
 export function isBracketed(value: string) {
-  return value.startsWith('(') && value.endsWith(')') && Array.from(value).slice(1).reduce((count, char) =>
-    char === '(' ? count + 1 : char === ')' ? count - 1 : count === 0 ? -Infinity : count
-  , 1) === 0
+  return value.startsWith('(') && value.endsWith(')')
 }
 
 export type QueryOperators = {
@@ -444,8 +442,9 @@ export class Builder {
         this.state = thisState
         return t
       })
-      prefix = joins[0] + joins.slice(1, -1).map(join => ` JOIN ${join} ON ${this.$true}`).join(' ') + ` JOIN ` + joins.at(-1)
       this.state.sqlTypes = sqlTypes
+      // the leading space is to prevent from being parsed as bracketed and added ref
+      prefix = ' ' + joins[0] + joins.slice(1, -1).map(join => ` JOIN ${join} ON ${this.$true}`).join(' ') + ` JOIN ` + joins.at(-1)
       const filter = this.parseEval(args[0].having)
       prefix += ` ON ${filter}`
     }
