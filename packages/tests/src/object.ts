@@ -196,7 +196,7 @@ namespace ObjectOperations {
   export const misc = function Misc(database: Database<Tables>) {
     it('join selections with dot fields', async () => {
       await setup(database)
-      await database.set('object', '1', { "meta.embed.b": 3 })
+      await database.set('object', '1', { 'meta.embed.b': 3 })
       await expect(database.join({
         x: database.select('object').where(row => $.lt(row.meta.embed.b, 100)),
         y: database.select('object').where(row => $.lt(row.meta.embed.b, 100)),
