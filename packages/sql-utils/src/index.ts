@@ -5,6 +5,10 @@ export function escapeId(value: string) {
   return '`' + value + '`'
 }
 
+export function isBracketed(value: string) {
+  return value.startsWith('(') && value.endsWith(')')
+}
+
 export type QueryOperators = {
   [K in keyof Query.FieldExpr]?: (key: string, value: NonNullable<Query.FieldExpr[K]>) => string
 }
@@ -27,6 +31,7 @@ interface State {
   sqlType?: SQLType
   sqlTypes?: Dict<SQLType>
   group?: boolean
+  tables?: Dict<Model>
 }
 
 export class Builder {
@@ -43,7 +48,9 @@ export class Builder {
 
   private readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
 
-  constructor(public tables?: Dict<Model>) {
+  constructor(tables?: Dict<Model>) {
+    this.state.tables = tables
+
     this.queryOperators = {
       // logical
       $or: (key, value) => this.logicalOr(value.map(value => this.parseFieldQuery(key, value))),
@@ -362,7 +369,7 @@ export class Builder {
       return this.getRecursive(['_', args])
     }
     const [table, key] = args
-    const fields = this.tables?.[table]?.fields || {}
+    const fields = this.state.tables?.[table]?.fields || {}
     const fkey = Object.keys(fields).find(field => key === field || key.startsWith(field + '.'))
     if (fkey && fields[fkey]?.expr) {
       if (key === fkey) {
@@ -373,9 +380,11 @@ export class Builder {
         return this.transformJsonField(`${field}`, rest.map(key => `.${this.escapeKey(key)}`).join(''))
       }
     }
-    const prefix = this.modifiedTable ? `${this.escapeId(this.tables?.[table]?.name ?? this.modifiedTable)}.` : (!this.tables || table === '_' || key in fields
+    const prefix = this.modifiedTable ? `${this.escapeId(this.state.tables?.[table]?.name ?? this.modifiedTable)}.`
+      : (!this.state.tables || table === '_' || key in fields
     // the only table must be the main table
-    || (Object.keys(this.tables).length === 1 && table in this.tables) ? '' : `${this.escapeId(table)}.`)
+    || (Object.keys(this.state.tables).length === 1 && table in this.state.tables) ? '' : `${this.escapeId(table)}.`)
+
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
@@ -405,9 +414,8 @@ export class Builder {
     return sql
   }
 
-  get(sel: Selection.Immutable, inline = false, group = false) {
+  get(sel: Selection.Immutable, inline = false, group = false, addref = true) {
     const { args, table, query, ref, model } = sel
-
     // get prefix
     let prefix: string | undefined
     if (typeof table === 'string') {
@@ -424,14 +432,19 @@ export class Builder {
       if (!prefix) return
     } else {
       const sqlTypes: Dict<SQLType> = {}
-      prefix = Object.entries(table).map(([key, table]) => {
-        const t = `${this.get(table, true)} AS ${this.escapeId(key)}`
+      const joins: string[] = Object.entries(table).map(([key, table]) => {
+        const thisState = this.state
+        this.state = { tables: table.tables }
+        const t = `${this.get(table, true, false, false)} AS ${this.escapeId(key)}`
         for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
           sqlTypes[`${key}.${fieldKey}`] = fieldType
         }
+        this.state = thisState
         return t
-      }).join(' JOIN ')
+      })
       this.state.sqlTypes = sqlTypes
+      // the leading space is to prevent from being parsed as bracketed and added ref
+      prefix = ' ' + joins[0] + joins.slice(1, -1).map(join => ` JOIN ${join} ON ${this.$true}`).join(' ') + ` JOIN ` + joins.at(-1)
       const filter = this.parseEval(args[0].having)
       prefix += ` ON ${filter}`
     }
@@ -460,10 +473,10 @@ export class Builder {
     }
 
     if (inline && !args[0].fields && !suffix) {
-      return (prefix.startsWith('(') && prefix.endsWith(')')) ? `${prefix} ${ref}` : prefix
+      return (addref && isBracketed(prefix)) ? `${prefix} ${ref}` : prefix
     }
 
-    if (!prefix.includes(' ') || prefix.startsWith('(')) {
+    if (!prefix.includes(' ') || isBracketed(prefix)) {
       suffix = ` ${ref}` + suffix
     }
 

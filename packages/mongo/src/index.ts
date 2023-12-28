@@ -355,12 +355,12 @@ export class MongoDriver extends Driver {
           path: `$${name}`,
         }
         pipeline.push({ $lookup }, { $unwind })
-        if (sel.args[0].having['$and'].length) {
-          transformer.lookup = true
-          const $expr = transformer.eval(sel.args[0].having)
-          pipeline.push({ $match: { $expr } })
-          transformer.lookup = false
-        }
+      }
+      if (sel.args[0].having['$and'].length) {
+        transformer.lookup = true
+        const $expr = transformer.eval(sel.args[0].having)
+        pipeline.push({ $match: { $expr } })
+        transformer.lookup = false
       }
     }
 

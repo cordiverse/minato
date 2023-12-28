@@ -297,6 +297,36 @@ namespace SelectionTests {
         ])
     })
 
+    it('selections', async () => {
+      await expect(database
+        .join({
+          all: 'bar',
+          index: database.select('bar').groupBy('uid', { id: row => $.max(row.id) })
+        }, ({ all, index }) => $.eq(all.id, index.id))
+        .execute(['all'])
+      ).to.eventually.have.shape([
+        { all: { id: 4, uid: 1, pid: 3, value: 1 } },
+        { all: { id: 6, uid: 2, pid: 1, value: 1 } },
+      ])
+
+      await expect(database
+        .join({
+          all: 'bar',
+          index: database.select('bar').where(row => $.gt(row.id, 0))
+        }, ({ all, index }) => $.eq(all.id, index.id))
+        .execute(['all'])
+      ).to.eventually.have.length(6)
+
+      await expect(database
+        .join({
+          t1: database.select('bar').where(row => $.gt(row.pid, 1)),
+          t2: database.select('bar').where(row => $.gt(row.uid, 1)),
+          t3: database.select('bar').where(row => $.gt(row.id, 4)),
+        }, ({ t1, t2, t3 }) => $.gt($.add(t1.id, t2.id, t3.id), 0))
+        .execute()
+      ).to.eventually.have.length(8)
+    })
+
     it('aggregate', async () => {
       await expect(database
         .join(['foo', 'bar'] as const)

@@ -1,7 +1,7 @@
 import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
 import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from '@minatojs/core'
-import { Builder } from '@minatojs/sql-utils'
+import { Builder, isBracketed } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
 const logger = new Logger('postgres')
@@ -629,7 +629,7 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(sel.tables)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
-    const ref = inner.startsWith('(') && inner.endsWith(')') ? sel.ref : ''
+    const ref = isBracketed(inner) ? sel.ref : ''
     const [data] = await this.query(`SELECT ${output} AS value FROM ${inner} ${ref}`)
     return builder.load(data?.value)
   }
