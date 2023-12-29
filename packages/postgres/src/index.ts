@@ -510,16 +510,10 @@ export class PostgresDriver extends Driver {
 
   async prepare(name: string) {
     const [columns, constraints] = await Promise.all([
-      this.queue<ColumnInfo[]>(`
-        SELECT *
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-        AND table_name = ${this.sql.escape(name)}`),
-      this.queue<ConstraintInfo[]>(`
-        SELECT *
-        FROM information_schema.table_constraints
-        WHERE table_schema = 'public'
-        AND table_name = ${this.sql.escape(name)}`),
+      this.queue<ColumnInfo[]>(`SELECT * FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ${this.sql.escape(name)}`),
+      this.queue<ConstraintInfo[]>(
+        `SELECT * FROM information_schema.table_constraints WHERE table_schema = 'public' AND table_name = ${this.sql.escape(name)}`,
+      ),
     ])
 
     const table = this.model(name)
@@ -586,7 +580,6 @@ export class PostgresDriver extends Driver {
 
     if (!columns.length) {
       logger.info('auto creating table %c', name)
-      console.log('create', name)
       return this.query<any>(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}, _pg_mtime BIGINT)`)
     }
 
@@ -622,27 +615,19 @@ export class PostgresDriver extends Driver {
       await this.query(`DROP TABLE IF EXISTS ${escapeId(table)} CASCADE`)
       return
     }
-    const tables: TableInfo[] = await this.queue(`
-      SELECT *
-      FROM information_schema.tables
-      WHERE table_schema = 'public'`)
+    const tables: TableInfo[] = await this.queue(`SELECT * FROM information_schema.tables WHERE table_schema = 'public'`)
     if (!tables.length) return
     await this.query(`DROP TABLE IF EXISTS ${tables.map(t => escapeId(t.table_name)).join(',')} CASCADE`)
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
     const names = Object.keys(this.database.tables)
-    const tables = (await this.queue<TableInfo[]>(`
-      SELECT *
-      FROM information_schema.tables
-      WHERE table_schema = 'public'`))
+    const tables = (await this.queue<TableInfo[]>(`SELECT * FROM information_schema.tables WHERE table_schema = 'public'`))
       .map(t => t.table_name).filter(name => names.includes(name))
     const tableStats = await this.queue(
-      tables.map(name => {
-        return `SELECT '${name}' AS name,
-          pg_total_relation_size('${escapeId(name)}') AS size,
-          COUNT(*) AS count FROM ${escapeId(name)}`
-      }).join(' UNION '),
+      tables.map(
+        (name) => `SELECT '${name}' AS name, pg_total_relation_size('${escapeId(name)}') AS size, COUNT(*) AS count FROM ${escapeId(name)}`,
+      ).join(' UNION '),
     ).then(s => s.map(t => [t.name, { size: +t.size, count: +t.count }]))
 
     return {
@@ -700,10 +685,11 @@ export class PostgresDriver extends Driver {
     const builder = new PostgresBuilder(sel.tables)
     const formatted = builder.dump(model, data)
     const keys = Object.keys(formatted)
-    const [row] = await this.query(`
-      INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})
-      VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})
-      RETURNING *`)
+    const [row] = await this.query([
+      `INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})`,
+      `VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})`,
+      `RETURNING *`,
+    ].join(' '))
     return builder.load(model, row)
   }
 
@@ -766,13 +752,13 @@ export class PostgresDriver extends Driver {
       return `${escaped} = ${value}`
     }).join(', ')
 
-    const result = await this.query(`
-      INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})
-      VALUES (${insertion.map(item => formatValues(table, item, initFields)).join('), (')})
-      ON CONFLICT (${keys.map(builder.escapeId).join(', ')})
-      DO UPDATE SET ${update}, _pg_mtime = ${mtime}
-      RETURNING _pg_mtime as rtime
-    `)
+    const result = await this.query([
+      `INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})`,
+      `VALUES (${insertion.map(item => formatValues(table, item, initFields)).join('), (')})`,
+      `ON CONFLICT (${keys.map(builder.escapeId).join(', ')})`,
+      `DO UPDATE SET ${update}, _pg_mtime = ${mtime}`,
+      `RETURNING _pg_mtime as rtime`,
+    ].join(' '))
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
   }
 
