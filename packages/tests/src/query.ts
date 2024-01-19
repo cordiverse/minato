@@ -163,6 +163,10 @@ namespace QueryOperators {
         value: { $in: [3, 4, 5] },
       })).eventually.to.have.length(2)
 
+      await expect(database.get('temp1', (row) => {
+        return $.in(row.value, [3, 4, 5])
+      })).eventually.to.have.length(2)
+
       await expect(database.get('temp1', {
         value: { $nin: [4, 5, 6] },
       })).eventually.to.have.length(2)

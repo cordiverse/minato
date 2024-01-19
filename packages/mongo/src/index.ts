@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 import Logger from 'reggol'
@@ -30,24 +30,12 @@ export namespace MongoDriver {
   }
 }
 
-interface Result {
-  table: string
-  pipeline: any[]
-}
-
-interface EvalTask extends Result {
-  expr: any
-  resolve: (value: any) => void
-  reject: (reason: unknown) => void
-}
-
 export class MongoDriver extends Driver {
   public client!: MongoClient
   public db!: Db
   public mongo = this
 
   private session?: ClientSession
-  private _evalTasks: EvalTask[] = []
   private _createTasks: Dict<Promise<void>> = {}
 
   constructor(database: Database, private config: MongoDriver.Config) {
@@ -289,7 +277,7 @@ export class MongoDriver extends Driver {
     return { size: totalSize, tables }
   }
 
-  private getVirtualKey(table: string) {
+  public getVirtualKey(table: string) {
     const { primary, fields } = this.model(table)
     if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
       return primary
@@ -314,137 +302,38 @@ export class MongoDriver extends Driver {
     return row
   }
 
-  private transformQuery(query: Query.Expr, table: string) {
-    return new Transformer(this.getVirtualKey(table)).query(query)
-  }
-
-  private createPipeline(sel: string | Selection.Immutable) {
-    if (typeof sel === 'string') {
-      sel = this.database.select(sel)
-    }
-
-    const { table, query } = sel
-    const pipeline: any[] = []
-    const result = { pipeline } as Result
-    const transformer = new Transformer()
-    if (typeof table === 'string') {
-      result.table = table
-      transformer.virtualKey = this.getVirtualKey(table)
-    } else if (table instanceof Selection) {
-      const predecessor = this.createPipeline(table)
-      if (!predecessor) return
-      result.table = predecessor.table
-      pipeline.push(...predecessor.pipeline)
-    } else {
-      for (const [name, subtable] of Object.entries(table)) {
-        const predecessor = this.createPipeline(subtable)
-        if (!predecessor) return
-        if (!result.table) {
-          result.table = predecessor.table
-          pipeline.push(...predecessor.pipeline, {
-            $replaceRoot: { newRoot: { [name]: '$$ROOT' } },
-          })
-          continue
-        }
-        const $lookup = {
-          from: predecessor.table,
-          as: name,
-          pipeline: predecessor.pipeline,
-        }
-        const $unwind = {
-          path: `$${name}`,
-        }
-        pipeline.push({ $lookup }, { $unwind })
-      }
-      if (sel.args[0].having['$and'].length) {
-        transformer.lookup = true
-        const $expr = transformer.eval(sel.args[0].having)
-        pipeline.push({ $match: { $expr } })
-        transformer.lookup = false
-      }
-    }
-
-    // where
-    const filter = transformer.query(query)
-    if (!filter) return
-    if (Object.keys(filter).length) {
-      pipeline.push({ $match: filter })
-    }
-
-    if (sel.type === 'get') {
-      transformer.modifier(pipeline, sel)
-    }
-
-    return result
+  private transformQuery(sel: Selection.Immutable, query: Query.Expr, table: string) {
+    return new Transformer(Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
   }
 
   async get(sel: Selection.Immutable) {
-    const result = this.createPipeline(sel)
-    if (!result) return []
-    logger.debug('%s %s', result.table, JSON.stringify(result.pipeline))
+    const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
+    if (!transformer) return []
+    logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     return this.db
-      .collection(result.table)
-      .aggregate(result.pipeline, { allowDiskUse: true, session: this.session })
+      .collection(transformer.table)
+      .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
       .toArray()
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const result = this.createPipeline(sel)
-    if (!result) return
-    return new Promise<any>((resolve, reject) => {
-      this._evalTasks.push({ expr, ...result, resolve, reject })
-      process.nextTick(() => this._flushEvalTasks())
-    })
-  }
-
-  private async _flushEvalTasks() {
-    const tasks = this._evalTasks
-    if (!tasks.length) return
-    this._evalTasks = []
-
-    const stages: any[] = [{ $match: { _id: null } }]
-    const transformer = new Transformer()
-    for (const task of tasks) {
-      const { expr, table, pipeline } = task
-      const $ = transformer.createKey()
-      const $group: Dict = { _id: null }
-      const $project: Dict = { _id: 0 }
-      pipeline.push({ $group }, { $project })
-      task.expr = { $ }
-      $project[$] = transformer.eval(expr, $group)
-      stages.push({
-        $unionWith: { coll: table, pipeline },
-      })
-    }
-
-    let data: any
-    try {
-      const results = await this.db
-        .collection('_fields')
-        .aggregate(stages, { allowDiskUse: true, session: this.session })
-        .toArray()
-      data = Object.assign({}, ...results)
-    } catch (error) {
-      tasks.forEach(task => task.reject(error))
-      return
-    }
-
-    for (const { expr, resolve, reject } of tasks) {
-      try {
-        resolve(executeEval({ _: data }, expr))
-      } catch (error) {
-        reject(error)
-      }
-    }
+    const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
+    if (!transformer) return
+    logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
+    const res = await this.db
+      .collection(transformer.table)
+      .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
+      .toArray()
+    return res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault
   }
 
   async set(sel: Selection.Mutable, update: {}) {
     const { query, table } = sel
-    const filter = this.transformQuery(query, table)
+    const filter = this.transformQuery(sel, query, table)
     if (!filter) return {}
     const coll = this.db.collection(table)
 
-    const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
+    const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
     const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
     const $unset = Object.entries($set)
       .filter(([_, value]) => typeof value === 'object')
@@ -462,7 +351,7 @@ export class MongoDriver extends Driver {
 
   async remove(sel: Selection.Mutable) {
     const { query, table } = sel
-    const filter = this.transformQuery(query, table)
+    const filter = this.transformQuery(sel, query, table)
     if (!filter) return {}
     const result = await this.db.collection(table).deleteMany(filter, { session: this.session })
     return { matched: result.deletedCount, removed: result.deletedCount }
@@ -530,7 +419,7 @@ export class MongoDriver extends Driver {
     if (this.shouldEnsurePrimary(table)) {
       const original = (await coll.find({
         $or: data.map((item) => {
-          return this.transformQuery(pick(item, keys), table)!
+          return this.transformQuery(sel, pick(item, keys), table)!
         }),
       }, { session: this.session }).toArray()).map(row => this.patchVirtual(table, row))
 
@@ -541,7 +430,7 @@ export class MongoDriver extends Driver {
         if (item) {
           const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
           const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
-          const query = this.transformQuery(pick(item, keys), table)
+          const query = this.transformQuery(sel, pick(item, keys), table)
           if (!query) continue
           bulk.find(query).updateOne({ $set: override })
         } else {
@@ -561,8 +450,8 @@ export class MongoDriver extends Driver {
       const hasInitial = !!Object.keys(initial).length
 
       for (const update of data) {
-        const query = this.transformQuery(pick(update, keys), table)!
-        const transformer = new Transformer(this.getVirtualKey(table), undefined, '$' + tempKey + '.')
+        const query = this.transformQuery(sel, pick(update, keys), table)!
+        const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
         const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
