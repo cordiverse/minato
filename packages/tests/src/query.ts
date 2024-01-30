@@ -219,6 +219,14 @@ namespace QueryOperators {
         text: /^.*foo$/,
       })).eventually.to.have.length(1).with.nested.property('[0].text').equal('awesome foo')
     })
+
+    regexBy && regexFor && it('$.regex', async () => {
+      await expect(database.get('temp1', row => $.regex('foo bar', row.regex))).eventually.to.have.length(2)
+      await expect(database.get('temp1', row => $.regex('baz', row.regex))).eventually.to.have.length(1)
+      await expect(database.get('temp1', row => $.regex(row.text, /^.*foo.*$/))).eventually.to.have.length(2)
+      await expect(database.get('temp1', row => $.regex(row.text, /^.*bar.*$/))).eventually.to.have.length(2)
+      await expect(database.get('temp1', row => $.regex(row.text, row.regex))).eventually.to.have.length(2)
+    })
   }
 
   export const bitwise = function Bitwise(database: Database<Tables>) {

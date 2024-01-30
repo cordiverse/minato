@@ -55,12 +55,9 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
     } else if (prop === '$regexFor') {
       filters.push({
         $expr: {
-          $function: {
-            body: function (data: string, value: string) {
-              return new RegExp(data, 'i').test(value)
-            }.toString(),
-            args: ['$' + key, query.$regexFor],
-            lang: 'js',
+          $regexMatch: {
+            input: query[prop],
+            regex: '$' + key,
           },
         },
       })
@@ -104,6 +101,8 @@ export class Transformer {
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
       $array: (arg, group) => this.transformEvalExpr(arg),
       $object: (arg, group) => this.transformEvalExpr(arg),
+
+      $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
 
       $length: (arg, group) => ({ $size: this.eval(arg, group) }),
       $nin: (arg, group) => ({ $not: { $in: arg.map(val => this.eval(val, group)) } }),
