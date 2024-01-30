@@ -55,12 +55,9 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
     } else if (prop === '$regexFor') {
       filters.push({
         $expr: {
-          $function: {
-            body: function (data: string, value: string) {
-              return new RegExp(data, 'i').test(value)
-            }.toString(),
-            args: ['$' + key, query.$regexFor],
-            lang: 'js',
+          $regexMatch: {
+            input: query[prop],
+            regex: '$' + key,
           },
         },
       })
