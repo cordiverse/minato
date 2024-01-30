@@ -152,6 +152,8 @@ class MySQLBuilder extends Builder {
   escape(value: any, field?: Field<any>) {
     if (value instanceof Date) {
       value = Time.template('yyyy-MM-dd hh:mm:ss', value)
+    } else if (value instanceof RegExp) {
+      value = value.source
     } else if (!field && !!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }

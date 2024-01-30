@@ -100,6 +100,7 @@ class SQLiteBuilder extends Builder {
 
   escape(value: any, field?: Field<any>) {
     if (value instanceof Date) value = +value
+    else if (value instanceof RegExp) value = value.source
     return super.escape(value, field)
   }
 

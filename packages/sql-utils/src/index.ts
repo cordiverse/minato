@@ -127,6 +127,7 @@ export class Builder {
 
       // string
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,
+      $regex: ([key, value]) => `${this.parseEval(key)} regexp ${this.parseEval(value)}`,
 
       // logical
       $or: (args) => this.logicalOr(args.map(arg => this.parseEval(arg))),
@@ -390,7 +391,7 @@ export class Builder {
 
   parseEval(expr: any, unquote: boolean = true): string {
     this.state.sqlType = 'raw'
-    if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
+    if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
     return unquote ? this.jsonUnquote(this.parseEvalExpr(expr)) : this.parseEvalExpr(expr)

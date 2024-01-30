@@ -212,6 +212,8 @@ class PostgresBuilder extends Builder {
         return `coalesce(${args.map(arg => this.parseEval(arg, type)).join(', ')})`
       },
 
+      $regex: ([key, value]) => `${this.parseEval(key)} ~ ${this.parseEval(value)}`,
+
       // number
       $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,
       $multiply: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' * ')})`,
@@ -291,7 +293,7 @@ class PostgresBuilder extends Builder {
 
   parseEval(expr: any, outtype: boolean | string = false): string {
     this.state.sqlType = 'raw'
-    if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date) {
+    if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
     return outtype ? this.jsonUnquote(this.parseEvalExpr(expr), false, typeof outtype === 'string' ? outtype : undefined) : this.parseEvalExpr(expr)
@@ -373,6 +375,8 @@ class PostgresBuilder extends Builder {
   escape(value: any, field?: Field<any>) {
     if (value instanceof Date) {
       value = formatTime(value)
+    } else if (value instanceof RegExp) {
+      value = value.source
     } else if (!field && !!value && typeof value === 'object') {
       return `${this.quote(JSON.stringify(value))}::jsonb`
     }

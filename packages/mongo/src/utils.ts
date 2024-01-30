@@ -105,6 +105,8 @@ export class Transformer {
       $array: (arg, group) => this.transformEvalExpr(arg),
       $object: (arg, group) => this.transformEvalExpr(arg),
 
+      $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
+
       $length: (arg, group) => ({ $size: this.eval(arg, group) }),
       $nin: (arg, group) => ({ $not: { $in: arg.map(val => this.eval(val, group)) } }),
 
