@@ -123,18 +123,18 @@ function executeFieldQuery(query: Query.FieldQuery, data: any) {
   return true
 }
 
-export function executeQuery(data: any, query: Query.Expr, ref: string): boolean {
+export function executeQuery(data: any, query: Query.Expr, ref: string, env: any = {}): boolean {
   const entries: [string, any][] = Object.entries(query)
   return entries.every(([key, value]) => {
     // execute logical query
     if (key === '$and') {
-      return (value as Query.Expr[]).reduce((prev, query) => prev && executeQuery(data, query, ref), true)
+      return (value as Query.Expr[]).reduce((prev, query) => prev && executeQuery(data, query, ref, env), true)
     } else if (key === '$or') {
-      return (value as Query.Expr[]).reduce((prev, query) => prev || executeQuery(data, query, ref), false)
+      return (value as Query.Expr[]).reduce((prev, query) => prev || executeQuery(data, query, ref, env), false)
     } else if (key === '$not') {
-      return !executeQuery(data, value, ref)
+      return !executeQuery(data, value, ref, env)
     } else if (key === '$expr') {
-      return executeEval({ [ref]: data, _: data }, value)
+      return executeEval({ ...env, [ref]: data, _: data }, value)
     }
 
     // execute field query

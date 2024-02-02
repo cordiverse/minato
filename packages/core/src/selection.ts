@@ -5,6 +5,14 @@ import { Model } from './model'
 import { Query } from './query'
 import { Keys, randomId, Row } from './utils'
 
+declare module '.' {
+  export namespace Eval {
+    export interface Static {
+      exec<S, T>(value: Executable<S, T>): Expr<T>
+    }
+  }
+}
+
 export type Direction = 'asc' | 'desc'
 
 export interface Modifier {
@@ -47,15 +55,9 @@ class Executable<S = any, T = any> {
 
   constructor(driver: Driver, payload: Executable.Payload) {
     Object.assign(this, payload)
-    defineProperty(this, 'model', driver.model(this.table))
-    const expr = { $model: this.model }
-    if (typeof payload.table !== 'string' && !(payload.table instanceof Selection)) {
-      for (const key in payload.table) {
-        expr[key] = createRow(key, {}, '', this.model)
-      }
-    }
     defineProperty(this, 'driver', driver)
-    defineProperty(this, 'row', createRow(this.ref, expr, '', this.model))
+    defineProperty(this, 'model', driver.model(this.table))
+    defineProperty(this, 'row', createRow(this.ref, {}, '', this.model))
   }
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>
@@ -210,19 +212,21 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return new Executable(this.driver, { ...this, type, args })
   }
 
-  /** @deprecated use `selection.execute()` instead */
   evaluate<T>(callback: Selection.Callback<S, T, true>): Eval.Expr<T, true>
-  evaluate<T>(callback: Selection.Callback<S, T>): Eval.Expr<T[], boolean>
-  evaluate<T>(callback: Selection.Callback<S, T>): any {
+  evaluate<K extends Keys<S>>(field: K): Eval.Expr<S[K][], boolean>
+  evaluate(): Eval.Expr<S[], boolean>
+  evaluate(callback?: any): any {
     const selection = new Selection(this.driver, this)
-    return selection._action('eval', this.resolveField(callback))
+    if (!callback) callback = (row) => Eval.array(Eval.object(row))
+    return Eval('exec', selection._action('eval', this.resolveField(callback)))
   }
 
   execute<K extends Keys<S> = Keys<S>>(cursor?: Driver.Cursor<K>): Promise<Pick<S, K>[]>
   execute<T>(callback: Selection.Callback<S, T, true>): Promise<T>
   execute(cursor?: any) {
     if (typeof cursor === 'function') {
-      return (this.evaluate(cursor) as any).execute()
+      const selection = new Selection(this.driver, this)
+      return selection._action('eval', this.resolveField(cursor)).execute()
     }
     if (Array.isArray(cursor)) {
       cursor = { fields: cursor }

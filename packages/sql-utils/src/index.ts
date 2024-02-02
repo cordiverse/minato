@@ -32,6 +32,9 @@ interface State {
   sqlTypes?: Dict<SQLType>
   group?: boolean
   tables?: Dict<Model>
+  refFields?: Dict<string>
+  refTables?: Dict<Model>
+  wrappedSubquery?: boolean
 }
 
 export class Builder {
@@ -174,6 +177,8 @@ export class Builder {
 
       $object: (fields) => this.groupObject(fields),
       $array: (expr) => this.groupArray(this.parseEval(expr, false)),
+
+      $exec: (sel) => this.parseSelection(sel as Selection),
     }
   }
 
@@ -234,6 +239,19 @@ export class Builder {
 
   protected logicalNot(condition: string) {
     return `NOT(${condition})`
+  }
+
+  protected parseSelection(sel: Selection) {
+    const { args: [expr], ref, table, tables } = sel
+    const restore = this.saveState({ tables })
+    const inner = this.get(table as Selection, true, true) as string
+    const output = this.parseEval(expr, false)
+    restore()
+    if (!(sel.args[0] as any).$) {
+      return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    } else {
+      return `(ifnull((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+    }
   }
 
   protected jsonLength(value: string) {
@@ -386,6 +404,20 @@ export class Builder {
     // the only table must be the main table
     || (Object.keys(this.state.tables).length === 1 && table in this.state.tables) ? '' : `${this.escapeId(table)}.`)
 
+    // field from outer selection
+    if (!(table in (this.state.tables || {})) && (table in (this.state.refTables || {}))) {
+      const fields = this.state.refTables?.[table]?.fields || {}
+      const res = (fields[key]?.expr) ? this.parseEvalExpr(fields[key]?.expr)
+        : this.transformKey(key, fields, `${this.escapeId(table)}.`, `${table}.${key}`)
+      if (this.state.wrappedSubquery) {
+        if (res in (this.state.refFields ?? {})) return this.state.refFields![res]
+        const key = `minato_tvar_${randomId()}`
+        ;(this.state.refFields ??= {})[res] = key
+        this.state.sqlType = 'json'
+        return this.escapeId(key)
+      } else return res
+    }
+
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
@@ -395,6 +427,15 @@ export class Builder {
       return this.escape(expr)
     }
     return unquote ? this.jsonUnquote(this.parseEvalExpr(expr)) : this.parseEvalExpr(expr)
+  }
+
+  protected saveState(extra: Partial<State> = {}) {
+    const thisState = this.state
+    this.state = { refTables: { ...(this.state.refTables || {}), ...(this.state.tables || {}) }, ...extra }
+    return () => {
+      thisState.sqlType = this.state.sqlType
+      this.state = thisState
+    }
   }
 
   suffix(modifier: Modifier) {
@@ -434,13 +475,12 @@ export class Builder {
     } else {
       const sqlTypes: Dict<SQLType> = {}
       const joins: string[] = Object.entries(table).map(([key, table]) => {
-        const thisState = this.state
-        this.state = { tables: table.tables }
+        const restore = this.saveState({ tables: table.tables })
         const t = `${this.get(table, true, false, false)} AS ${this.escapeId(key)}`
         for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
           sqlTypes[`${key}.${fieldKey}`] = fieldType
         }
-        this.state = thisState
+        restore()
         return t
       })
       this.state.sqlTypes = sqlTypes

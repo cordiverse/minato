@@ -366,6 +366,19 @@ class PostgresBuilder extends Builder {
     return `coalesce(jsonb_agg(${value}), '[]'::jsonb)`
   }
 
+  protected parseSelection(sel: Selection) {
+    const { args: [expr], ref, table, tables } = sel
+    const restore = this.saveState({ tables })
+    const inner = this.get(table as Selection, true, true) as string
+    const output = this.parseEval(expr, false)
+    restore()
+    if (!(sel.args[0] as any).$) {
+      return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    } else {
+      return `(coalesce((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
+    }
+  }
+
   escapeId = escapeId
 
   escapeKey(value: string) {

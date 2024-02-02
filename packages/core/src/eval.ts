@@ -243,6 +243,9 @@ Eval.object = (fields) => {
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data))
   : Array.from(executeEval(table, expr)))
+
+Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data))
+
 export { Eval as $ }
 
 type MapUneval<S> = {

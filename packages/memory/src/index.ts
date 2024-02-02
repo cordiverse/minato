@@ -28,25 +28,34 @@ export class MemoryDriver extends Driver {
     // await this.#loader?.stop(this.#store)
   }
 
-  table(sel: string | Selection.Immutable | Dict<string | Selection.Immutable>, expr?: any): any[] {
+  table(sel: string | Selection.Immutable | Dict<string | Selection.Immutable>, env: any = {}): any[] {
     if (typeof sel === 'string') {
       return this.#store[sel] ||= []
     }
 
     if (!(sel instanceof Selection)) {
-      const entries = Object.entries(sel).map(([name, sel]) => [name, this.table(sel)] as const)
+      throw new Error('Should not reach here')
+    }
+
+    const { ref, query, table, args, model } = sel
+    const { fields, group, having } = sel.args[0]
+
+    let data: any[]
+
+    if (typeof table === 'object' && !(table instanceof Selection)) {
+      const entries = Object.entries(table).map(([name, sel]) => [name, this.table(sel, env)] as const)
       const catesian = (entries: (readonly [string, any[]])[]): any[] => {
         if (!entries.length) return []
         const [[name, rows], ...tail] = entries
         if (!tail.length) return rows.map(row => ({ [name]: row }))
         return rows.flatMap(row => catesian(tail).map(tail => ({ ...tail, [name]: row })))
       }
-      return catesian(entries).filter(data => executeEval(data, expr))
+      data = catesian(entries).map(x => ({ ...env, [ref]: x })).filter(data => executeEval(data, having)).map(x => x[ref])
+    } else {
+      data = this.table(table, env).filter(row => executeQuery(row, query, ref, env))
     }
 
-    const { ref, query, table, args, model } = sel
-    const { fields, group, having } = sel.args[0]
-    const data = this.table(table, having).filter(row => executeQuery(row, query, ref))
+    env[ref] = data
 
     const branches: { index: Dict; table: any[] }[] = []
     const groupFields = group ? pick(fields!, group) : fields
@@ -58,7 +67,7 @@ export class MemoryDriver extends Driver {
       }
       let index = row
       if (fields) {
-        index = valueMap(groupFields!, (expr) => executeEval({ [ref]: row }, expr))
+        index = valueMap(groupFields!, (expr) => executeEval({ ...env, [ref]: row }, expr))
       }
       let branch = branches.find((branch) => {
         if (!group || !groupFields) return false
@@ -76,11 +85,11 @@ export class MemoryDriver extends Driver {
     return branches.map(({ index, table }) => {
       if (group) {
         if (having) {
-          const value = executeEval(table.map(row => ({ [ref]: row, _: row })), having)
+          const value = executeEval(table.map(row => ({ ...env, [ref]: row, _: row })), having)
           if (!value) return
         }
         for (const key in omit(fields!, group)) {
-          index[key] = executeEval(table.map(row => ({ [ref]: row, _: row })), fields![key])
+          index[key] = executeEval(table.map(row => ({ ...env, [ref]: row, _: row })), fields![key])
         }
       }
       return model.parse(index, false)
@@ -171,6 +180,15 @@ export class MemoryDriver extends Driver {
     }
     this.$save(table)
     return result
+  }
+
+  executeSelection(sel: Selection.Immutable, env: any = {}) {
+    const expr = sel.args[0], table = sel.table as Selection
+    if (Array.isArray(env)) env = { [sel.ref]: env }
+    const data = this.table(sel.table, env)
+    const res = expr.$ ? data.map(row => executeEval({ ...env, [table.ref]: row, _: row }, expr))
+      : executeEval(Object.assign(data.map(row => ({ [table.ref]: row, _: row })), env), expr)
+    return res
   }
 
   async withTransaction(callback: (session: Driver) => Promise<void>) {

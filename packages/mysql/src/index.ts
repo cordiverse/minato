@@ -1,7 +1,7 @@
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, RuntimeError, Selection } from '@minatojs/core'
+import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection } from '@minatojs/core'
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
@@ -114,6 +114,8 @@ class MySQLBuilder extends Builder {
     '\\': '\\\\',
   }
 
+  prequeries: string[] = []
+
   constructor(tables?: Dict<Model>, private compat: Compat = {}) {
     super(tables)
 
@@ -176,11 +178,37 @@ class MySQLBuilder extends Builder {
   }
 
   protected groupArray(value: string) {
-    if (!this.compat.maria105) return super.groupArray(value)
+    if (!this.compat.maria) return super.groupArray(value)
     const res = this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
       : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`
     this.state.sqlType = 'json'
     return `ifnull(${res}, json_array())`
+  }
+
+  protected parseSelection(sel: Selection) {
+    if (!this.compat.maria && !this.compat.mysql57) return super.parseSelection(sel)
+    const { args: [expr], ref, table, tables } = sel
+    const restore = this.saveState({ wrappedSubquery: true, tables })
+    const inner = this.get(table as Selection, true, true) as string
+    const output = this.parseEval(expr, false)
+    const refFields = this.state.refFields
+    restore()
+    let query: string
+    if (!(sel.args[0] as any).$) {
+      query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    } else {
+      query = `(ifnull((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+    }
+    if (Object.keys(refFields ?? {}).length) {
+      const funcname = `minato_tfunc_${randomId()}`
+      const decls = Object.values(refFields ?? {}).map(x => `${x} JSON`).join(',')
+      const args = Object.keys(refFields ?? {}).map(x => this.state.refFields?.[x] ?? x).map(x => this.jsonQuote(x, true)).join(',')
+      query = this.state.sqlType === 'json' ? `ifnull(${query}, json_array())` : this.jsonQuote(query)
+      this.prequeries.push(`DROP FUNCTION IF EXISTS ${funcname}`)
+      this.prequeries.push(`CREATE FUNCTION ${funcname} (${decls}) RETURNS JSON DETERMINISTIC RETURN ${query}`)
+      this.state.sqlType = 'json'
+      return `${funcname}(${args})`
+    } else return query
   }
 
   toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
@@ -528,8 +556,8 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const builder = new MySQLBuilder(tables, this._compat)
     const sql = builder.get(sel)
     if (!sql) return []
-    return this.queue(sql).then((data) => {
-      return data.map((row) => builder.load(model, row))
+    return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
+      return data.at(-1).map((row) => builder.load(model, row))
     })
   }
 
@@ -538,8 +566,10 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const ref = isBracketed(inner) ? sel.ref : ''
-    const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${ref}`)
-    return builder.load(data.value)
+    const sql = `SELECT ${output} AS value FROM ${inner} ${ref}`
+    return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
+      return builder.load(data.at(-1)[0].value)
+    })
   }
 
   async set(sel: Selection.Mutable, data: {}) {

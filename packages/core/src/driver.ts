@@ -115,7 +115,9 @@ export class Database<S = any> {
     this.extend(name, fields, { callback })
   }
 
-  select<T extends Keys<S>>(table: T, query?: Query<S[T]>): Selection<S[T]> {
+  select<T>(table: Selection<T>, query?: Query<T>): Selection<T>
+  select<T extends Keys<S>>(table: T, query?: Query<S[T]>): Selection<S[T]>
+  select(table: any, query?: any) {
     return new Selection(this.getDriver(table), table, query)
   }
 
@@ -128,14 +130,14 @@ export class Database<S = any> {
         sel.args[0].having = Eval.and(query(...tables.map(name => sel.row[name])))
       }
       sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
-      return new Selection(this.getDriver(sel), sel)
+      return this.select(sel)
     } else {
       const sel = new Selection(this.getDriver(Object.values(tables)[0]), valueMap(tables, (t: TableLike<S>) => typeof t === 'string' ? this.select(t) : t))
       if (typeof query === 'function') {
         sel.args[0].having = Eval.and(query(sel.row))
       }
       sel.args[0].optional = optional
-      return new Selection(this.getDriver(sel), sel)
+      return this.select(sel)
     }
   }
 

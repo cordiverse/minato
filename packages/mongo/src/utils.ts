@@ -1,6 +1,7 @@
 import { Dict, isNullable, valueMap } from 'cosmokit'
 import { Eval, isComparable, Query, Selection } from '@minatojs/core'
 import { Filter, FilterOperators } from 'mongodb'
+import MongoDriver from '.'
 
 function createFieldFilter(query: Query.FieldQuery, key: string) {
   const filters: Filter<any>[] = []
@@ -79,10 +80,18 @@ const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count', '$length', '$array']
 
 export class Transformer {
   private counter = 0
-  private evalOperators: EvalOperators
-  public walkedKeys: string[]
+  public table!: string
+  public walkedKeys: string[] = []
+  public pipeline: any[] = []
+  protected lookups: any[] = []
+  public evalKey?: string
+  private refTables: string[] = []
+  private refVirtualKeys: Dict<string> = {}
+  public aggrDefault: any
 
-  constructor(public virtualKey?: string, public lookup?: boolean, public recursivePrefix: string = '$') {
+  private evalOperators: EvalOperators
+
+  constructor(private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
     this.walkedKeys = []
 
     this.evalOperators = {
@@ -90,12 +99,13 @@ export class Transformer {
         if (typeof arg === 'string') {
           this.walkedKeys.push(this.getActualKey(arg))
           return this.recursivePrefix + this.getActualKey(arg)
-        } else if (this.lookup) {
-          this.walkedKeys.push(arg[0] + '.' + this.getActualKey(arg[1]))
-          return this.recursivePrefix + arg[0] + '.' + this.getActualKey(arg[1])
-        } else {
+        } else if (this.tables.includes(arg[0])) {
           this.walkedKeys.push(this.getActualKey(arg[1]))
           return this.recursivePrefix + this.getActualKey(arg[1])
+        } else if (this.refTables.includes(arg[0])) {
+          return `$$${arg[0]}.` + this.getActualKey(arg[1], arg[0])
+        } else {
+          throw new Error(`$ not transformed: ${JSON.stringify(arg)}`)
         }
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
@@ -130,6 +140,45 @@ export class Transformer {
           }, 0],
         }
       },
+
+      $exec: (arg, group) => {
+        const sel = arg as Selection
+        const transformer = this.createSubquery(sel)
+        if (!transformer) throw new Error(`Selection cannot be executed: ${JSON.stringify(arg)}`)
+
+        const name = this.createKey()
+        this.lookups.push({
+          $lookup: {
+            from: transformer.table,
+            as: name,
+            let: {
+              [this.tables[0]]: '$$ROOT',
+            },
+            pipeline: transformer.pipeline,
+          },
+        }, {
+          $set: {
+            [name]: !(sel.args[0] as any).$ ? {
+              $getField: {
+                input: {
+                  $ifNull: [
+                    { $arrayElemAt: ['$' + name, 0] },
+                    { [transformer.evalKey!]: transformer.aggrDefault },
+                  ],
+                },
+                field: transformer.evalKey!,
+              },
+            } : {
+              $map: {
+                input: '$' + name,
+                as: 'el',
+                in: '$$el.' + transformer.evalKey!,
+              },
+            },
+          },
+        })
+        return `$${name}`
+      },
     }
   }
 
@@ -137,8 +186,8 @@ export class Transformer {
     return '_temp_' + ++this.counter
   }
 
-  protected getActualKey(key: string) {
-    return key === this.virtualKey ? '_id' : key
+  protected getActualKey(key: string, ref?: string) {
+    return key === (ref ? this.refVirtualKeys[ref] : this.virtualKey) ? '_id' : key
   }
 
   private transformEvalExpr(expr: any, group?: Dict) {
@@ -152,6 +201,10 @@ export class Transformer {
       if (this.evalOperators[key]) {
         return this.evalOperators[key](expr[key], group)
       }
+    }
+
+    if (Array.isArray(expr)) {
+      return expr.map(val => this.eval(val, group))
     }
 
     return valueMap(expr as any, (value) => {
@@ -176,6 +229,12 @@ export class Transformer {
     return this.transformEvalExpr(expr)
   }
 
+  public flushLookups() {
+    const ret = this.lookups
+    this.lookups = []
+    return ret
+  }
+
   public eval(expr: any, group?: Dict) {
     if (isComparable(expr) || isNullable(expr)) {
       return expr
@@ -186,6 +245,7 @@ export class Transformer {
         if (!expr[type]) continue
         const key = this.createKey()
         const value = this.transformAggr(expr[type])
+        this.aggrDefault = 0
         if (type === '$count') {
           group![key] = { $addToSet: value }
           return { $size: '$' + key }
@@ -193,6 +253,7 @@ export class Transformer {
           group![key] = { $push: value }
           return { $size: '$' + key }
         } else if (type === '$array') {
+          this.aggrDefault = []
           group![key] = { $push: value }
           return '$' + key
         } else {
@@ -273,7 +334,7 @@ export class Transformer {
     if (group) {
       const $group: Dict = { _id: {} }
       const $project: Dict = { _id: 0 }
-      stages.push({ $group })
+      const groupStages: any[] = [{ $group }]
 
       for (const key in fields) {
         if (group.includes(key)) {
@@ -285,14 +346,14 @@ export class Transformer {
       }
       if (having['$and'].length) {
         const $expr = this.eval(having, $group)
-        stages.push({ $match: { $expr } })
+        groupStages.push(...this.flushLookups(), { $match: { $expr } })
       }
-      stages.push({ $project })
+      stages.push(...this.flushLookups(), ...groupStages, { $project })
       $group['_id'] = model.parse($group['_id'], false)
     } else if (fields) {
       const $project = valueMap(fields, (expr) => this.eval(expr))
       $project._id = 0
-      stages.push({ $project })
+      stages.push(...this.flushLookups(), { $project })
     } else {
       const $project: Dict = { _id: 0 }
       for (const key in model.fields) {
@@ -300,5 +361,73 @@ export class Transformer {
       }
       stages.push({ $project })
     }
+  }
+
+  protected createSubquery(sel: Selection.Immutable) {
+    const predecessor = new Transformer(Object.keys(sel.tables))
+    predecessor.refTables = [...this.refTables, ...this.tables]
+    predecessor.refVirtualKeys = this.refVirtualKeys
+    return predecessor.select(sel)
+  }
+
+  public select(sel: Selection.Immutable) {
+    const { table, query } = sel
+    if (typeof table === 'string') {
+      this.table = table
+      this.refVirtualKeys[sel.ref] = this.virtualKey = (sel.driver as MongoDriver).getVirtualKey(table)!
+    } else if (table instanceof Selection) {
+      const predecessor = this.createSubquery(table)
+      if (!predecessor) return
+      this.table = predecessor.table
+      this.pipeline.push(...predecessor.flushLookups(), ...predecessor.pipeline)
+    } else {
+      for (const [name, subtable] of Object.entries(table)) {
+        const predecessor = this.createSubquery(subtable)
+        if (!predecessor) return
+        if (!this.table) {
+          this.table = predecessor.table
+          this.pipeline.push(...predecessor.flushLookups(), ...predecessor.pipeline, {
+            $replaceRoot: { newRoot: { [name]: '$$ROOT' } },
+          })
+          continue
+        }
+        const $lookup = {
+          from: predecessor.table,
+          as: name,
+          pipeline: predecessor.pipeline,
+        }
+        const $unwind = {
+          path: `$${name}`,
+        }
+        this.pipeline.push({ $lookup }, { $unwind })
+      }
+      if (sel.args[0].having['$and'].length) {
+        const $expr = this.eval(sel.args[0].having)
+        this.pipeline.push(...this.flushLookups(), { $match: { $expr } })
+      }
+    }
+
+    // where
+    const filter = this.query(query)
+    if (!filter) return
+    if (Object.keys(filter).length) {
+      this.pipeline.push(...this.flushLookups(), { $match: filter })
+    }
+
+    if (sel.type === 'get') {
+      this.modifier(this.pipeline, sel)
+    } else if (sel.type === 'eval') {
+      const $ = this.createKey()
+      const $group: Dict = { _id: null }
+      const $project: Dict = { _id: 0 }
+      $project[$] = this.eval(sel.args[0], $group)
+      if (Object.keys($group).length === 1) {
+        this.pipeline.push(...this.flushLookups(), { $project })
+      } else {
+        this.pipeline.push({ $group }, ...this.flushLookups(), { $project })
+      }
+      this.evalKey = $
+    }
+    return this
   }
 }
