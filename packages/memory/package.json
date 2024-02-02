@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-memory",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "description": "In-memory Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -26,12 +26,12 @@
     "memory"
   ],
   "peerDependencies": {
-    "@minatojs/core": "^2.8.0"
+    "@minatojs/core": "^2.9.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^1.8.3"
+    "@minatojs/tests": "^1.9.0"
   },
   "dependencies": {
-    "cosmokit": "^1.5.1"
+    "cosmokit": "^1.5.2"
   }
 }
