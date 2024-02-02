@@ -1,9 +1,9 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval'
-import { Comparable, Indexable, isComparable, makeRegExp } from './utils'
+import { Comparable, Flatten, Indexable, isComparable, makeRegExp } from './utils'
 import { Selection } from './selection'
 
-export type Query<T = any> = Query.Expr<T> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
+export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
 
 export namespace Query {
   export interface FieldExpr<T = any> {

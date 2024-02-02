@@ -4,7 +4,7 @@ import { Eval } from './eval'
 export type Values<S> = S[keyof S]
 
 export type Keys<O, T = any> = Values<{
-  [K in keyof O]: O[K] extends T ? K : never
+  [K in keyof O]: O[K] extends T | undefined ? K : never
 }> & string
 
 export type Atomic = number | string | boolean | bigint | symbol | Date
