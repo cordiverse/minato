@@ -1,8 +1,9 @@
 import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from '@minatojs/core'
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import Logger from 'reggol'
+import { Context } from 'cordis'
 
 const logger = new Logger('postgres')
 const timeRegex = /(\d+):(\d+):(\d+)/
@@ -452,19 +453,16 @@ export namespace PostgresDriver {
   }
 }
 
-export class PostgresDriver extends Driver {
+export class PostgresDriver extends Driver<PostgresDriver.Config> {
   public postgres!: postgres.Sql
-  public config: PostgresDriver.Config
   public sql: PostgresBuilder
 
   private session?: postgres.TransactionSql
   private _counter = 0
   private _queryTasks: QueryTask[] = []
 
-  constructor(database: Database, config: PostgresDriver.Config) {
-    super(database)
-
-    this.config = {
+  constructor(ctx: Context, config: PostgresDriver.Config) {
+    super(ctx, {
       onnotice: () => { },
       debug(_, query, parameters) {
         logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
@@ -478,7 +476,7 @@ export class PostgresDriver extends Driver {
         },
       },
       ...config,
-    }
+    })
 
     this.sql = new PostgresBuilder()
   }

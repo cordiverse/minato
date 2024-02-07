@@ -1,7 +1,8 @@
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection } from '@minatojs/core'
+import { Context } from 'cordis'
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 
@@ -262,19 +263,16 @@ export namespace MySQLDriver {
   export interface Config extends PoolConfig {}
 }
 
-export class MySQLDriver extends Driver {
+export class MySQLDriver extends Driver<MySQLDriver.Config> {
   public pool!: Pool
-  public config: MySQLDriver.Config
   public sql: MySQLBuilder
 
   private session?: PoolConnection
   private _compat: Compat = {}
   private _queryTasks: QueryTask[] = []
 
-  constructor(database: Database, config?: MySQLDriver.Config) {
-    super(database)
-
-    this.config = {
+  constructor(ctx: Context, config?: MySQLDriver.Config) {
+    super(ctx, {
       host: 'localhost',
       port: 3306,
       charset: 'utf8mb4_general_ci',
@@ -306,7 +304,7 @@ export class MySQLDriver extends Driver {
         }
       },
       ...config,
-    }
+    })
 
     this.sql = new MySQLBuilder()
   }

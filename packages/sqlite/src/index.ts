@@ -1,5 +1,5 @@
 import { clone, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
@@ -145,18 +145,12 @@ class SQLiteBuilder extends Builder {
   }
 }
 
-export class SQLiteDriver extends Driver {
+export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   db!: init.Database
-  sql: Builder
+  sql = new SQLiteBuilder()
   beforeUnload?: () => void
 
-  private _transactionTask?
-
-  constructor(database: Database, public config: SQLiteDriver.Config) {
-    super(database)
-
-    this.sql = new SQLiteBuilder()
-  }
+  private _transactionTask?: Promise<void>
 
   /** synchronize table schema */
   async prepare(table: string, dropKeys?: string[]) {

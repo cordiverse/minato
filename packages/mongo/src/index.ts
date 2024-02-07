@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Database, Driver, Eval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 import Logger from 'reggol'
@@ -30,17 +30,13 @@ export namespace MongoDriver {
   }
 }
 
-export class MongoDriver extends Driver {
+export class MongoDriver extends Driver<MongoDriver.Config> {
   public client!: MongoClient
   public db!: Db
   public mongo = this
 
   private session?: ClientSession
   private _createTasks: Dict<Promise<void>> = {}
-
-  constructor(database: Database, private config: MongoDriver.Config) {
-    super(database)
-  }
 
   private connectionStringFromConfig() {
     const {

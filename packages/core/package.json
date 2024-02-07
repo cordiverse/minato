@@ -31,6 +31,7 @@
     "level"
   ],
   "dependencies": {
+    "cordis": "^3.8.4",
     "cosmokit": "^1.5.2"
   }
 }

@@ -1,17 +1,13 @@
 import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
-import { Database, Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection } from '@minatojs/core'
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection } from '@minatojs/core'
 
 export namespace MemoryDriver {
   export interface Config {}
 }
 
-export class MemoryDriver extends Driver {
+export class MemoryDriver extends Driver<MemoryDriver.Config> {
   #store: Dict<any[]> = {
     _fields: [],
-  }
-
-  constructor(public database: Database, public config: MemoryDriver.Config) {
-    super(database)
   }
 
   async prepare(name: string) {}
