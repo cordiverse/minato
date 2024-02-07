@@ -42,7 +42,7 @@ jobs:
       - name: Unit Test
         run: yarn test:json mysql
       - name: Report Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
@@ -83,7 +83,7 @@ jobs:
       - name: Unit Test
         run: yarn test:json postgres
       - name: Report Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
@@ -121,7 +121,7 @@ jobs:
       - name: Unit Test
         run: yarn test:json mongo
       - name: Report Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
@@ -156,7 +156,7 @@ jobs:
       - name: Unit Test
         run: yarn test:json mongo --+transaction.abort
       - name: Report Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json
@@ -184,7 +184,7 @@ jobs:
       - name: Unit Test
         run: yarn test:json ${{ matrix.driver-name }}
       - name: Report Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/coverage-final.json

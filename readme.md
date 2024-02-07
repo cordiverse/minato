@@ -1,1 +1,1 @@
-./packages/minato/readme.md
+./packages/core/readme.md

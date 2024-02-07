@@ -1,11 +1,11 @@
-import { Flatten, Indexable, Keys, Row } from './utils'
-import { Selection } from './selection'
 import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
-import { Field, Model } from './model'
-import { Driver } from './driver'
-import { Eval, Update } from './eval'
-import { Query } from './query'
 import { Context, Plugin, Service, Spread } from 'cordis'
+import { Flatten, Indexable, Keys, Row } from './utils.ts'
+import { Selection } from './selection.ts'
+import { Field, Model } from './model.ts'
+import { Driver } from './driver.ts'
+import { Eval, Update } from './eval.ts'
+import { Query } from './query.ts'
 
 type TableLike<S> = Keys<S> | Selection
 

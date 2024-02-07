@@ -1,5 +1,5 @@
 import { clone, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from 'minato'
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'

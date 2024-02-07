@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from 'minato'
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import Logger from 'reggol'
 import { Context } from 'cordis'

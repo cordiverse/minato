@@ -30,7 +30,7 @@
     "@minatojs/tests": "^1.9.0"
   },
   "peerDependencies": {
-    "@minatojs/core": "^2.9.0"
+    "minato": "^3.0.0-alpha.0"
   },
   "dependencies": {
     "cosmokit": "^1.5.2",

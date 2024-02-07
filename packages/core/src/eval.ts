@@ -1,5 +1,5 @@
 import { defineProperty, Dict, isNullable, valueMap } from 'cosmokit'
-import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils'
+import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils.ts'
 
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))

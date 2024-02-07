@@ -1,7 +1,7 @@
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection } from 'minato'
 import { Context } from 'cordis'
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import Logger from 'reggol'

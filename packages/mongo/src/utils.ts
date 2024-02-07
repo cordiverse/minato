@@ -1,5 +1,5 @@
 import { Dict, isNullable, valueMap } from 'cosmokit'
-import { Eval, isComparable, Query, Selection } from '@minatojs/core'
+import { Eval, isComparable, Query, Selection } from 'minato'
 import { Filter, FilterOperators } from 'mongodb'
 import MongoDriver from '.'
 

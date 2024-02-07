@@ -1,7 +1,7 @@
 import { Extract, isNullable } from 'cosmokit'
-import { Eval, executeEval } from './eval'
-import { Comparable, Flatten, Indexable, isComparable, makeRegExp } from './utils'
-import { Selection } from './selection'
+import { Eval, executeEval } from './eval.ts'
+import { Comparable, Flatten, Indexable, isComparable, makeRegExp } from './utils.ts'
+import { Selection } from './selection.ts'
 
 export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
 

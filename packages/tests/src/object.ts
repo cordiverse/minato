@@ -1,4 +1,4 @@
-import { $, Database } from '@minatojs/core'
+import { $, Database } from 'minato'
 import { expect } from 'chai'
 
 interface ObjectModel {

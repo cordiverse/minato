@@ -1,13 +1,13 @@
-import { Database } from './database'
+import { Database } from './database.ts'
 
-export * from './database'
-export * from './driver'
-export * from './error'
-export * from './eval'
-export * from './model'
-export * from './query'
-export * from './selection'
-export * from './utils'
+export * from './database.ts'
+export * from './driver.ts'
+export * from './error.ts'
+export * from './eval.ts'
+export * from './model.ts'
+export * from './query.ts'
+export * from './selection.ts'
+export * from './utils.ts'
 
 declare module 'cordis' {
   interface Events {

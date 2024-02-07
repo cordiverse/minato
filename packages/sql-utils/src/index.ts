@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from '@minatojs/core'
+import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'

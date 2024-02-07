@@ -1,5 +1,5 @@
 import { Intersect } from 'cosmokit'
-import { Eval } from './eval'
+import { Eval } from './eval.ts'
 
 export type Values<S> = S[keyof S]
 

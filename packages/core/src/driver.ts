@@ -1,9 +1,9 @@
 import { Awaitable, Dict, valueMap } from 'cosmokit'
-import { Eval, Update } from './eval'
-import { Direction, Modifier, Selection } from './selection'
-import { Model } from './model'
-import { Database } from './database'
 import { Context } from 'cordis'
+import { Eval, Update } from './eval.ts'
+import { Direction, Modifier, Selection } from './selection.ts'
+import { Model } from './model.ts'
+import { Database } from './database.ts'
 
 export namespace Driver {
   export interface Stats {

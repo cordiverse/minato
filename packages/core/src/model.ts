@@ -1,8 +1,8 @@
 import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
-import { Database } from './database'
-import { Eval, isEvalExpr } from './eval'
-import { Selection } from './selection'
-import { Flatten, Keys } from './utils'
+import { Database } from './database.ts'
+import { Eval, isEvalExpr } from './eval.ts'
+import { Selection } from './selection.ts'
+import { Flatten, Keys } from './utils.ts'
 
 export const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }

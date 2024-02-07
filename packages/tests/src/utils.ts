@@ -1,4 +1,4 @@
-import { Database } from '@minatojs/core'
+import { Database } from 'minato'
 
 export async function setup<S, K extends keyof S & string>(database: Database<S>, name: K, table: Partial<S[K]>[]) {
   await database.remove(name, {})

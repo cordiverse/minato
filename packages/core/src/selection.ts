@@ -1,11 +1,11 @@
 import { defineProperty, Dict, valueMap } from 'cosmokit'
-import { Driver } from './driver'
-import { Eval, executeEval } from './eval'
-import { Model } from './model'
-import { Query } from './query'
-import { Keys, randomId, Row } from './utils'
+import { Driver } from './driver.ts'
+import { Eval, executeEval } from './eval.ts'
+import { Model } from './model.ts'
+import { Query } from './query.ts'
+import { Keys, randomId, Row } from './utils.ts'
 
-declare module '.' {
+declare module './eval.ts' {
   export namespace Eval {
     export interface Static {
       exec<S, T>(value: Executable<S, T>): Expr<T>

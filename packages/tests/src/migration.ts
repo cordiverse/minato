@@ -1,4 +1,4 @@
-import { Database, Flatten, Indexable, Keys } from '@minatojs/core'
+import { Database, Flatten, Indexable, Keys } from 'minato'
 import { expect } from 'chai'
 
 interface Qux {

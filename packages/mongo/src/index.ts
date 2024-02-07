@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection } from '@minatojs/core'
+import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection } from 'minato'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 import Logger from 'reggol'
