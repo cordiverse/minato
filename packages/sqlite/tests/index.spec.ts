@@ -1,5 +1,6 @@
 import { join } from 'path'
 import { Database } from 'minato'
+import SQLiteDriver from '@minatojs/driver-sqlite'
 import Logger from 'reggol'
 import test from '@minatojs/tests'
 
@@ -10,7 +11,7 @@ describe('@minatojs/driver-sqlite', () => {
 
   before(async () => {
     logger.level = 3
-    await database.connect('sqlite', {
+    await database.connect(SQLiteDriver, {
       path: join(__dirname, 'test.db'),
     })
   })

@@ -1,4 +1,5 @@
 import { Database } from 'minato'
+import PostgresDriver from '@minatojs/driver-postgres'
 import Logger from 'reggol'
 import test from '@minatojs/tests'
 
@@ -9,7 +10,7 @@ describe('@minatojs/driver-postgres', () => {
 
   before(async () => {
     logger.level = 3
-    await database.connect('postgres', {
+    await database.connect(PostgresDriver, {
       host: 'localhost',
       port: 5432,
       username: 'koishi',

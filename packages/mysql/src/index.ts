@@ -2,17 +2,13 @@ import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection } from 'minato'
-import { Context } from 'cordis'
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
-import Logger from 'reggol'
 
 declare module 'mysql' {
   interface UntypedFieldInfo {
     packet: UntypedFieldInfo
   }
 }
-
-const logger = new Logger('mysql')
 
 const DEFAULT_DATE = new Date('1970-01-01')
 
@@ -33,11 +29,11 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'timestamp': return 'datetime(3)'
     case 'boolean': return 'bit'
     case 'integer':
-      if ((length || 0) > 8) logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+      if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
       return getIntegerType(length)
     case 'primary':
     case 'unsigned':
-      if ((length || 0) > 8) logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+      if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
       return `${getIntegerType(length)} unsigned`
     case 'decimal': return `decimal(${precision}, ${scale}) unsigned`
     case 'char': return `char(${length || 255})`
@@ -264,15 +260,17 @@ export namespace MySQLDriver {
 }
 
 export class MySQLDriver extends Driver<MySQLDriver.Config> {
+  static name = 'mysql'
+
   public pool!: Pool
-  public sql: MySQLBuilder
+  public sql = new MySQLBuilder()
 
   private session?: PoolConnection
   private _compat: Compat = {}
   private _queryTasks: QueryTask[] = []
 
-  constructor(ctx: Context, config?: MySQLDriver.Config) {
-    super(ctx, {
+  async start() {
+    this.pool = createPool({
       host: 'localhost',
       port: 3306,
       charset: 'utf8mb4_general_ci',
@@ -303,14 +301,8 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
           return next()
         }
       },
-      ...config,
+      ...this.config,
     })
-
-    this.sql = new MySQLBuilder()
-  }
-
-  async start() {
-    this.pool = createPool(this.config)
 
     const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
     // https://jira.mariadb.org/browse/MDEV-30623
@@ -418,8 +410,8 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     }
 
     if (!columns.length) {
-      logger.info('auto creating table %c', name)
-      return this.query(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}) COLLATE = ${this.sql.escape(this.config.charset)}`)
+      this.logger.info('auto creating table %c', name)
+      return this.query(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}) COLLATE = ${this.sql.escape(this.config.charset ?? 'utf8mb4_general_ci')}`)
     }
 
     const operations = [
@@ -428,19 +420,19 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     ]
     if (operations.length) {
       // https://dev.mysql.com/doc/refman/5.7/en/alter-table.html
-      logger.info('auto updating table %c', name)
+      this.logger.info('auto updating table %c', name)
       await this.query(`ALTER TABLE ${escapeId(name)} ${operations.join(', ')}`)
     }
 
     // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
     this.migrate(name, {
-      error: logger.warn,
+      error: this.logger.warn,
       before: keys => keys.every(key => columns.some(info => info.COLUMN_NAME === key)),
       after: keys => dropKeys.push(...keys),
       finalize: async () => {
         if (!dropKeys.length) return
-        logger.info('auto migrating table %c', name)
+        this.logger.info('auto migrating table %c', name)
         await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
       },
     })
@@ -476,17 +468,17 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
 INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT max(value) INTO r FROM mtt; RETURN r; END`)
     } catch (e) {
-      logger.warn(`Failed to setup compact functions: ${e}`)
+      this.logger.warn(`Failed to setup compact functions: ${e}`)
     }
   }
 
   query<T = any>(sql: string, debug = true): Promise<T> {
     const error = new Error()
     return new Promise((resolve, reject) => {
-      if (debug) logger.debug('> %s', sql)
+      if (debug) this.logger.debug('> %s', sql)
       ;(this.session ?? this.pool).query(sql, (err: Error, results) => {
         if (!err) return resolve(results)
-        logger.warn('> %s', sql)
+        this.logger.warn('> %s', sql)
         if (err['code'] === 'ER_DUP_ENTRY') {
           err = new RuntimeError('duplicate-entry', err.message)
         }
@@ -498,11 +490,11 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   queue<T = any>(sql: string, values?: any): Promise<T> {
     sql = format(sql, values)
-    if (this.session || !this.config.multipleStatements) {
+    if (this.session || !(this.config.multipleStatements ?? true)) {
       return this.query(sql)
     }
 
-    logger.debug('> %s', sql)
+    this.logger.debug('> %s', sql)
     return new Promise<any>((resolve, reject) => {
       this._queryTasks.push({ sql, resolve, reject })
       process.nextTick(() => this._flushTasks())
@@ -671,7 +663,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     return new Promise<void>((resolve, reject) => {
       this.pool.getConnection((err, conn) => {
         if (err) {
-          logger.warn('getConnection failed: ', err)
+          this.logger.warn('getConnection failed: ', err)
           return
         }
         const driver = new Proxy(this, {

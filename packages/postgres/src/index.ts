@@ -2,10 +2,7 @@ import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from 'minato'
 import { Builder, isBracketed } from '@minatojs/sql-utils'
-import Logger from 'reggol'
-import { Context } from 'cordis'
 
-const logger = new Logger('postgres')
 const timeRegex = /(\d+):(\d+):(\d+)/
 
 interface ColumnInfo {
@@ -72,7 +69,7 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
     else if (length <= 2) def += autoInc ? 'smallserial' : 'smallint'
     else if (length <= 4) def += autoInc ? 'serial' : 'integer'
     else {
-      if (length > 8) logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+      if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
       def += autoInc ? 'bigserial' : 'bigint'
     }
     if (!isNullable(initial) && !autoInc) def += ` DEFAULT ${initial}`
@@ -454,18 +451,20 @@ export namespace PostgresDriver {
 }
 
 export class PostgresDriver extends Driver<PostgresDriver.Config> {
+  static name = 'postgres'
+
   public postgres!: postgres.Sql
-  public sql: PostgresBuilder
+  public sql = new PostgresBuilder()
 
   private session?: postgres.TransactionSql
   private _counter = 0
   private _queryTasks: QueryTask[] = []
 
-  constructor(ctx: Context, config: PostgresDriver.Config) {
-    super(ctx, {
+  async start() {
+    this.postgres = postgres({
       onnotice: () => { },
       debug(_, query, parameters) {
-        logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
+        this.logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
       },
       transform: {
         value: {
@@ -475,14 +474,8 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
           },
         },
       },
-      ...config,
+      ...this.config,
     })
-
-    this.sql = new PostgresBuilder()
-  }
-
-  async start() {
-    this.postgres = postgres(this.config)
   }
 
   async stop() {
@@ -491,7 +484,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
   async query<T extends any[] = any[]>(sql: string): Promise<postgres.RowList<T>> {
     return await (this.session ?? this.postgres).unsafe<T>(sql).catch(e => {
-      logger.warn('> %s', sql)
+      this.logger.warn('> %s', sql)
       throw e
     })
   }
@@ -594,7 +587,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     }
 
     if (!columns.length) {
-      logger.info('auto creating table %c', name)
+      this.logger.info('auto creating table %c', name)
       return this.query<any>(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}, _pg_mtime BIGINT)`)
     }
 
@@ -604,7 +597,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     ]
     if (operations.length) {
       // https://www.postgresql.org/docs/current/sql-altertable.html
-      logger.info('auto updating table %c', name)
+      this.logger.info('auto updating table %c', name)
       if (rename.length) {
         await Promise.all(rename.map(op => this.query(`ALTER TABLE ${escapeId(name)} ${op}`)))
       }
@@ -614,12 +607,12 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
     this.migrate(name, {
-      error: logger.warn,
+      error: this.logger.warn,
       before: keys => keys.every(key => columns.some(info => info.column_name === key)),
       after: keys => dropKeys.push(...keys),
       finalize: async () => {
         if (!dropKeys.length) return
-        logger.info('auto migrating table %c', name)
+        this.logger.info('auto migrating table %c', name)
         await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
       },
     })

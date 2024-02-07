@@ -50,8 +50,9 @@ export class Database<S = any> extends Service {
     super(ctx, 'model', true)
   }
 
-  connect<T = undefined>(driver: Plugin.Constructor<Context, T>, ...args: Spread<T>) {
+  async connect<T = undefined>(driver: Plugin.Constructor<Context, T>, ...args: Spread<T>) {
     this.ctx.plugin(driver, args[0])
+    await this.ctx.start()
   }
 
   refresh() {

@@ -3,9 +3,7 @@ import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmok
 import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection } from 'minato'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
-import Logger from 'reggol'
 
-const logger = new Logger('mongo')
 const tempKey = '__temp_minato_mongo__'
 
 export namespace MongoDriver {
@@ -31,6 +29,8 @@ export namespace MongoDriver {
 }
 
 export class MongoDriver extends Driver<MongoDriver.Config> {
+  static name = 'mongo'
+
   public client!: MongoClient
   public db!: Db
   public mongo = this
@@ -149,15 +149,15 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       else {
         // Empty collection, just set meta and return
         fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
-        logger.info('Successfully reconfigured table %s', table)
+        this.logger.info('Successfully reconfigured table %s', table)
         return
       }
     }
     if (virtual === useVirtualKey) return
-    logger.info('Start migrating table %s', table)
+    this.logger.info('Start migrating table %s', table)
 
     if (found?.migrate && await this.db.listCollections({ name: '_migrate_' + table }).hasNext()) {
-      logger.info('Last time crashed, recover')
+      this.logger.info('Last time crashed, recover')
     } else {
       await this.db.dropCollection('_migrate_' + table).catch(noop)
       await this.db.collection(table).aggregate([
@@ -175,7 +175,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       { $set: { virtual: useVirtualKey, migrate: false } },
       { upsert: true },
     )
-    logger.info('Successfully migrated table %s', table)
+    this.logger.info('Successfully migrated table %s', table)
   }
 
   private async _migratePrimary(table: string) {
@@ -226,7 +226,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
     const $unset = {}
     this.migrate(table, {
-      error: logger.warn,
+      error: this.logger.warn,
       before: () => true,
       after: keys => keys.forEach(key => $unset[key] = ''),
       finalize: async () => {
@@ -305,7 +305,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   async get(sel: Selection.Immutable) {
     const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
     if (!transformer) return []
-    logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
+    this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
@@ -315,7 +315,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
     if (!transformer) return
-    logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
+    this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     const res = await this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
@@ -479,7 +479,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       })
       await session.withTransaction(async () => callback(driver)).catch(async e => {
         if (e instanceof MongoError && e.code === 20 && e.message.includes('Transaction numbers')) {
-          logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
+          this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
 Convert to replicaSet to enable the feature.
 See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
           await callback(this)

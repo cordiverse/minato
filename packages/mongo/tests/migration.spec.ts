@@ -2,7 +2,7 @@ import { Database, Primary } from 'minato'
 import Logger from 'reggol'
 import { expect } from 'chai'
 import { } from 'chai-shape'
-import { MongoDriver } from '@minatojs/driver-mongo'
+import MongoDriver from '@minatojs/driver-mongo'
 
 const logger = new Logger('mongo')
 
@@ -40,7 +40,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
 
   const resetConfig = async (optimizeIndex: boolean) => {
     await database.stopAll()
-    await database.connect('mongo', {
+    await database.connect(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
@@ -50,7 +50,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
 
   beforeEach(async () => {
     logger.level = 3
-    await database.connect('mongo', {
+    await database.connect(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',

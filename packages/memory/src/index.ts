@@ -6,6 +6,8 @@ export namespace MemoryDriver {
 }
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
+  static name = 'memory'
+
   #store: Dict<any[]> = {
     _fields: [],
   }

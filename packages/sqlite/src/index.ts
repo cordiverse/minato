@@ -3,9 +3,6 @@ import { Driver, Eval, executeUpdate, Field, Model, randomId, Selection } from '
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { promises as fs } from 'fs'
 import init from '@minatojs/sql.js'
-import Logger from 'reggol'
-
-const logger = new Logger('sqlite')
 
 function getTypeDef({ type }: Field) {
   switch (type) {
@@ -146,6 +143,8 @@ class SQLiteBuilder extends Builder {
 }
 
 export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
+  static name = 'sqlite'
+
   db!: init.Database
   sql = new SQLiteBuilder()
   beforeUnload?: () => void
@@ -206,7 +205,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     }
 
     if (!columns.length) {
-      logger.info('auto creating table %c', table)
+      this.logger.info('auto creating table %c', table)
       this.#run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
     } else if (shouldMigrate) {
       // preserve old columns
@@ -222,7 +221,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
       const temp = table + '_temp'
       const fields = Object.keys(mapping).map(escapeId).join(', ')
-      logger.info('auto migrating table %c', table)
+      this.logger.info('auto migrating table %c', table)
       this.#run(`CREATE TABLE ${escapeId(temp)} (${[...columnDefs, ...indexDefs].join(', ')})`)
       try {
         this.#run(`INSERT INTO ${escapeId(temp)} SELECT ${fields} FROM ${escapeId(table)}`)
@@ -233,7 +232,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       }
       this.#run(`ALTER TABLE ${escapeId(temp)} RENAME TO ${escapeId(table)}`)
     } else if (alter.length) {
-      logger.info('auto updating table %c', table)
+      this.logger.info('auto updating table %c', table)
       for (const def of alter) {
         this.#run(`ALTER TABLE ${escapeId(table)} ${def}`)
       }
@@ -242,7 +241,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     if (dropKeys) return
     dropKeys = []
     this.migrate(table, {
-      error: logger.warn,
+      error: this.logger.warn,
       before: keys => keys.every(key => columns.some(({ name }) => name === key)),
       after: keys => dropKeys!.push(...keys),
       finalize: () => {
@@ -296,10 +295,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
       stmt.free()
-      logger.debug('> %s', sql, params)
+      this.logger.debug('> %s', sql, params)
       return result
     } catch (e) {
-      logger.warn('> %s', sql, params)
+      this.logger.warn('> %s', sql, params)
       throw e
     }
   }

@@ -1,5 +1,5 @@
 import { Awaitable, Dict, valueMap } from 'cosmokit'
-import { Context } from 'cordis'
+import { Context, Logger } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
 import { Model } from './model.ts'
@@ -54,9 +54,11 @@ export abstract class Driver<C = any> {
   abstract withTransaction(callback: (driver: Driver) => Promise<void>): Promise<void>
 
   public database: Database
+  public logger: Logger
 
   constructor(public ctx: Context, public config: C) {
     this.database = ctx.model
+    this.logger = ctx.logger(this['contructor'].name)
 
     ctx.on('ready', async () => {
       await this.start()

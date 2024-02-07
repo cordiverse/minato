@@ -1,4 +1,5 @@
 import { Database } from 'minato'
+import MongoDriver from '@minatojs/driver-mongo'
 import test from '@minatojs/tests'
 import Logger from 'reggol'
 
@@ -9,7 +10,7 @@ describe('@minatojs/driver-mongo', () => {
 
   before(async () => {
     logger.level = 3
-    await database.connect('mongo', {
+    await database.connect(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',

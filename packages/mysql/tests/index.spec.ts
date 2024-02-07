@@ -1,4 +1,5 @@
 import { Database } from 'minato'
+import MySQLDriver from '@minatojs/driver-mysql'
 import Logger from 'reggol'
 import test from '@minatojs/tests'
 
@@ -9,7 +10,7 @@ describe('@minatojs/driver-mysql', () => {
 
   before(async () => {
     logger.level = 3
-    await database.connect('mysql', {
+    await database.connect(MySQLDriver, {
       user: 'koishi',
       password: 'koishi@114514',
       database: 'test',
