@@ -42,7 +42,8 @@ export abstract class Driver<C = any> {
 
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
-  abstract drop(table?: string): Promise<void>
+  abstract drop(table: string): Promise<void>
+  abstract dropAll(): Promise<void>
   abstract stats(): Promise<Partial<Driver.Stats>>
   abstract prepare(name: string): Promise<void>
   abstract get(sel: Selection.Immutable, modifier: Modifier): Promise<any>

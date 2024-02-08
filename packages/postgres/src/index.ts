@@ -608,11 +608,11 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     })
   }
 
-  async drop(table?: string) {
-    if (table) {
-      await this.query(`DROP TABLE IF EXISTS ${escapeId(table)} CASCADE`)
-      return
-    }
+  async drop(table: string) {
+    await this.query(`DROP TABLE IF EXISTS ${escapeId(table)} CASCADE`)
+  }
+
+  async dropAll() {
     const tables: TableInfo[] = await this.queue(`SELECT * FROM information_schema.tables WHERE table_schema = 'public'`)
     if (!tables.length) return
     await this.query(`DROP TABLE IF EXISTS ${tables.map(t => escapeId(t.table_name)).join(',')} CASCADE`)

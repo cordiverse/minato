@@ -203,7 +203,7 @@ export class Database<S = any> extends Service {
   }
 
   async dropAll() {
-    await Promise.all(Object.values(this.drivers).map(driver => driver.drop()))
+    await Promise.all(Object.values(this.drivers).map(driver => driver.dropAll()))
   }
 
   async stats() {

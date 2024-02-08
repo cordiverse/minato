@@ -19,19 +19,21 @@ Type Driven Database Framework.
 
 | Driver | Version | Notes |
 | ------ | ------ | ----- |
-| [MySQL](https://github.com/shigma/minato/tree/master/packages/mysql) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mysql?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mysql) | MySQL 5.7, MySQL 8.0, MariaDB 10.5 |
-| [MongoDB](https://github.com/shigma/minato/tree/master/packages/mongo) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mongo?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mongo) | |
-| [SQLite](https://github.com/shigma/minato/tree/master/packages/sqlite) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-sqlite?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-sqlite) | |
 | [Memory](https://github.com/shigma/minato/tree/master/packages/memory) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-memory?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-memory) | In-memory driver support |
+| [MongoDB](https://github.com/shigma/minato/tree/master/packages/mongo) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mongo?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mongo) | |
+| [MySQL](https://github.com/shigma/minato/tree/master/packages/mysql) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mysql?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mysql) | MySQL 5.7+, MariaDB 10.5 |
+| [PostgreSQL](https://github.com/shigma/minato/tree/master/packages/postgres) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-postgres?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-postgres) | PostgreSQL 14+ |
+| [SQLite](https://github.com/shigma/minato/tree/master/packages/sqlite) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-sqlite?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-sqlite) | |
 
 ## Basic Usage
 
 ```ts
-import { Database } from 'minato'
+import Database from 'minato'
+import MySQLDriver from '@minatojs/driver-mysql'
 
 const database = new Database()
 
-await database.connect('mysql', {
+await database.connect(MySQLDriver, {
   host: 'localhost',
   port: 3306,
   user: 'root',

@@ -215,11 +215,11 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     })
   }
 
-  async drop(table?: string) {
-    if (table) {
-      await this.db.dropCollection(table, { session: this.session })
-      return
-    }
+  async drop(table: string) {
+    await this.db.dropCollection(table, { session: this.session })
+  }
+
+  async dropAll() {
     await Promise.all([
       '_fields',
       ...Object.keys(this.database.tables),

@@ -94,12 +94,12 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     }).filter(Boolean)
   }
 
-  async drop(table?: string) {
-    if (table) {
-      delete this.#store[table]
-    } else {
-      this.#store = { _fields: [] }
-    }
+  async drop(table: string) {
+    delete this.#store[table]
+  }
+
+  async dropAll() {
+    this.#store = { _fields: [] }
   }
 
   async stats() {
