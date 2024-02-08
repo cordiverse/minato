@@ -58,7 +58,7 @@ export abstract class Driver<C = any> {
 
   constructor(public ctx: Context, public config: C) {
     this.database = ctx.model
-    this.logger = ctx.logger(this['contructor'].name)
+    this.logger = ctx.logger(this.constructor.name)
 
     ctx.on('ready', async () => {
       await this.start()

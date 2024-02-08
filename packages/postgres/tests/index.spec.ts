@@ -13,7 +13,7 @@ describe('@minatojs/driver-postgres', () => {
     await database.connect(PostgresDriver, {
       host: 'localhost',
       port: 5432,
-      username: 'koishi',
+      user: 'koishi',
       password: 'koishi@114514',
       database: 'test'
     })

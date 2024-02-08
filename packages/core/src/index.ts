@@ -22,4 +22,6 @@ declare module 'cordis' {
 
 export interface Tables {}
 
+export { Logger, Schema, Schema as z } from 'cordis'
+
 export default Database

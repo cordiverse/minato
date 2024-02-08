@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick, Time } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection } from 'minato'
+import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, Selection, z } from 'minato'
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 
 const timeRegex = /(\d+):(\d+):(\d+)/
@@ -440,16 +440,6 @@ class PostgresBuilder extends Builder {
   }
 }
 
-export namespace PostgresDriver {
-  export interface Config<T extends Record<string, postgres.PostgresType> = {}> extends postgres.Options<T> {
-    host: string
-    port: number
-    username: string
-    password: string
-    database: string
-  }
-}
-
 export class PostgresDriver extends Driver<PostgresDriver.Config> {
   static name = 'postgres'
 
@@ -463,7 +453,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   async start() {
     this.postgres = postgres({
       onnotice: () => { },
-      debug(_, query, parameters) {
+      debug: (_, query, parameters) => {
         this.logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
       },
       transform: {
@@ -783,6 +773,27 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       await conn.unsafe(`COMMIT`)
     })
   }
+}
+
+export namespace PostgresDriver {
+  export interface Config<T extends Record<string, postgres.PostgresType> = {}> extends postgres.Options<T> {
+    host: string
+    port: number
+    user: string
+    password: string
+    database: string
+  }
+
+  export const Config: z<Config> = z.object({
+    host: z.string().default('localhost'),
+    port: z.natural().max(65535).default(5432),
+    user: z.string().default('root'),
+    password: z.string().role('secret'),
+    database: z.string().default('koishi'),
+  }).i18n({
+    'en-US': require('./locales/en-US'),
+    'zh-CN': require('./locales/zh-CN'),
+  })
 }
 
 export default PostgresDriver

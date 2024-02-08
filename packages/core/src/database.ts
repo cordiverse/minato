@@ -46,7 +46,7 @@ export class Database<S = any> extends Service {
 
   private stashed = new Set<string>()
 
-  constructor(ctx = new Context()) {
+  constructor(ctx?: Context) {
     super(ctx, 'model', true)
   }
 

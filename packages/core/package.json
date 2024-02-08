@@ -42,7 +42,7 @@
     "postgres"
   ],
   "dependencies": {
-    "cordis": "^3.8.5",
+    "cordis": "^3.9.0",
     "cosmokit": "^1.5.2"
   }
 }

@@ -1,32 +1,10 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection } from 'minato'
+import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 
 const tempKey = '__temp_minato_mongo__'
-
-export namespace MongoDriver {
-  export interface Config extends MongoClientOptions {
-    username?: string
-    password?: string
-    protocol?: string
-    host?: string
-    port?: number
-    /** database name */
-    database?: string
-    /** default auth database */
-    authDatabase?: string
-    connectOptions?: ConstructorParameters<typeof URLSearchParams>[0]
-    /** connection string (will overwrite all configs except 'name') */
-    uri?: string
-    /**
-     * store single primary key in `_id` field to enhance index performance
-     * @default false
-     */
-    optimizeIndex?: boolean
-  }
-}
 
 export class MongoDriver extends Driver<MongoDriver.Config> {
   static name = 'mongo'
@@ -489,6 +467,49 @@ See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-s
       })
     })
   }
+}
+
+export namespace MongoDriver {
+  export interface Config extends MongoClientOptions {
+    username?: string
+    password?: string
+    protocol?: string
+    host?: string
+    port?: number
+    /** database name */
+    database?: string
+    /** default auth database */
+    authDatabase?: string
+    connectOptions?: ConstructorParameters<typeof URLSearchParams>[0]
+    /** connection string (will overwrite all configs except 'name') */
+    uri?: string
+    /**
+     * store single primary key in `_id` field to enhance index performance
+     * @default false
+     */
+    optimizeIndex?: boolean
+  }
+
+  export const Config: z<Config> = z.object({
+    protocol: z.string().default('mongodb'),
+    host: z.string().default('localhost'),
+    port: z.natural().max(65535),
+    username: z.string(),
+    password: z.string().role('secret'),
+    database: z.string().default('koishi'),
+    writeConcern: z.object({
+      w: z.union([
+        z.const(undefined),
+        z.number().required(),
+        z.const('majority').required(),
+      ]),
+      wtimeoutMS: z.number(),
+      journal: z.boolean(),
+    }),
+  }).i18n({
+    'en-US': require('./locales/en-US'),
+    'zh-CN': require('./locales/zh-CN'),
+  })
 }
 
 export default MongoDriver

@@ -1,7 +1,7 @@
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick, Time } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection } from 'minato'
+import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, randomId, RuntimeError, Selection, z } from 'minato'
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 
 declare module 'mysql' {
@@ -253,10 +253,6 @@ class MySQLBuilder extends Builder {
       return value
     }
   }
-}
-
-export namespace MySQLDriver {
-  export interface Config extends PoolConfig {}
 }
 
 export class MySQLDriver extends Driver<MySQLDriver.Config> {
@@ -678,6 +674,51 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       })
     })
   }
+}
+
+export namespace MySQLDriver {
+  export interface Config extends PoolConfig {}
+
+  export const Config: z<Config> = z.intersect([
+    z.object({
+      host: z.string().default('localhost'),
+      port: z.natural().max(65535).default(3306),
+      user: z.string().default('root'),
+      password: z.string().role('secret'),
+      database: z.string().default('koishi'),
+    }),
+    z.object({
+      ssl: z.union([
+        z.const(undefined),
+        z.object({
+          ca: z.string(),
+          cert: z.string(),
+          sigalgs: z.string(),
+          ciphers: z.string(),
+          clientCertEngine: z.string(),
+          crl: z.string(),
+          dhparam: z.string(),
+          ecdhCurve: z.string(),
+          honorCipherOrder: z.boolean(),
+          key: z.string(),
+          privateKeyEngine: z.string(),
+          privateKeyIdentifier: z.string(),
+          maxVersion: z.string(),
+          minVersion: z.string(),
+          passphrase: z.string(),
+          pfx: z.string(),
+          rejectUnauthorized: z.boolean(),
+          secureOptions: z.natural(),
+          secureProtocol: z.string(),
+          sessionIdContext: z.string(),
+          sessionTimeout: z.number(),
+        }),
+      ]) as any,
+    }),
+  ]).i18n({
+    'en-US': require('./locales/en-US'),
+    'zh-CN': require('./locales/zh-CN'),
+  })
 }
 
 export default MySQLDriver
