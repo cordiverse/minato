@@ -1,5 +1,5 @@
 import { Database, Primary } from 'minato'
-import Logger from 'reggol'
+import { Context, ForkScope, Logger } from 'cordis'
 import { expect } from 'chai'
 import { } from 'chai-shape'
 import MongoDriver from '@minatojs/driver-mongo'
@@ -36,31 +36,38 @@ interface Tables {
 }
 
 describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
-  const database: Database<Tables> = new Database()
+  const ctx = new Context()
+  ctx.plugin(Database)
+
+  const database = ctx.model as Database<Tables>
+  let fork: ForkScope
 
   const resetConfig = async (optimizeIndex: boolean) => {
-    await database.stopAll()
-    await database.connect(MongoDriver, {
+    fork?.dispose()
+    fork = ctx.plugin(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
-      optimizeIndex: optimizeIndex,
+      optimizeIndex,
     })
+    await ctx.events.flush()
   }
+
+  before(() => ctx.start())
 
   beforeEach(async () => {
     logger.level = 3
-    await database.connect(MongoDriver, {
+    fork = ctx.plugin(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
       optimizeIndex: false,
     })
+    await ctx.events.flush()
   })
 
   afterEach(async () => {
-    await database.dropAll()
-    await database.stopAll()
+    fork?.dispose()
     logger.level = 2
   })
 

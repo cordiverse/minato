@@ -789,7 +789,7 @@ export namespace PostgresDriver {
     port: z.natural().max(65535).default(5432),
     user: z.string().default('root'),
     password: z.string().role('secret'),
-    database: z.string().default('koishi'),
+    database: z.string().required(),
   }).i18n({
     'en-US': require('./locales/en-US'),
     'zh-CN': require('./locales/zh-CN'),

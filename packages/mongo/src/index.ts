@@ -47,7 +47,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   stop() {
-    return this.client.close()
+    return this.client?.close()
   }
 
   /**
@@ -496,7 +496,7 @@ export namespace MongoDriver {
     port: z.natural().max(65535),
     username: z.string(),
     password: z.string().role('secret'),
-    database: z.string().default('koishi'),
+    database: z.string().required(),
     writeConcern: z.object({
       w: z.union([
         z.const(undefined),

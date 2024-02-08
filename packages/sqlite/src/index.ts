@@ -1,10 +1,11 @@
 import { clone, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, Model, randomId, Selection, z } from 'minato'
 import { Builder, escapeId } from '@minatojs/sql-utils'
-import { promises as fs } from 'fs'
+import { resolve } from 'node:path'
+import { readFile, writeFile } from 'node:fs/promises'
 import init from '@minatojs/sql.js'
-import { dirname, join } from 'path'
-import { mkdir, rename, stat } from 'fs/promises'
+import enUS from './locales/en-US.yml'
+import zhCN from './locales/zh-CN.yml'
 
 function getTypeDef({ type }: Field) {
   switch (type) {
@@ -249,13 +250,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async start() {
     if (this.config.path !== ':memory:') {
-      this.config.path = join(this.ctx.baseDir, this.config.path)
-      const oldPath = join(this.ctx.baseDir, '.koishi.db')
-      if (await stat(oldPath).catch(() => null)) {
-        this.logger.info('migrating to data directory')
-        await mkdir(dirname(this.config.path), { recursive: true })
-        await rename(oldPath, this.config.path)
-      }
+      this.config.path = resolve(this.ctx.baseDir, this.config.path)
     }
     const isBrowser = process.env.KOISHI_ENV === 'browser'
     const sqlite = await init({
@@ -269,7 +264,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       console.log(this.config.path)
       this.db = new sqlite.Database(this.config.path)
     } else {
-      const buffer = await fs.readFile(this.config.path).catch(() => null)
+      const buffer = await readFile(this.config.path).catch(() => null)
       this.db = new sqlite.Database(this.config.path, buffer)
       if (isBrowser) {
         window.addEventListener('beforeunload', this.beforeUnload = () => {
@@ -326,7 +321,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   #export() {
     const data = this.db.export()
-    fs.writeFile(this.config.path, data)
+    return writeFile(this.config.path, data)
   }
 
   #run(sql: string, params: any = [], callback?: () => any) {
@@ -469,9 +464,10 @@ export namespace SQLiteDriver {
   }
 
   export const Config: z<Config> = z.object({
-    path: z.string().role('path').default('data/koishi.db'),
+    path: z.string().role('path').required(),
   }).i18n({
-    // 'zh-CN': zhCN,
+    'en-US': enUS,
+    'zh-CN': zhCN,
   })
 }
 

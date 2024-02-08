@@ -15,7 +15,7 @@ describe('@minatojs/driver-postgres', () => {
       port: 5432,
       user: 'koishi',
       password: 'koishi@114514',
-      database: 'test'
+      database: 'test',
     })
   })
 

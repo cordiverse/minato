@@ -3,6 +3,10 @@
   "compilerOptions": {
     "outDir": "lib",
     "rootDir": "src",
+    "types": [
+      "@types/mocha",
+      "@types/node",
+    ],
   },
   "include": [
     "src",

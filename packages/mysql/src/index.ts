@@ -685,7 +685,7 @@ export namespace MySQLDriver {
       port: z.natural().max(65535).default(3306),
       user: z.string().default('root'),
       password: z.string().role('secret'),
-      database: z.string().default('koishi'),
+      database: z.string().required(),
     }),
     z.object({
       ssl: z.union([

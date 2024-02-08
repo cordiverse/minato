@@ -14,5 +14,9 @@
     "noImplicitAny": false,
     "noImplicitThis": false,
     "strictFunctionTypes": false,
+    "types": [
+      "@types/node",
+      "yml-register/types",
+    ],
   },
 }
