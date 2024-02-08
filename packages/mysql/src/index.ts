@@ -658,7 +658,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     return { inserted: records - result.changedRows, matched: result.changedRows, modified: result.affectedRows - records }
   }
 
-  async withTransaction(callback: (session: Driver) => Promise<void>) {
+  async withTransaction(callback: (session: this) => Promise<void>) {
     return new Promise<void>((resolve, reject) => {
       this.pool.getConnection((err, conn) => {
         if (err) {

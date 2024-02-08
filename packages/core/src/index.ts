@@ -11,16 +11,14 @@ export * from './utils.ts'
 
 declare module 'cordis' {
   interface Events {
-    'minato/model'(name: string): void
+    'model'(name: string): void
   }
 
   interface Context {
-    database: Database<Tables>
-    model: Database<Tables>
+    database: Database
+    model: Database
   }
 }
-
-export interface Tables {}
 
 export { Logger, Schema, Schema as z } from 'cordis'
 

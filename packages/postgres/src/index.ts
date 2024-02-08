@@ -760,7 +760,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
   }
 
-  async withTransaction(callback: (session: Driver) => Promise<void>) {
+  async withTransaction(callback: (session: this) => Promise<void>) {
     return await this.postgres.begin(async (conn) => {
       const driver = new Proxy(this, {
         get(target, p, receiver) {

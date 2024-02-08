@@ -261,7 +261,6 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
           : require.resolve('@minatojs/sql.js/dist/' + file),
     })
     if (!isBrowser || this.config.path === ':memory:') {
-      console.log(this.config.path)
       this.db = new sqlite.Database(this.config.path)
     } else {
       const buffer = await readFile(this.config.path).catch(() => null)
@@ -452,7 +451,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     return result
   }
 
-  async withTransaction(callback: (session: Driver) => Promise<void>) {
+  async withTransaction(callback: (session: this) => Promise<void>) {
     if (this._transactionTask) await this._transactionTask
     return this._transactionTask = new Promise<void>((resolve, reject) => {
       this.#run('BEGIN TRANSACTION')

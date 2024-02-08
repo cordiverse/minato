@@ -34,10 +34,10 @@ export namespace Driver {
 }
 
 export namespace Driver {
-  export type Constructor<T = any> = new (database: Database, config?: T) => Driver
+  export type Constructor<T> = new (ctx: Context, config: T) => Driver<T>
 }
 
-export abstract class Driver<C = any> {
+export abstract class Driver<T = any> {
   static inject = ['model']
 
   abstract start(): Promise<void>
@@ -52,12 +52,12 @@ export abstract class Driver<C = any> {
   abstract remove(sel: Selection.Mutable): Promise<Driver.WriteResult>
   abstract create(sel: Selection.Mutable, data: any): Promise<any>
   abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
-  abstract withTransaction(callback: (driver: Driver) => Promise<void>): Promise<void>
+  abstract withTransaction(callback: (driver: this) => Promise<void>): Promise<void>
 
   public database: Database
   public logger: Logger
 
-  constructor(public ctx: Context, public config: C) {
+  constructor(public ctx: Context, public config: T) {
     this.database = ctx.model
     this.logger = ctx.logger(this.constructor.name)
 

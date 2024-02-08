@@ -1,5 +1,5 @@
 import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
-import { Context, Plugin, Service, Spread } from 'cordis'
+import { Context, Service, Spread } from 'cordis'
 import { Flatten, Indexable, Keys, Row } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model } from './model.ts'
@@ -37,7 +37,7 @@ type JoinCallback2<S, U extends Dict<TableLike<S>>> = (args: {
 
 const kTransaction = Symbol('transaction')
 
-export class Database<S = any> extends Service {
+export class Database<S = any, C extends Context = Context> extends Service<C> {
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
   public migrating = false
@@ -46,12 +46,12 @@ export class Database<S = any> extends Service {
 
   private stashed = new Set<string>()
 
-  constructor(ctx?: Context) {
+  constructor(ctx?: C) {
     super(ctx, 'model', true)
   }
 
-  async connect<T = undefined>(driver: Plugin.Constructor<Context, T>, ...args: Spread<T>) {
-    this.ctx.plugin(driver, args[0])
+  async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
+    this.ctx.plugin(driver, args[0] as any)
     await this.ctx.start()
   }
 
@@ -92,7 +92,7 @@ export class Database<S = any> extends Service {
     }
     model.extend(fields, config)
     this.prepareTasks[name] = this.prepare(name)
-    this.ctx.emit('minato/model', name)
+    ;(this.ctx as Context).emit('model', name)
   }
 
   migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {

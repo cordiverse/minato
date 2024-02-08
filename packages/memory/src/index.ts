@@ -1,9 +1,5 @@
 import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
-import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection } from 'minato'
-
-export namespace MemoryDriver {
-  export interface Config {}
-}
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection, z } from 'minato'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
   static name = 'memory'
@@ -189,13 +185,19 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     return res
   }
 
-  async withTransaction(callback: (session: Driver) => Promise<void>) {
+  async withTransaction(callback: (session: this) => Promise<void>) {
     const data = clone(this.#store)
     await callback(this).then(undefined, (e) => {
       this.#store = data
       throw e
     })
   }
+}
+
+export namespace MemoryDriver {
+  export interface Config {}
+
+  export const Config: z<Config> = z.object({})
 }
 
 export default MemoryDriver

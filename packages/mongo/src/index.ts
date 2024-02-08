@@ -447,7 +447,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     }
   }
 
-  async withTransaction(callback: (session: Driver) => Promise<void>) {
+  async withTransaction(callback: (session: this) => Promise<void>) {
     await this.client.withSession(async (session) => {
       const driver = new Proxy(this, {
         get(target, p, receiver) {
