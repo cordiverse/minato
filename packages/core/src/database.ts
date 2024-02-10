@@ -14,26 +14,36 @@ type TableType<S, T extends TableLike<S>> =
   : T extends Selection<infer U> ? U
   : never
 
-type TableMap1<S, M extends readonly Keys<S>[]> = Intersect<
-  | M extends readonly (infer K extends Keys<S>)[]
-  ? { [P in K]: TableType<S, P> }
-  : never
->
+export namespace Join1 {
+  export type Input<S> = readonly Keys<S>[]
 
-type TableMap2<S, U extends Dict<TableLike<S>>> = {
-  [K in keyof U]: TableType<S, U[K]>
+  export type Output<S, U extends Input<S>> = Intersect<
+    | U extends readonly (infer K extends Keys<S>)[]
+    ? { [P in K]: TableType<S, P> }
+    : never
+  >
+
+  type Parameters<S, U extends Input<S>> =
+    | U extends readonly [infer K extends Keys<S>, ...infer R]
+    ? [Row<S[K]>, ...Parameters<S, Extract<R, Input<S>>>]
+    : []
+
+  export type Predicate<S, U extends Input<S>> = (...args: Parameters<S, U>) => Eval.Expr<boolean>
 }
 
-type JoinParameters<S, U extends readonly Keys<S>[]> =
-  | U extends readonly [infer K extends Keys<S>, ...infer R]
-  ? [Row<S[K]>, ...JoinParameters<S, Extract<R, readonly Keys<S>[]>>]
-  : []
+export namespace Join2 {
+  export type Input<S> = Dict<TableLike<S>>
 
-type JoinCallback1<S, U extends readonly Keys<S>[]> = (...args: JoinParameters<S, U>) => Eval.Expr<boolean>
+  export type Output<S, U extends Input<S>> = {
+    [K in keyof U]: TableType<S, U[K]>
+  }
 
-type JoinCallback2<S, U extends Dict<TableLike<S>>> = (args: {
-  [K in keyof U]: Row<TableType<S, U[K]>>
-}) => Eval.Expr<boolean>
+  type Parameters<S, U extends Input<S>> = {
+    [K in keyof U]: Row<TableType<S, U[K]>>
+  }
+
+  export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
+}
 
 const kTransaction = Symbol('transaction')
 
@@ -105,8 +115,8 @@ export class Database<S = any, C extends Context = Context> extends Service<C> {
     return new Selection(this.getDriver(table), table, query)
   }
 
-  join<U extends readonly Keys<S>[]>(tables: U, callback?: JoinCallback1<S, U>, optional?: boolean[]): Selection<TableMap1<S, U>>
-  join<U extends Dict<TableLike<S>>>(tables: U, callback?: JoinCallback2<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<TableMap2<S, U>>
+  join<U extends Join1.Input<S>>(tables: U, callback?: Join1.Predicate<S, U>, optional?: boolean[]): Selection<Join1.Output<S, U>>
+  join<U extends Join2.Input<S>>(tables: U, callback?: Join2.Predicate<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<Join2.Output<S, U>>
   join(tables: any, query?: any, optional?: any) {
     if (Array.isArray(tables)) {
       const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, this.select(name)])))
