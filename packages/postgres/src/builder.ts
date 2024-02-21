@@ -1,8 +1,12 @@
-import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
+import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
 import { Field, isEvalExpr, Model, randomId, Selection } from 'minato'
 
 const timeRegex = /(\d+):(\d+):(\d+)/
+
+export function escapeId(value: string) {
+  return '"' + value.replace(/"/g, '""') + '"'
+}
 
 export function formatTime(time: Date) {
   const year = time.getFullYear().toString()
