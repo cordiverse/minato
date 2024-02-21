@@ -67,6 +67,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   })
 
   afterEach(async () => {
+    await database.dropAll()
     fork?.dispose()
     logger.level = 2
   })

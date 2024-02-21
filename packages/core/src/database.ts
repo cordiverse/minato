@@ -47,7 +47,10 @@ export namespace Join2 {
 
 const kTransaction = Symbol('transaction')
 
-export class Database<S = any, C extends Context = Context> extends Service<C> {
+export class Database<S = any, C extends Context = Context> extends Service<undefined, C> {
+  static [Service.provide] = 'model'
+  static [Service.immediate] = true
+
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
   public migrating = false
@@ -55,10 +58,6 @@ export class Database<S = any, C extends Context = Context> extends Service<C> {
   private migrateTasks: Dict<Promise<void>> = Object.create(null)
 
   private stashed = new Set<string>()
-
-  constructor(ctx?: C) {
-    super(ctx, 'model', true)
-  }
 
   async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
     this.ctx.plugin(driver, args[0] as any)
