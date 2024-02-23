@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-postgres",
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.0",
   "description": "PostgreSQL Driver for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -31,13 +31,13 @@
     "postgresql"
   ],
   "peerDependencies": {
-    "minato": "^3.0.0-alpha.0"
+    "minato": "^3.0.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^2.0.0-alpha.0"
+    "@minatojs/tests": "^2.0.0"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^5.0.0-alpha.0",
+    "@minatojs/sql-utils": "^5.0.0",
     "cosmokit": "^1.5.2",
     "postgres": "^3.4.3"
   }

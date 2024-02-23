@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/sql-utils",
-  "version": "5.0.0-alpha.0",
+  "version": "5.0.0",
   "description": "SQL Utilities for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -30,7 +30,7 @@
     "builder"
   ],
   "peerDependencies": {
-    "minato": "^3.0.0-alpha.0"
+    "minato": "^3.0.0"
   },
   "dependencies": {
     "cosmokit": "^1.5.2"

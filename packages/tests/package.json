@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/tests",
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.0",
   "description": "Test Cases for Minato",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -30,7 +30,7 @@
     "@types/chai-as-promised": "^7.1.8"
   },
   "peerDependencies": {
-    "minato": "^3.0.0-alpha.0"
+    "minato": "^3.0.0"
   },
   "dependencies": {
     "chai": "^4.3.10",
