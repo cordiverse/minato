@@ -56,11 +56,18 @@ export class SQLiteBuilder extends Builder {
       dump: value => value === null ? null : +new Date(value),
       load: (value) => value === null ? null : new Date(value),
     })
+
+    this.define<Buffer, Uint8Array>({
+      types: ['blob'],
+      dump: value => value,
+      load: value => value === null ? null : Buffer.from(value),
+    })
   }
 
   escape(value: any, field?: Field) {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
+    else if (value instanceof Buffer) return `X'${value.toString('hex')}'`
     return super.escape(value, field)
   }
 

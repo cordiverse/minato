@@ -57,6 +57,14 @@ export = (({ Assertion }) => {
       return
     }
 
+    // blobs
+    if (expect instanceof Buffer) {
+      if (!(actual instanceof Buffer) || expect.compare(actual) !== 0) {
+        return formatError(inspect(expect), inspect(actual))
+      }
+      return
+    }
+
     if (actual === null) {
       const type = Object.prototype.toString.call(expect).slice(8, -1).toLowerCase()
       return formatError(`a ${type}`, 'null')

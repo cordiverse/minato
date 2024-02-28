@@ -32,6 +32,7 @@ export namespace Field {
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
+    : T extends Buffer ? 'blob'
     : T extends unknown[] ? 'list' | 'json'
     : T extends object ? 'json'
     : 'expr'
@@ -152,6 +153,8 @@ export class Model<S = any> {
       const date = new Date(value)
       date.setHours(0, 0, 0, 0)
       return date
+    } else if (value.buffer?.constructor?.name === 'Buffer') {
+      return value.buffer
     }
     return value
   }

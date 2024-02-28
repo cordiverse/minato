@@ -110,6 +110,9 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
   } else if (type === 'timestamp') {
     def += 'timestamp with time zone'
     if (initial) def += ` DEFAULT ${formatTime(initial)}`
+  } else if (type === 'blob') {
+    def += 'bytea'
+    if (initial) def += ` DEFAULT '\\x${initial.toString('hex')}'::bytea`
   } else throw new Error(`unsupported type: ${type}`)
 
   return def
@@ -177,6 +180,8 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       },
       ...this.config,
     })
+    const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
+    console.log('1', version)
   }
 
   async stop() {

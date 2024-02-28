@@ -13,6 +13,7 @@ interface Bar {
   date?: Date
   time?: Date
   bigtext?: string
+  binary?: Buffer
 }
 
 interface Baz {
@@ -38,6 +39,7 @@ function OrmOperations(database: Database<Tables>) {
     date: 'date',
     time: 'time',
     bigtext: 'text',
+    binary: 'blob',
   }, {
     autoInc: true,
   })
@@ -308,6 +310,13 @@ namespace OrmOperations {
       await expect(database.eval('temp2', row => $.max(row.timestamp))).to.eventually.deep.eq(table[4].timestamp)
       await expect(database.eval('temp2', row => $.max(row.date))).to.eventually.deep.eq(table[5].date)
       await expect(database.eval('temp2', row => $.max(row.time))).to.eventually.deep.eq(table[6].time)
+    })
+
+    it('blob type', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      await database.create('temp2', { binary: Buffer.from('hello') })
+      console.log(await database.get('temp2', { binary: { $exists: true} }))
+      await expect(database.get('temp2', { binary: { $exists: true} })).to.eventually.have.shape([{ binary: Buffer.from('hello') }])
     })
 
     it('$.number on date types', async () => {

@@ -38,6 +38,7 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'char': return `char(${length || 255})`
     case 'string': return `varchar(${length || 255})`
     case 'text': return `text(${length || 65535})`
+    case 'blob': return 'blob'
     case 'list': return `text(${length || 65535})`
     case 'json': return `text(${length || 65535})`
     default: throw new Error(`unsupported type: ${type}`)

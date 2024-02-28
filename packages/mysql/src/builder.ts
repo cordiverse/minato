@@ -67,6 +67,8 @@ export class MySQLBuilder extends Builder {
       value = Time.template('yyyy-MM-dd hh:mm:ss', value)
     } else if (value instanceof RegExp) {
       value = value.source
+    } else if (value instanceof Buffer) {
+      return `X'${value.toString('hex')}'`
     } else if (!field && !!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
