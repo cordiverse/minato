@@ -7,6 +7,7 @@ export * from './eval.ts'
 export * from './model.ts'
 export * from './query.ts'
 export * from './selection.ts'
+export * from './typed.ts'
 export * from './utils.ts'
 
 declare module 'cordis' {

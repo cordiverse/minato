@@ -3,6 +3,7 @@ import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Selection } from './selection.ts'
 import { Flatten, Keys } from './utils.ts'
+import { Typed } from './typed.ts'
 
 export const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }
@@ -17,6 +18,7 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
+  typed?: Typed<T>
 }
 
 export namespace Field {
