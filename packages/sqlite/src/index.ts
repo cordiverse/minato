@@ -271,7 +271,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
-    return builder.load(value)
+    return builder.load(expr, value)
   }
 
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {

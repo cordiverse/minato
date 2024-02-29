@@ -360,7 +360,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const output = builder.parseEval(expr, false)
     const ref = isBracketed(inner) ? sel.ref : ''
     const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${ref}`)
-    return builder.load(data?.value)
+    return builder.load(expr, data?.value)
   }
 
   async set(sel: Selection.Mutable, data: {}) {

@@ -43,17 +43,8 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
     if (key === '$prefix') return prefix
     if (key === '$model') return model
     if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
-    // if (!model?.fields[key as string]!) throw new TypeError(`model is required ${key} ${Object.keys(model!.fields)}`)
-    let typed
-    // if (model?.fields[key as string]) typed = Typed.fromField(model?.fields[key as string]!)
-    if (model?.fields[prefix + key as string]) typed = Typed.fromField(model?.fields[prefix + key as string]!)
-    else {
-      // console.log('$notfound', key, prefix, ref, JSON.stringify(model?.fields!, undefined, 2))
-      typed = Typed.Object(Object.fromEntries(Object.entries(model?.fields!)
-        .map(([k, field]) => [k.slice(prefix.length + key.length + 1), Typed.fromField(field!)])))
-    }
-    // console.log('>', key, prefix, Object.keys(model?.fields!), Object.keys(typed.inner ?? {}))
-    // console.dir(typed, { depth: 10 })
+    const typed = model?.fields[prefix + key as string] ? Typed.fromField(model?.fields[prefix + key as string]!)
+      : Typed.Object(Object.fromEntries(Object.entries(model?.fields!).map(([k, field]) => [k.slice(prefix.length + key.length + 1), Typed.fromField(field!)])))
     return createRow(ref, Eval('', [ref, `${prefix}${key}`], typed), `${prefix}${key}.`, model)
   },
 })

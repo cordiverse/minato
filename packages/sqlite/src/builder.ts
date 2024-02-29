@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { Dict, isNullable } from 'cosmokit'
-import { Field, Model, randomId } from 'minato'
+import { Field, Model, randomId, Typed } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -26,9 +26,9 @@ export class SQLiteBuilder extends Builder {
       }
     })
     this.evalOperators.$number = (arg) => {
+      const typed = Typed.transform(arg)
       const value = this.parseEval(arg)
-      const res = this.state.sqlType === 'raw' ? `cast(${this.parseEval(arg)} as double)`
-        : `cast(${value} / 1000 as integer)`
+      const res = Field.date.includes(typed.field!) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       this.state.sqlType = 'raw'
       return `ifnull(${res}, 0)`
     }
@@ -65,7 +65,8 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+    console.log('$createElementQuery', key, value)
+    if (this.isJsonQuery(key)) {
       return this.jsonContains(key, this.quote(JSON.stringify(value)))
     } else {
       return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`

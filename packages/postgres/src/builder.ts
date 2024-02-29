@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Field, isEvalExpr, Model, randomId, Selection } from 'minato'
+import { Field, isEvalExpr, Model, randomId, Selection, Typed } from 'minato'
 
 const timeRegex = /(\d+):(\d+):(\d+)/
 
@@ -47,7 +47,7 @@ export class PostgresBuilder extends Builder {
       $regexFor: (key, value) => `${this.escape(value)} ~ ${key}`,
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+        if (this.isJsonQuery(key)) {
           return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
           return `${key} IS NOT NULL AND ARRAY_LENGTH(${key}, 1) = ${value}`
@@ -84,8 +84,8 @@ export class PostgresBuilder extends Builder {
 
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const res = this.state.sqlType === 'raw' ? `${value}::double precision`
-          : `extract(epoch from ${value})::bigint`
+        const typed = Typed.transform(arg)
+        const res = Field.date.includes(typed.field!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
         this.state.sqlType = 'raw'
         return `coalesce(${res}, 0)`
       },
@@ -158,7 +158,7 @@ export class PostgresBuilder extends Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+    if (this.isJsonQuery(key)) {
       return this.jsonContains(key, this.quote(JSON.stringify(value)))
     } else {
       return `${key} && ARRAY['${value}']::TEXT[]`

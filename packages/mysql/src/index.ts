@@ -391,7 +391,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const ref = isBracketed(inner) ? sel.ref : ''
     const sql = `SELECT ${output} AS value FROM ${inner} ${ref}`
     return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
-      return builder.load(data.at(-1)[0].value)
+      return builder.load(expr, data.at(-1)[0].value)
     })
   }
 

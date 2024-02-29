@@ -242,10 +242,7 @@ Eval.object = (fields) => {
     const typed = Typed.Object(fields)
     // GetRecursive from Row already handles typed
     // modelFields.filter(([path]) => path.startsWith(prefix))
-    //   .forEach(([k, v]) => {
-    //     console.log(k, v, Typed.fromField(v))
-    //     typed.inner![k.slice(prefix.length)] = Typed.fromField(v)
-    //   })
+    //   .forEach(([k, v]) => typed.inner![k.slice(prefix.length)] = Typed.fromField(v))
     return Eval('object', fields, typed)
   }
   return Eval('object', fields, Typed.Object(fields)) as any
