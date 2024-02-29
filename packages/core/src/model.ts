@@ -54,7 +54,7 @@ export namespace Field {
 
   export function parse(source: string | Field): Field {
     if (typeof source === 'function') return { type: 'expr', expr: source }
-    if (typeof source !== 'string') return { initial: null, ...source }
+    if (typeof source !== 'string') return { initial: null, ...source, typed: Typed.fromField(source) }
 
     // parse string definition
     const capture = regexp.exec(source)
@@ -78,6 +78,8 @@ export namespace Field {
     } else if (args[0]) {
       field.length = +args[0]
     }
+
+    field.typed = Typed.fromField(field)
 
     return field
   }

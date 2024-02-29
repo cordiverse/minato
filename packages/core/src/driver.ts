@@ -85,11 +85,20 @@ export abstract class Driver<T = any> {
     }
 
     if (table instanceof Selection) {
-      if (!table.args[0].fields) return table.model
+      if (!table.args[0].fields) {
+        // const model = new Model('temp')
+        // model.fields = valueMap(table.model.fields, (field, key) => ({
+        //   type: 'expr',
+        //   typed: field?.typed,
+        // }))
+        // console.log('$CM', table.model.fields, model.fields)
+        // return model
+        return table.model
+      }
       const model = new Model('temp')
       model.fields = valueMap(table.args[0].fields, (expr, key) => ({
         type: 'expr',
-        typed: expr[Typed.expr],
+        typed: expr[Typed.symbol] ?? 'x',
       }))
       return model
     }
@@ -101,7 +110,8 @@ export abstract class Driver<T = any> {
         if (submodel.fields[field]!.deprecated) continue
         model.fields[`${key}.${field}`] = {
           type: 'expr',
-          expr: Eval('', [key, field], Typed.fromField(submodel.fields[field]!)),
+          expr: Eval('', [table[key].ref, field], Typed.fromField(submodel.fields[field]!)),
+          typed: Typed.fromField(submodel.fields[field]!) ?? 'y', // can omit
         }
       }
     }

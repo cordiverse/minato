@@ -1,8 +1,9 @@
-import { mapValues } from 'cosmokit'
+import { defineProperty, mapValues } from 'cosmokit'
 import { Field, Primary } from './model.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 
 export interface Typed<T = any> {
+  [Typed.symbol]?: true
   type: Typed.Type<T>
   field?: Field.Type<T>
   inner?: Typed.Type<T> extends 'object' ? { [key in keyof T]: Typed<T[key]> } : T extends (infer I)[] ? Typed<I> : never
@@ -10,7 +11,7 @@ export interface Typed<T = any> {
 
 export namespace Typed {
 
-  export const expr = Symbol('typed.expr')
+  export const symbol = Symbol.for('minato.typed')
 
   export type Type<T = any> =
     | T extends Primary ? 'primary'
@@ -27,45 +28,52 @@ export namespace Typed {
   export type Object<T = any> = Typed<T>
   export type List<T = any> = Typed<T[]>
 
-  export const Boolean: Typed<boolean> = { type: 'boolean' }
-  export const Number: Typed<number> = { type: 'number' }
-  export const String: Typed<string> = { type: 'string' }
-  export const $Date: Typed<Date> = { type: 'date' }
-  export const $Object: Typed<object> = { type: 'object' }
+  export const Boolean: Typed<boolean> = defineProperty({ type: 'boolean' }, symbol, true) as any
+  export const Number: Typed<number> = defineProperty({ type: 'number' }, symbol, true)
+  export const String: Typed<string> = defineProperty({ type: 'string' }, symbol, true)
+  export const $Date: Typed<Date> = defineProperty({ type: 'date' }, symbol, true)
+  export const $Object: Typed<object> = defineProperty({ type: 'object' }, symbol, true)
+  export const $List: Typed<any[]> = defineProperty({ type: 'list' }, symbol, true)
 
-  export const Object = <T extends object>(obj: T): Object<T> => ({
+  export const Object = <T extends object>(obj: T): Object<T> => defineProperty({
     type: 'object' as any,
     inner: mapValues(obj, (value) => transform(value)) as any,
-  })
-  export const List = <T>(type: Typed<T>): List<T> => ({
+  }, symbol, true)
+  export const List = <T>(type: Typed<T>): List<T> => defineProperty({
+    [symbol]: true,
     type: 'list' as any,
     inner: type as any,
-  })
+  }, symbol, true)
 
   export function fromPrimitive<T>(value: T): Typed<T> {
-    if (typeof value === 'number') return { type: 'number' } as any
-    else if (typeof value === 'string') return { type: 'string' } as any
-    else if (typeof value === 'boolean') return { type: 'boolean' } as any
-    else if (value instanceof Date) return { type: 'date' } as any
-    else if (Array.isArray(value)) return { type: 'object' } as any
-    else if (typeof value === 'object') return { type: 'object' } as any
+    if (typeof value === 'number') return Number as any
+    else if (typeof value === 'string') return String as any
+    else if (typeof value === 'boolean') return Boolean as any
+    else if (value instanceof Date) return $Date as any
+    else if (Array.isArray(value)) return $List as any
+    else if (typeof value === 'object') return $Object as any
     throw new TypeError(`invalid primitive: ${value}`)
   }
 
   export function fromField<T>(field: Field<T>): Typed {
     if (field.typed) return field.typed
-    else if (field.expr?.[expr]) return field.expr[expr]
-    // else if (field.type === 'primary') return { type: 'string' }
-    else if (Field.number.includes(field.type)) return { ...Number, field: field.type }
-    else if (Field.string.includes(field.type)) return { ...String, field: field.type }
-    else if (Field.boolean.includes(field.type)) return { ...Boolean, field: field.type }
-    else if (Field.date.includes(field.type)) return { ...$Date, field: field.type }
-    else if (Field.object.includes(field.type)) return { ...$Object, field: field.type, inner: undefined }
+    else if (field.expr?.[symbol]) return field.expr[symbol]
+    else if (field.type === 'primary') return defineProperty({ type: 'primary', field: field.type }, symbol, true)
+    else if (Field.number.includes(field.type)) return defineProperty({ ...Number, field: field.type }, symbol, true)
+    else if (Field.string.includes(field.type)) return defineProperty({ ...String, field: field.type }, symbol, true)
+    else if (Field.boolean.includes(field.type)) return defineProperty({ ...Boolean, field: field.type }, symbol, true)
+    else if (Field.date.includes(field.type)) return defineProperty({ ...$Date, field: field.type }, symbol, true)
+    else if (Field.object.includes(field.type)) return defineProperty({ ...$Object, field: field.type }, symbol, true) as any
     throw new TypeError(`invalid field: ${field}`)
   }
 
-  export function transform<T>(value: Eval.Expr<T> | T): Typed<T> {
-    if (isEvalExpr(value)) return value[expr]
+  export function transform<T>(value: Eval.Expr<T> | T | Typed<T>): Typed<T> {
+    if (isTyped(value)) return value
+    else if (isEvalExpr(value)) return value[symbol]
     else return fromPrimitive(value)
+  }
+
+  export function isTyped(value: any): value is Typed {
+    return value?.[symbol] === true
   }
 }

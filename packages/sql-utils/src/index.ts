@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from 'minato'
+import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection, Typed } from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -375,7 +375,12 @@ export class Builder {
     if (key in fields || !key.includes('.')) {
       if (this.state.sqlTypes?.[key] || this.state.sqlTypes?.[fullKey]) {
         this.state.sqlType = this.state.sqlTypes[key] || this.state.sqlTypes[fullKey]
+        // console.log('<', this.state.sqlType)
+        this.state.sqlType = fields[key]?.typed?.field ?? (fields[key]?.typed?.inner ? 'json' : 'raw')
+        // console.log('>', this.state.sqlType, fields[key])
+        if (!fields[key]) console.log('aaa', fields, key, prefix, fullKey)
       }
+
       return prefix + this.escapeId(key)
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
@@ -417,7 +422,7 @@ export class Builder {
         return this.escapeId(key)
       } else return res
     }
-
+    if (Object.keys(fields).length === 0) console.log(111, args, Object.keys(this.state.tables!), Object.keys(this.state.refTables || {}))
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
@@ -458,6 +463,7 @@ export class Builder {
 
   get(sel: Selection.Immutable, inline = false, group = false, addref = true) {
     const { args, table, query, ref, model } = sel
+    console.log('$get', sel.ref, Object.keys(this.state.tables!))
     // get prefix
     let prefix: string | undefined
     if (typeof table === 'string') {
@@ -474,9 +480,12 @@ export class Builder {
       if (!prefix) return
     } else {
       const sqlTypes: Dict<SQLType> = {}
+      console.log('$join', Object.values(table).map(x => x.ref))
       const joins: string[] = Object.entries(table).map(([key, table]) => {
-        const restore = this.saveState({ tables: table.tables })
-        const t = `${this.get(table, true, false, false)} AS ${this.escapeId(key)}`
+        const restore = this.saveState({ tables: { ...table.tables } })
+        console.log(123, Object.keys(this.state.tables || {}), Object.keys(this.state.refTables || {}))
+        const t = `${this.get(table, true, false, false)} AS ${this.escapeId(table.ref)}`
+        console.log(321, Object.keys(this.state.tables || {}), Object.keys(this.state.refTables || {}))
         for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
           sqlTypes[`${key}.${fieldKey}`] = fieldType
         }
@@ -494,16 +503,27 @@ export class Builder {
     if (filter === this.$false) return
 
     this.state.group = group || !!args[0].group
+    // const restore = (typeof table !== 'string' && !(table instanceof Selection)) ? this.saveState({
+    //   tables: { ...this.state.tables ?? {}, ...Object.fromEntries(Object.values(table).map(t => [t.ref, t.model])) },
+    // }) : () => null
+    console.log('$save', ref, Object.keys(this.state.tables!))
+    console.log(args[0].fields)
+    console.dir(model.fields, { depth: 10 })
     const sqlTypes: Dict<SQLType> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
-      .map(([key]) => [key, { $: [ref, key] }]))
+      .map(([key, field]) => field!.expr ? [key, field!.expr] : [key, Eval('', [ref, key], Typed.fromField(field!))]))
+    // .map(([key, field]) => [key, Eval('', [ref, key], Typed.fromField(field!))]))
     const keys = Object.entries(fields).map(([key, value]) => {
+      const typed = value![Typed.symbol]
       value = this.parseEval(value, false)
-      sqlTypes[key] = this.state.sqlType!
+      console.log('$typed', key, typed, this.state.sqlType)
+      sqlTypes[key] = typed.inner ? 'json' : typed.field // this.state.sqlType!
+      // sqlTypes[key] = typed.inner ? 'json' : typed.field // this.state.sqlType!
       return this.escapeId(key) === value ? this.escapeId(key) : `${value} AS ${this.escapeId(key)}`
     }).join(', ')
+    // restore()
 
     // get suffix
     let suffix = this.suffix(args[0])
@@ -549,8 +569,11 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial } = model.fields[key]!
-      const converter = (this.state.sqlTypes?.[key] ?? 'raw') === 'raw' ? this.types[type] : this.types[this.state.sqlTypes![key]]
+      const { type, initial, typed = {} } = model.fields[key]!
+      console.log('$load', key, type, typed, this.state.sqlTypes?.[key])
+
+      const converter = typed.field ? this.types[typed.field] : typed.inner ? this.types['json'] : this.types[type]
+      // const converter = (this.state.sqlTypes?.[key] ?? 'raw') === 'raw' ? this.types[type] : this.types[this.state.sqlTypes![key]]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)
