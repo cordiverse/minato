@@ -58,8 +58,8 @@ export = (({ Assertion }) => {
     }
 
     // buffer
-    if (expect instanceof Buffer) {
-      if (!(actual instanceof Buffer) || !expect.equals(actual)) {
+    if (Buffer.isBuffer(expect)) {
+      if (!(Buffer.isBuffer(actual)) || !expect.equals(actual)) {
         return formatError(inspect(expect), inspect(actual))
       }
       return
