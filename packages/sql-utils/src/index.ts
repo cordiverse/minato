@@ -31,15 +31,10 @@ export interface Transformer<S = any, T = any> {
 
 type SQLType = 'raw' | 'json'
 
-declare module 'minato' {
-  interface Field {
-    sqlType?: SQLType
-  }
-}
-
 interface State {
   table?: string
   sqlType?: SQLType
+  sqlTypes?: Dict<SQLType>
   group?: boolean
   tables?: Dict<Model>
   innerTables?: Dict<Model>
@@ -386,9 +381,9 @@ export class Builder {
     return `json_extract(${obj}, '$${path}')`
   }
 
-  protected transformKey(key: string, fields: {}, prefix: string, fullKey: string) {
+  protected transformKey(key: string, fields: Field.Config, prefix: string, ref: string) {
     if (key in fields || !key.includes('.')) {
-      this.state.sqlType = isSqlJson(fields[key]?.typed) ? 'json' : 'raw'
+      this.state.sqlType = this.state.sqlTypes?.[key] ?? (isSqlJson(fields[key]?.typed) ? 'json' : 'raw')
       return prefix + this.escapeId(key)
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
@@ -420,7 +415,7 @@ export class Builder {
     if (!(table in (this.state.tables || {})) && (table in (this.state.innerTables || {}))) {
       const fields = this.state.innerTables?.[table]?.fields || {}
       const res = (fields[key]?.expr) ? this.parseEvalExpr(fields[key]?.expr)
-        : this.transformKey(key, fields, `${this.escapeId(table)}.`, `${table}.${key}`)
+        : this.transformKey(key, fields, `${this.escapeId(table)}.`, table)
       return res
     }
 
@@ -428,7 +423,7 @@ export class Builder {
     if (!(table in (this.state.tables || {})) && (table in (this.state.refTables || {}))) {
       const fields = this.state.refTables?.[table]?.fields || {}
       const res = (fields[key]?.expr) ? this.parseEvalExpr(fields[key]?.expr)
-        : this.transformKey(key, fields, `${this.escapeId(table)}.`, `${table}.${key}`)
+        : this.transformKey(key, fields, `${this.escapeId(table)}.`, table)
       if (this.state.wrappedSubquery) {
         if (res in (this.state.refFields ?? {})) return this.state.refFields![res]
         const key = `minato_tvar_${randomId()}`
@@ -437,7 +432,7 @@ export class Builder {
         return this.escapeId(key)
       } else return res
     }
-    return this.transformKey(key, fields, prefix, `${table}.${key}`)
+    return this.transformKey(key, fields, prefix, table)
   }
 
   parseEval(expr: any, unquote: boolean = true): string {
@@ -505,17 +500,20 @@ export class Builder {
     if (filter === this.$false) return
 
     this.state.group = group || !!args[0].group
+    const sqlTypes: Dict<SQLType> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
-      .map(([key, field]) => field!.expr ? [key, field!.expr] : [key, Eval('', [ref, key], Typed.fromField(field!))]))
+      .map(([key, field]) => [key, field!.expr ? field!.expr : Eval('', [ref, key], Typed.fromField(field!))]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
+      sqlTypes![key] = this.state.sqlType!
       return this.escapeId(key) === value ? this.escapeId(key) : `${value} AS ${this.escapeId(key)}`
     }).join(', ')
 
     // get suffix
     let suffix = this.suffix(args[0])
+    this.state.sqlTypes = sqlTypes
 
     if (filter !== this.$true) {
       suffix = ` WHERE ${filter}` + suffix
@@ -559,7 +557,8 @@ export class Builder {
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial, typed = {} } = model.fields[key]!
-      const converter = typed.field ? this.types[typed.field] : typed.inner ? this.types['json'] : this.types[type]
+      const converter = this.state.sqlTypes?.[key] === 'json' ? this.types['json']
+        : typed.field ? this.types[typed.field] : typed.inner ? this.types['json'] : this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)

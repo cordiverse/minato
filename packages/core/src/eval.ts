@@ -136,7 +136,10 @@ function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval
 }
 
 type MultivariateCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S> ? (args: R, data: any) => S : never
-function multary<K extends keyof Eval.Static>(key: K, callback: MultivariateCallback<Eval.Static[K]>, type: Typed | ((...args: any[]) => Typed)): Eval.Static[K] {
+function multary<K extends keyof Eval.Static>(
+  key: K, callback: MultivariateCallback<Eval.Static[K]>,
+  type: Typed | ((...args: any[]) => Typed),
+): Eval.Static[K] {
   operators[`$${key}`] = callback
   return (...args: any) => Eval(key, args, typeof type === 'function' ? type(...args) : type) as any
 }
@@ -161,7 +164,8 @@ operators.$switch = (args, data) => {
 }
 
 // univeral
-Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen) : executeEval(data, vElse), (cond, vThen, vElse) => Typed.transform(vThen))
+Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)
+  : executeEval(data, vElse), (cond, vThen, vElse) => Typed.transform(vThen))
 Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback), (value) => Typed.transform(value))
 
 // arithmetic
