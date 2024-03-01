@@ -112,7 +112,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   private async _migrateVirtual(table: string) {
-    const { primary } = this.model(table)
+    const { primary, fields: modelFields } = this.model(table)
     if (Array.isArray(primary)) return
     const fields = this.db.collection('_fields')
     const meta: Dict = { table, field: primary }
@@ -123,8 +123,9 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     // Test the type of _id to get its possible preference
     if (!found) {
       const doc = await this.db.collection(table).findOne()
-      if (doc) virtual = typeof doc._id !== 'object'
-      else {
+      if (doc) {
+        virtual = typeof doc._id !== 'object' || (typeof primary === 'string' && modelFields[primary]?.type === 'primary')
+      } else {
         // Empty collection, just set meta and return
         fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
         this.logger.info('Successfully reconfigured table %s', table)

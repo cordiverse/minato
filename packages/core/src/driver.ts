@@ -62,6 +62,7 @@ export abstract class Driver<T = any> {
     this.logger = ctx.logger(this.constructor.name)
 
     ctx.on('ready', async () => {
+      await Promise.resolve()
       await this.start()
       ctx.model.drivers.default = this
       ctx.model.refresh()

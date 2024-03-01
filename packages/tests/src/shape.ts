@@ -57,6 +57,14 @@ export = (({ Assertion }) => {
       return
     }
 
+    // buffer
+    if (expect instanceof Buffer) {
+      if (!(actual instanceof Buffer) || !expect.equals(actual)) {
+        return formatError(inspect(expect), inspect(actual))
+      }
+      return
+    }
+
     if (actual === null) {
       const type = Object.prototype.toString.call(expect).slice(8, -1).toLowerCase()
       return formatError(`a ${type}`, 'null')
