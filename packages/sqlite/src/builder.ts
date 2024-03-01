@@ -16,21 +16,13 @@ export class SQLiteBuilder extends Builder {
     this.evalOperators.$log = ([left, right]) => isNullable(right)
       ? `log(${this.parseEval(left)})`
       : `log(${this.parseEval(left)}) / log(${this.parseEval(right)})`
-    this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => {
-      if (this.state.sqlType === 'json') {
-        this.state.sqlType = 'raw'
-        return `${this.jsonLength(value)}`
-      } else {
-        this.state.sqlType = 'raw'
-        return `iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
-      }
-    })
+    this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => this.isEncoded() ? this.jsonLength(value)
+      : this.asEncoded(`iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false))
     this.evalOperators.$number = (arg) => {
       const typed = Typed.transform(arg)
       const value = this.parseEval(arg)
       const res = Field.date.includes(typed.field!) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
-      this.state.sqlType = 'raw'
-      return `ifnull(${res}, 0)`
+      return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
 
     this.define<boolean, number>({
@@ -73,15 +65,19 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected jsonLength(value: string) {
-    return `json_array_length(${value})`
+    return this.asEncoded(`json_array_length(${value})`, false)
   }
 
   protected jsonContains(obj: string, value: string) {
-    return `json_array_contains(${obj}, ${value})`
+    return this.asEncoded(`json_array_contains(${obj}, ${value})`, false)
   }
 
-  protected jsonUnquote(value: string, pure: boolean = false) {
-    return value
+  // protected jsonUnquote(value: string, pure: boolean = false) {
+  //   return value
+  // }
+
+  protected encode(value: string, encoded: boolean, pure: boolean = false) {
+    return encoded ? super.encode(value, encoded, pure) : value
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
@@ -94,13 +90,11 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected groupArray(value: string) {
-    const res = this.state.sqlType === 'json' ? `('[' || group_concat(${value}) || ']')` : `('[' || group_concat(json_quote(${value})) || ']')`
-    this.state.sqlType = 'json'
-    return `ifnull(${res}, json_array())`
+    const res = this.isEncoded() ? `('[' || group_concat(${value}) || ']')` : `('[' || group_concat(json_quote(${value})) || ']')`
+    return this.asEncoded(`ifnull(${res}, json_array())`, true)
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.state.sqlType = 'raw'
-    return `json_extract(${obj}, '$${path}')`
+    return this.asEncoded(`json_extract(${obj}, '$${path}')`, false)
   }
 }

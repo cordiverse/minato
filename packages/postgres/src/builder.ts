@@ -86,8 +86,7 @@ export class PostgresBuilder extends Builder {
         const value = this.parseEval(arg)
         const typed = Typed.transform(arg)
         const res = Field.date.includes(typed.field!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
-        this.state.sqlType = 'raw'
-        return `coalesce(${res}, 0)`
+        return this.asEncoded(`coalesce(${res}, 0)`, false)
       },
 
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::double precision, 0)`, undefined, 'double precision'),
@@ -95,15 +94,9 @@ export class PostgresBuilder extends Builder {
       $min: (expr) => this.createAggr(expr, value => `min(${value})`, undefined, 'double precision'),
       $max: (expr) => this.createAggr(expr, value => `max(${value})`, undefined, 'double precision'),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})::integer`),
-      $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`, value => {
-        if (this.state.sqlType === 'json') {
-          this.state.sqlType = 'raw'
-          return `${this.jsonLength(value)}`
-        } else {
-          this.state.sqlType = 'raw'
-          return `COALESCE(ARRAY_LENGTH(${value}, 1), 0)`
-        }
-      }),
+      $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`,
+        value => this.isEncoded() ? this.jsonLength(value) : this.asEncoded(`COALESCE(ARRAY_LENGTH(${value}, 1), 0)`, false),
+      ),
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg, 'text')).join('||')}`,
     }
@@ -146,11 +139,11 @@ export class PostgresBuilder extends Builder {
   }
 
   parseEval(expr: any, outtype: boolean | string = false): string {
-    this.state.sqlType = 'raw'
+    this.state.encoded = false
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return outtype ? this.jsonUnquote(this.parseEvalExpr(expr), false, typeof outtype === 'string' ? outtype : undefined) : this.parseEvalExpr(expr)
+    return outtype ? this.encode(this.parseEvalExpr(expr), false, false, typeof outtype === 'string' ? outtype : undefined) : this.parseEvalExpr(expr)
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
@@ -168,56 +161,40 @@ export class PostgresBuilder extends Builder {
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, eltype?: string) {
     if (!this.state.group && !nonaggr) {
       const value = this.parseEval(expr, false)
-      return `(select ${aggr(this.jsonUnquote(this.escapeId('value'), true, eltype))} from jsonb_array_elements(${value}) ${randomId()})`
+      return `(select ${aggr(this.encode(this.escapeId('value'), false, true, eltype))} from jsonb_array_elements(${value}) ${randomId()})`
     } else {
       return super.createAggr(expr, aggr, nonaggr)
     }
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.state.sqlType = 'json'
-    return `jsonb_extract_path(${obj}, ${path.slice(1).replace('.', ',')})`
+    return this.asEncoded(`jsonb_extract_path(${obj}, ${path.slice(1).replace('.', ',')})`, true)
   }
 
   protected jsonLength(value: string) {
-    return `jsonb_array_length(${value})`
+    return this.asEncoded(`jsonb_array_length(${value})`, false)
   }
 
   protected jsonContains(obj: string, value: string) {
-    return `(${obj} @> ${value})`
+    return this.asEncoded(`(${obj} @> ${value})`, false)
   }
 
-  protected jsonUnquote(value: string, pure: boolean = false, type?: string) {
-    if (pure && type) return `(jsonb_build_object('v', ${value})->>'v')::${type}`
-    if (this.state.sqlType === 'json') {
-      this.state.sqlType = 'raw'
-      return `(jsonb_build_object('v', ${value})->>'v')::${type}`
-    }
-    return value
-  }
-
-  protected jsonQuote(value: string, pure: boolean = false) {
-    if (pure) return `to_jsonb(${value})`
-    if (this.state.sqlType !== 'json') {
-      this.state.sqlType = 'json'
-      return `to_jsonb(${value})`
-    }
-    return value
+  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: string) {
+    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value : encoded
+      ? `to_jsonb(${value})` : `(jsonb_build_object('v', ${value})->>'v')::${type}`, pure ? undefined : encoded)
   }
 
   protected groupObject(fields: any) {
     const parse = (expr) => {
       const value = this.parseEval(expr, false)
-      return this.state.sqlType === 'json' ? `to_jsonb(${value})` : `${value}`
+      return this.encode(`to_jsonb(${value})`, true)
     }
     const res = `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
-    this.state.sqlType = 'json'
-    return res
+    return this.asEncoded(res, true)
   }
 
   protected groupArray(value: string) {
-    this.state.sqlType = 'json'
-    return `coalesce(jsonb_agg(${value}), '[]'::jsonb)`
+    return this.asEncoded(`coalesce(jsonb_agg(${value}), '[]'::jsonb)`, true)
   }
 
   protected parseSelection(sel: Selection) {
@@ -285,7 +262,7 @@ export class PostgresBuilder extends Builder {
     for (const prop in item) {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')
-      value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${this.jsonQuote(this.parseEval(item[prop]), true)}, true)`
+      value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${this.encode(this.parseEval(item[prop]), true, true)}, true)`
     }
 
     if (value === valueInit) {

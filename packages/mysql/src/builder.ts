@@ -73,11 +73,10 @@ export class MySQLBuilder extends Builder {
     return super.escape(value, field)
   }
 
-  protected jsonQuote(value: string, pure: boolean = false) {
-    if (pure) return this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`
-    const res = this.state.sqlType === 'raw' ? (this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`) : value
-    this.state.sqlType = 'json'
-    return res
+  protected encode(value: string, encoded: boolean, pure: boolean = false) {
+    return this.asEncoded(encoded === this.isEncoded() && !pure ? value : encoded
+      ? (this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`)
+      : `json_unquote(${value})`, pure ? undefined : encoded)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
@@ -90,10 +89,9 @@ export class MySQLBuilder extends Builder {
 
   protected groupArray(value: string) {
     if (!this.compat.maria) return super.groupArray(value)
-    const res = this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
+    const res = this.isEncoded() ? `concat('[', group_concat(${value}), ']')`
       : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`
-    this.state.sqlType = 'json'
-    return `ifnull(${res}, json_array())`
+    return this.asEncoded(`ifnull(${res}, json_array())`, true)
   }
 
   protected parseSelection(sel: Selection) {
@@ -113,12 +111,11 @@ export class MySQLBuilder extends Builder {
     if (Object.keys(refFields ?? {}).length) {
       const funcname = `minato_tfunc_${randomId()}`
       const decls = Object.values(refFields ?? {}).map(x => `${x} JSON`).join(',')
-      const args = Object.keys(refFields ?? {}).map(x => this.state.refFields?.[x] ?? x).map(x => this.jsonQuote(x, true)).join(',')
-      query = this.state.sqlType === 'json' ? `ifnull(${query}, json_array())` : this.jsonQuote(query)
+      const args = Object.keys(refFields ?? {}).map(x => this.state.refFields?.[x] ?? x).map(x => this.encode(x, true, true)).join(',')
+      query = this.isEncoded() ? `ifnull(${query}, json_array())` : this.encode(query, true)
       this.prequeries.push(`DROP FUNCTION IF EXISTS ${funcname}`)
       this.prequeries.push(`CREATE FUNCTION ${funcname} (${decls}) RETURNS JSON DETERMINISTIC RETURN ${query}`)
-      this.state.sqlType = 'json'
-      return `${funcname}(${args})`
+      return this.asEncoded(`${funcname}(${args})`, true)
     } else return query
   }
 
