@@ -31,6 +31,12 @@ export interface Transformer<S = any, T = any> {
 
 type SQLType = 'raw' | 'json'
 
+declare module 'minato' {
+  interface Field {
+    sqlType?: SQLType
+  }
+}
+
 interface State {
   table?: string
   sqlType?: SQLType
@@ -431,7 +437,6 @@ export class Builder {
         return this.escapeId(key)
       } else return res
     }
-    // if (Object.keys(fields).length === 0) console.log(111, args, Object.keys(this.state.tables!), Object.keys(this.state.refTables || {}))
     return this.transformKey(key, fields, prefix, `${table}.${key}`)
   }
 
@@ -546,7 +551,7 @@ export class Builder {
   load(model: any, obj?: any) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
       const typed = Typed.transform(model)
-      const converter = this.types[typed.field ?? (typed.inner ? 'json' : 'raw')]
+      const converter = this.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
       return converter ? converter.load(obj) : obj
     }
 

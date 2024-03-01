@@ -65,7 +65,6 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    console.log('$createElementQuery', key, value)
     if (this.isJsonQuery(key)) {
       return this.jsonContains(key, this.quote(JSON.stringify(value)))
     } else {
