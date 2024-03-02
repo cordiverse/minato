@@ -1,4 +1,4 @@
-import { Database, Primary } from 'minato'
+import { $, Database, Primary } from 'minato'
 import { Context, ForkScope, Logger } from 'cordis'
 import { expect } from 'chai'
 import { } from 'chai-shape'
@@ -28,6 +28,7 @@ interface Bar {
   date?: Date
   time?: Date
   regex?: string
+  foreign?: Primary
 }
 
 interface Tables {
@@ -124,6 +125,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
       date: 'date',
       time: 'time',
       regex: 'string',
+      foreign: 'primary',
     })
 
     const table: Bar[] = []
@@ -144,5 +146,11 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await resetConfig(false)
     await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+
+    // query & eval
+    table.push(await database.create('temp2', { foreign: table[0].id }))
+    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp2', { foreign: table[0].id })).to.eventually.have.shape([table[3]])
+    await expect(database.get('temp2', row => $.eq(row.foreign, table[0].id!))).to.eventually.have.shape([table[3]])
   })
 })
