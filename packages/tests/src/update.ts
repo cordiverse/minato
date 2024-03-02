@@ -305,9 +305,18 @@ namespace OrmOperations {
   export const misc = function Misc(database: Database<Tables>) {
     it('date type', async () => {
       const table = await setup(database, 'temp2', barTable)
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
       await expect(database.eval('temp2', row => $.max(row.timestamp))).to.eventually.deep.eq(table[4].timestamp)
       await expect(database.eval('temp2', row => $.max(row.date))).to.eventually.deep.eq(table[5].date)
       await expect(database.eval('temp2', row => $.max(row.time))).to.eventually.deep.eq(table[6].time)
+
+      table.push(await database.create('temp2', {
+        text: 'date type',
+        timestamp: new Date(),
+        date: new Date(),
+        time: new Date(),
+      }))
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
     it('$.number on date types', async () => {

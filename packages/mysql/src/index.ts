@@ -3,7 +3,7 @@ import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
 import { escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Compat, DEFAULT_DATE, MySQLBuilder } from './builder'
+import { Compat, MySQLBuilder, timeRegex } from './builder'
 
 declare module 'mysql' {
   interface UntypedFieldInfo {
@@ -23,8 +23,8 @@ function getTypeDef({ type, length, precision, scale }: Field) {
   switch (type) {
     case 'float':
     case 'double':
-    case 'date':
-    case 'time': return type
+    case 'date': return type
+    case 'time': return 'time(3)'
     case 'timestamp': return 'datetime(3)'
     case 'boolean': return 'bit'
     case 'integer':
@@ -117,12 +117,11 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
         } else if (meta?.type === 'time') {
           const source = field.string()
           if (!source) return meta.initial
-          const time = new Date(DEFAULT_DATE)
-          const [h, m, s] = source.split(':')
-          time.setHours(parseInt(h))
-          time.setMinutes(parseInt(m))
-          time.setSeconds(parseInt(s))
-          return time
+          const date = new Date(0)
+          const parsed = timeRegex.exec(source)
+          if (!parsed) throw Error(`unexpected time value: ${source}`)
+          date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
+          return date
         }
 
         if (field.type === 'BIT') {

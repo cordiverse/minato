@@ -2,7 +2,7 @@ import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Dict, Time } from 'cosmokit'
 import { Field, isEvalExpr, Model, randomId, Selection } from 'minato'
 
-export const DEFAULT_DATE = new Date('1970-01-01')
+export const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
 export interface Compat {
   maria?: boolean
@@ -52,19 +52,18 @@ export class MySQLBuilder extends Builder {
       dump: value => value,
       load: (value) => {
         if (!value || typeof value === 'object') return value
-        const time = new Date(DEFAULT_DATE)
-        const [h, m, s] = value.split(':')
-        time.setHours(parseInt(h))
-        time.setMinutes(parseInt(m))
-        time.setSeconds(parseInt(s))
-        return time
+        const date = new Date(0)
+        const parsed = timeRegex.exec(value)
+        if (!parsed) throw Error(`unexpected time value: ${value}`)
+        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
+        return date
       },
     })
   }
 
   escape(value: any, field?: Field) {
     if (value instanceof Date) {
-      value = Time.template('yyyy-MM-dd hh:mm:ss', value)
+      value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
       value = value.source
     } else if (!field && !!value && typeof value === 'object') {

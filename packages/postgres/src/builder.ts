@@ -2,7 +2,7 @@ import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
 import { Field, isEvalExpr, Model, randomId, Selection, Typed } from 'minato'
 
-const timeRegex = /(\d+):(\d+):(\d+)/
+const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -109,7 +109,7 @@ export class PostgresBuilder extends Builder {
         const date = new Date(0)
         const parsed = timeRegex.exec(str)
         if (!parsed) throw Error(`unexpected time value: ${str}`)
-        date.setHours(+parsed[1], +parsed[2], +parsed[3])
+        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
         return date
       },
     })
