@@ -1,6 +1,6 @@
 import { Dict, isNullable, valueMap } from 'cosmokit'
 import { Eval, isComparable, Query, Selection } from 'minato'
-import { Filter, FilterOperators } from 'mongodb'
+import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
 function createFieldFilter(query: Query.FieldQuery, key: string) {
@@ -16,7 +16,7 @@ function createFieldFilter(query: Query.FieldQuery, key: string) {
 
 function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filter<any>[]) {
   // shorthand syntax
-  if (isComparable(query)) {
+  if (isComparable(query) || query instanceof ObjectId) {
     return { $eq: query }
   } else if (Array.isArray(query)) {
     if (!query.length) return false
@@ -236,7 +236,7 @@ export class Transformer {
   }
 
   public eval(expr: any, group?: Dict) {
-    if (isComparable(expr) || isNullable(expr)) {
+    if (isComparable(expr) || isNullable(expr) || expr instanceof ObjectId) {
       return expr
     }
 
