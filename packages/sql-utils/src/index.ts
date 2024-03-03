@@ -534,7 +534,7 @@ export class Builder {
 
   load(model: Model, obj: any): any
   load(typed: Typed | Eval.Expr, obj: any): any
-  load(model: any, obj?: any) {
+  load(model: Model | Typed | Eval.Expr, obj?: any) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
       const typed = Typed.transform(model)
       const converter = this.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
@@ -544,9 +544,9 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial, typed = {} } = model.fields[key]!
+      const { type, initial, typed } = model.fields[key]!
       const converter = this.isEncoded(key) ? this.types['json']
-        : typed.field ? this.types[typed.field] : typed.inner ? this.types['json'] : this.types[type]
+        : typed?.field ? this.types[typed.field] : typed?.inner ? this.types['json'] : this.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)

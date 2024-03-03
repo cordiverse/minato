@@ -312,7 +312,6 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async create(sel: Selection.Mutable, data: {}) {
     const { model, table } = sel
-    data = model.create(data)
     const { id } = this.#create(table, data)
     const { autoInc, primary } = model
     if (!autoInc || Array.isArray(primary)) return data as any

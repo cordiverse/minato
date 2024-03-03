@@ -150,10 +150,9 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
         throw new RuntimeError('duplicate-entry')
       }
     }
-    const copy = model.create(data)
-    store.push(copy)
+    store.push(data)
     this.$save(table)
-    return clone(copy)
+    return clone(data)
   }
 
   async upsert(sel: Selection.Mutable, data: any, keys: string[]) {

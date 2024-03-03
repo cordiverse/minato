@@ -488,6 +488,8 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       `ON DUPLICATE KEY UPDATE ${update}`,
     ].join(' '))
     const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
+    if (!result.message && !result.insertId) return { inserted: 0, matched: result.affectedRows, modified: 0 }
+    if (!result.message && result.affectedRows > 1) return { inserted: 0, matched: result.affectedRows / 2, modified: result.affectedRows / 2 }
     return { inserted: records - result.changedRows, matched: result.changedRows, modified: result.affectedRows - records }
   }
 
