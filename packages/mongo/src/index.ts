@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, Query, RuntimeError, Selection, Typed, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Transformer } from './utils'
 
@@ -13,6 +13,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   public db!: Db
   public mongo = this
 
+  private types: Dict<MongoDriver.Transformer> = Object.create(null)
   private session?: ClientSession
   private _createTasks: Dict<Promise<void>> = {}
 
@@ -281,6 +282,40 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     return new Transformer(Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
   }
 
+  define<S, T>(converter: MongoDriver.Transformer<S, T>) {
+    converter.types.forEach(type => this.types[type] = converter)
+  }
+
+  dump(model: Model, obj: any): any {
+    obj = model.format(obj)
+    const result = {}
+    for (const key in obj) {
+      const converter = this.types[model.fields[key]!?.type]
+      result[key] = converter ? converter.dump(obj[key]) : obj[key]
+    }
+    return model.parse(result)
+  }
+
+  load(model: Model, obj: any): any
+  load(typed: Typed | Eval.Expr, obj: any): any
+  load(model: Model | Typed | Eval.Expr, obj?: any) {
+    if (Typed.isTyped(model) || isEvalExpr(model)) {
+      const typed = Typed.transform(model)
+      const converter = this.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
+      return converter ? converter.load(obj) : obj
+    }
+
+    obj = model.format(obj)
+    const result = {}
+    for (const key in obj) {
+      if (!(key in model.fields)) continue
+      const { type, initial, typed } = model.fields[key]!
+      const converter = typed?.field ? this.types[typed.field] : this.types[type]
+      result[key] = converter ? converter.load(obj[key], initial) : obj[key]
+    }
+    return model.parse(result)
+  }
+
   async get(sel: Selection.Immutable) {
     const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
     if (!transformer) return []
@@ -288,7 +323,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
-      .toArray()
+      .toArray().then(rows => rows.map(row => this.load(sel.model, row)))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
@@ -299,7 +334,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
       .toArray()
-    return res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault
+    return this.load(expr, res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault)
   }
 
   async set(sel: Selection.Mutable, update: {}) {
@@ -370,7 +405,6 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       await this.ensurePrimary(table, [data])
 
       try {
-        data = model.create(data)
         const copy = this.unpatchVirtual(table, { ...data })
         const insertedId = (await coll.insertOne(copy, { session: this.session })).insertedId
         if (this.shouldFillPrimary(table)) {
@@ -471,6 +505,12 @@ See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-s
 }
 
 export namespace MongoDriver {
+  export interface Transformer<S = any, T = any> {
+    types: Field.Type<S>[]
+    dump: (value: S) => T | null
+    load: (value: T, initial?: S) => S | null
+  }
+
   export interface Config extends MongoClientOptions {
     username?: string
     password?: string
