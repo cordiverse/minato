@@ -36,6 +36,7 @@ function getTypeDef({ type, length, precision, scale }: Field) {
       return `${getIntegerType(length)} unsigned`
     case 'decimal': return `decimal(${precision}, ${scale}) unsigned`
     case 'char': return `char(${length || 255})`
+    case 'bigint':
     case 'string': return `varchar(${length || 255})`
     case 'text': return `text(${length || 65535})`
     case 'blob': return 'blob'

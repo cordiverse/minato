@@ -184,6 +184,12 @@ export class Builder {
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
+
+    this.define<BigInt, string>({
+      types: ['bigint'],
+      dump: value => value ? value.toString() : value as any,
+      load: value => value ? BigInt(value) : value as any,
+    })
   }
 
   protected unescapeId(value: string) {

@@ -110,6 +110,9 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
   } else if (type === 'timestamp') {
     def += 'timestamp with time zone'
     if (initial) def += ` DEFAULT ${formatTime(initial)}`
+  } else if (type === 'bigint') {
+    def += 'text'
+    if (initial) def += ` DEFAULT '${initial}'`
   } else if (type === 'blob') {
     def += 'bytea'
     if (initial) def += ` DEFAULT '\\x${initial.toString('hex')}'::bytea`

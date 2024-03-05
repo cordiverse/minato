@@ -94,7 +94,7 @@ export class Transformer {
   constructor(private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
     this.walkedKeys = []
 
-    this.evalOperators = {
+    this.evalOperators = Object.assign(Object.create(null), {
       $: (arg, group) => {
         if (typeof arg === 'string') {
           this.walkedKeys.push(this.getActualKey(arg))
@@ -109,8 +109,8 @@ export class Transformer {
         }
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
-      $array: (arg, group) => this.transformEvalExpr(arg),
-      $object: (arg, group) => this.transformEvalExpr(arg),
+
+      $object: (arg, group) => valueMap(arg as any, x => this.transformEvalExpr(x)),
 
       $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
 
@@ -179,7 +179,7 @@ export class Transformer {
         })
         return `$${name}`
       },
-    }
+    })
   }
 
   public createKey() {
@@ -200,6 +200,14 @@ export class Transformer {
     for (const key in expr) {
       if (this.evalOperators[key]) {
         return this.evalOperators[key](expr[key], group)
+      } else if (key?.startsWith('$') && Eval[key.slice(1)]) {
+        return valueMap(expr, (value) => {
+          if (Array.isArray(value)) {
+            return value.map(val => this.eval(val, group))
+          } else {
+            return this.eval(value, group)
+          }
+        })
       }
     }
 
@@ -207,13 +215,7 @@ export class Transformer {
       return expr.map(val => this.eval(val, group))
     }
 
-    return valueMap(expr as any, (value) => {
-      if (Array.isArray(value)) {
-        return value.map(val => this.eval(val, group))
-      } else {
-        return this.eval(value, group)
-      }
-    })
+    return expr
   }
 
   private transformAggr(expr: any) {

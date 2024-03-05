@@ -125,7 +125,7 @@ export namespace Eval {
 
 export const Eval = ((key, value, type) => defineProperty(defineProperty({ ['$' + key]: value }, kExpr, true), Typed.symbol, type)) as Eval.Static
 
-const operators = {} as Record<`$${keyof Eval.Static}`, (args: any, data: any) => any>
+const operators = Object.create(null) as Record<`$${keyof Eval.Static}`, (args: any, data: any) => any>
 
 operators['$'] = getRecursive
 

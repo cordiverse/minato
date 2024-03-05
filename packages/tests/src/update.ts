@@ -14,6 +14,7 @@ interface Bar {
   time?: Date
   bigtext?: string
   binary?: Buffer
+  bigint?: bigint
 }
 
 interface Baz {
@@ -40,6 +41,7 @@ function OrmOperations(database: Database<Tables>) {
     time: 'time',
     bigtext: 'text',
     binary: 'blob',
+    bigint: 'bigint',
   }, {
     autoInc: true,
   })
@@ -67,6 +69,8 @@ namespace OrmOperations {
     { id: 5, timestamp: magicBorn },
     { id: 6, date: magicBorn },
     { id: 7, time: new Date('1970-01-01 12:00:00') },
+    { id: 8, binary: Buffer.from('hello') },
+    { id: 9, bigint: BigInt(1e63) },
   ]
 
   const bazTable: Baz[] = [
@@ -97,8 +101,8 @@ namespace OrmOperations {
         await expect(database.get('temp2', { id: obj.id })).to.eventually.have.shape([obj])
       }
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
-      await database.remove('temp2', { id: 7 })
-      await expect(database.create('temp2', {})).to.eventually.have.shape({ id: 8 })
+      await database.remove('temp2', { id: table.length })
+      await expect(database.create('temp2', {})).to.eventually.have.shape({ id: table.length + 1 })
     })
 
     it('specify primary key', async () => {
@@ -134,6 +138,21 @@ namespace OrmOperations {
       const row = { id: 100, bigtext: Array(1000000).fill('a').join('') }
       await database.create('temp2', row)
       await expect(database.get('temp2', 100)).to.eventually.have.nested.property('0.bigtext', row.bigtext)
+    })
+
+    it('advanced type', async () => {
+      await setup(database, 'temp2', barTable)
+      await expect(database.create('temp2', { binary: Buffer.from('world') })).to.eventually.have.shape({ binary: Buffer.from('world') })
+      await expect(database.get('temp2', { binary: { $exists: true } })).to.eventually.have.shape([
+        { binary: Buffer.from('hello') },
+        { binary: Buffer.from('world') },
+      ])
+
+      await expect(database.create('temp2', { bigint: 1234567891011121314151617181920n })).to.eventually.have.shape({ bigint: 1234567891011121314151617181920n })
+      await expect(database.get('temp2', { bigint: { $exists: true } })).to.eventually.have.shape([
+        { bigint: BigInt(1e63) },
+        { bigint: 1234567891011121314151617181920n },
+      ])
     })
   }
 
@@ -177,7 +196,7 @@ namespace OrmOperations {
       const table = await setup(database, 'temp2', barTable)
       table[1].num = table[1].id * 2
       table[2].num = table[2].id * 2
-      await database.set('temp2', [table[1].id, table[2].id, 9], row => ({
+      await database.set('temp2', [table[1].id, table[2].id, 99], row => ({
         num: $.multiply(2, row.id),
       }))
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
@@ -188,6 +207,15 @@ namespace OrmOperations {
       row.bigtext = Array(1000000).fill('a').join('')
       await database.set('temp2', row.id, { bigtext: row.bigtext })
       await expect(database.get('temp2', row.id)).to.eventually.have.nested.property('0.bigtext', row.bigtext)
+    })
+
+    it('advanced type', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      const data1 = table.find(item => item.id === 1)!
+      data1.binary = Buffer.from('world')
+      data1.bigint = 1234567891011121314151617181920n
+      await database.set('temp2', { id: 1 }, { binary: Buffer.from('world'), bigint: 1234567891011121314151617181920n })
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
   }
 
@@ -227,15 +255,15 @@ namespace OrmOperations {
       const table = await setup(database, 'temp2', barTable)
       const data2 = table.find(item => item.id === 2)!
       const data3 = table.find(item => item.id === 3)!
-      const data9 = table.find(item => item.id === 9)
+      const data99 = table.find(item => item.id === 99)
       data2.num = data2.id * 2
       data3.num = data3.num! + 3
-      expect(data9).to.be.undefined
-      table.push({ id: 9, num: 999 })
+      expect(data99).to.be.undefined
+      table.push({ id: 99, num: 999 })
       await expect(database.upsert('temp2', row => [
         { id: 2, num: $.multiply(2, row.id) },
         { id: 3, num: $.add(3, row.num) },
-        { id: 9, num: 999 },
+        { id: 99, num: 999 },
       ])).to.eventually.have.shape({ inserted: 1, matched: 2 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
@@ -279,6 +307,19 @@ namespace OrmOperations {
         { ida: 11, idb: 'b', value: 'f' },
         { ida: 12, idb: 'c', value: 'd' },
       ], ['value'] as any)).to.eventually.have.shape({ inserted: 2, matched: 1 })
+    })
+
+    it('advanced type', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      const data1 = table.find(item => item.id === 1)!
+      data1.binary = Buffer.from('world')
+      data1.bigint = 1234567891011121314151617181920n
+      table.push({ binary: Buffer.from('foobar'), bigint: 1234567891011121314151617181920212223n } as any)
+      await database.upsert('temp2', [
+        { id: 1, binary: Buffer.from('world'), bigint: 1234567891011121314151617181920n },
+        { binary: Buffer.from('foobar'), bigint: 1234567891011121314151617181920212223n },
+      ])
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
   }
 
@@ -325,12 +366,6 @@ namespace OrmOperations {
         time: new Date(),
       }))
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
-    })
-
-    it('blob type', async () => {
-      await setup(database, 'temp2', barTable)
-      await expect(database.create('temp2', { binary: Buffer.from('hello') })).to.eventually.have.shape({ binary: Buffer.from('hello') })
-      await expect(database.get('temp2', { binary: { $exists: true} })).to.eventually.have.shape([{ binary: Buffer.from('hello') }])
     })
 
     it('$.number on date types', async () => {

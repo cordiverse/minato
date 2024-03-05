@@ -51,6 +51,12 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       dump: value => value,
       load: (value: any) => value.buffer,
     })
+
+    this.define<BigInt, string>({
+      types: ['bigint'],
+      dump: value => value ? value.toString() : value as any,
+      load: value => value ? BigInt(value) : value as any,
+    })
   }
 
   stop() {
@@ -293,13 +299,14 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   dump(model: Model, obj: any): any {
-    obj = model.format(obj)
+    // obj = model.format(obj)
     const result = {}
     for (const key in obj) {
       const converter = this.types[model.fields[key]!?.type]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
-    return model.parse(result)
+    // return model.parse(result)
+    return result
   }
 
   load(model: Model, obj: any): any
@@ -344,13 +351,14 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   async set(sel: Selection.Mutable, update: {}) {
-    const { query, table } = sel
+    const { query, table, model } = sel
     const filter = this.transformQuery(sel, query, table)
     if (!filter) return {}
     const coll = this.db.collection(table)
 
     const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-    const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
+    const $set = mapValues(this.dump(model, update),
+      (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
     const $unset = Object.entries($set)
       .filter(([_, value]) => typeof value === 'object')
       .map(([key, _]) => key)
@@ -403,15 +411,14 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   async create(sel: Selection.Mutable, data: any) {
-    const { table } = sel
+    const { table, model } = sel
     const lastTask = Promise.resolve(this._createTasks[table]).catch(noop)
     return this._createTasks[table] = lastTask.then(async () => {
-      const model = this.model(table)
       const coll = this.db.collection(table)
       await this.ensurePrimary(table, [data])
 
       try {
-        const copy = this.unpatchVirtual(table, { ...data })
+        const copy = this.unpatchVirtual(table, { ...this.dump(model, data) })
         const insertedId = (await coll.insertOne(copy, { session: this.session })).insertedId
         if (this.shouldFillPrimary(table)) {
           return { ...data, [model.primary as string]: insertedId }
@@ -444,7 +451,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
         if (item) {
           const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
-          const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
+          const override = this.dump(model, omit(pick(executeUpdate(item, update, ref), updateFields), keys))
           const query = this.transformQuery(sel, pick(item, keys), table)
           if (!query) continue
           bulk.find(query).updateOne({ $set: override })
@@ -454,7 +461,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       }
       await this.ensurePrimary(table, insertion)
       for (const update of insertion) {
-        const copy = executeUpdate(model.create(), update, ref)
+        const copy = this.dump(model, executeUpdate(model.create(), update, ref))
         bulk.insert(this.unpatchVirtual(table, copy))
       }
       const result = await bulk.execute({ session: this.session })
@@ -467,7 +474,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
         const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-        const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
+        const $set = mapValues(this.dump(model, update),
+          (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)

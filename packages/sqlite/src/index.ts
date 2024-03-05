@@ -20,6 +20,7 @@ function getTypeDef({ type }: Field) {
     case 'float':
     case 'double':
     case 'decimal': return `REAL`
+    case 'bigint':
     case 'char':
     case 'string':
     case 'text':
