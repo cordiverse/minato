@@ -1,5 +1,5 @@
 import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
-import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Model, RuntimeError, Selection, z } from 'minato'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
   static name = 'memory'
@@ -20,6 +20,17 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
 
   async stop() {
     // await this.#loader?.stop(this.#store)
+  }
+
+  transform(data: any, model?: Model) {
+    return model ? valueMap(data, (value, key) => {
+      const field = model.fields[key]
+      if (field?.deprecated) return
+      if (field?.type === 'blob') {
+        return Buffer.copyBytesFrom(value as Buffer)
+      }
+      return clone(value)
+    }) : clone(data)
   }
 
   table(sel: string | Selection.Immutable | Dict<string | Selection.Immutable>, env: any = {}): any[] {
@@ -152,7 +163,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     }
     store.push(data)
     this.$save(table)
-    return clone(data)
+    return this.transform(data, model)
   }
 
   async upsert(sel: Selection.Mutable, data: any, keys: string[]) {
@@ -185,7 +196,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
   }
 
   async withTransaction(callback: (session: this) => Promise<void>) {
-    const data = clone(this.#store)
+    const data = valueMap(this.#store, (rows, table) => rows.map(row => this.transform(row, table === '_fields' ? undefined : this.model(table))))
     await callback(this).then(undefined, (e) => {
       this.#store = data
       throw e

@@ -21,7 +21,7 @@ export namespace Typed {
     : T extends Date ? 'date'
     : T extends unknown[] ? 'list'
     : T extends object ? 'object'
-    : never
+    : 'expr'
 
   // export type Type = 'string' | 'number' | 'boolean' | 'object' | 'date'
 
@@ -34,6 +34,7 @@ export namespace Typed {
   export const $Date: Typed<Date> = defineProperty({ type: 'date' }, symbol, true)
   export const $Object: Typed<object> = defineProperty({ type: 'object' }, symbol, true)
   export const $List: Typed<any[]> = defineProperty({ type: 'list' }, symbol, true)
+  export const $Expr: Typed<any> = defineProperty({ type: 'expr' }, symbol, true)
 
   export const Object = <T extends object>(obj: T): Object<T> => defineProperty({
     type: 'object' as any,
@@ -64,7 +65,7 @@ export namespace Typed {
     else if (Field.boolean.includes(field.type)) return defineProperty({ ...Boolean, field: field.type }, symbol, true)
     else if (Field.date.includes(field.type)) return defineProperty({ ...$Date, field: field.type }, symbol, true)
     else if (Field.object.includes(field.type)) return defineProperty({ ...$Object, field: field.type }, symbol, true) as any
-    throw new TypeError(`invalid field: ${field}`)
+    else return defineProperty({ ...$Expr, field: field.type }, symbol, true) as any
   }
 
   export function transform<T>(value: Eval.Expr<T> | T | Typed<T>): Typed<T> {

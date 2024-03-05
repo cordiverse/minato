@@ -221,6 +221,8 @@ export class PostgresBuilder extends Builder {
       value = formatTime(value)
     } else if (value instanceof RegExp) {
       value = value.source
+    } else if (value instanceof Buffer) {
+      return `'\\x${value.toString('hex')}'::bytea`
     } else if (!field && !!value && typeof value === 'object') {
       return `${this.quote(JSON.stringify(value))}::jsonb`
     }

@@ -25,6 +25,7 @@ function getTypeDef({ type }: Field) {
     case 'text':
     case 'list':
     case 'json': return `TEXT`
+    case 'blob': return `BLOB`
   }
 }
 

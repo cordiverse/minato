@@ -45,6 +45,12 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       'writeConcern',
     ]))
     this.db = this.client.db(this.config.database)
+
+    this.define<Buffer, Buffer>({
+      types: ['blob'],
+      dump: value => value,
+      load: (value: any) => value.buffer,
+    })
   }
 
   stop() {

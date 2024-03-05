@@ -34,6 +34,7 @@ export namespace Field {
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
+    : T extends Buffer ? 'blob'
     : T extends unknown[] ? 'list' | 'json'
     : T extends object ? 'json'
     : 'expr'
