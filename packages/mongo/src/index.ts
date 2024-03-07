@@ -1,8 +1,8 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, isEvalExpr, Model, Query, RuntimeError, Selection, Typed, z } from 'minato'
+import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
-import { Transformer } from './utils'
+import { Builder } from './builder'
 
 const tempKey = '__temp_minato_mongo__'
 
@@ -13,7 +13,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   public db!: Db
   public mongo = this
 
-  private types: Dict<MongoDriver.Transformer> = Object.create(null)
+  private builder = new Builder([])
   private session?: ClientSession
   private _createTasks: Dict<Promise<void>> = {}
 
@@ -45,18 +45,6 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       'writeConcern',
     ]))
     this.db = this.client.db(this.config.database)
-
-    this.define<Buffer, Buffer>({
-      types: ['blob'],
-      dump: value => value,
-      load: (value: any) => value.buffer,
-    })
-
-    this.define<BigInt, string>({
-      types: ['bigint'],
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
-    })
   }
 
   stop() {
@@ -291,63 +279,28 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   private transformQuery(sel: Selection.Immutable, query: Query.Expr, table: string) {
-    return new Transformer(Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
-  }
-
-  define<S, T>(converter: MongoDriver.Transformer<S, T>) {
-    converter.types.forEach(type => this.types[type] = converter)
-  }
-
-  dump(model: Model, obj: any): any {
-    // obj = model.format(obj)
-    const result = {}
-    for (const key in obj) {
-      const converter = this.types[model.fields[key]!?.type]
-      result[key] = converter ? converter.dump(obj[key]) : obj[key]
-    }
-    // return model.parse(result)
-    return result
-  }
-
-  load(model: Model, obj: any): any
-  load(typed: Typed | Eval.Expr, obj: any): any
-  load(model: Model | Typed | Eval.Expr, obj?: any) {
-    if (Typed.isTyped(model) || isEvalExpr(model)) {
-      const typed = Typed.transform(model)
-      const converter = this.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
-      return converter ? converter.load(obj) : obj
-    }
-
-    obj = model.format(obj)
-    const result = {}
-    for (const key in obj) {
-      if (!(key in model.fields)) continue
-      const { type, initial, typed } = model.fields[key]!
-      const converter = typed?.field ? this.types[typed.field] : this.types[type]
-      result[key] = converter ? converter.load(obj[key], initial) : obj[key]
-    }
-    return model.parse(result)
+    return new Builder(Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
   }
 
   async get(sel: Selection.Immutable) {
-    const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
+    const transformer = new Builder(Object.keys(sel.tables)).select(sel)
     if (!transformer) return []
     this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
-      .toArray().then(rows => rows.map(row => this.load(sel.model, row)))
+      .toArray().then(rows => rows.map(row => this.builder.load(sel.model, row)))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
+    const transformer = new Builder(Object.keys(sel.tables)).select(sel)
     if (!transformer) return
     this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     const res = await this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
       .toArray()
-    return this.load(expr, res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault)
+    return this.builder.load(expr, res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault)
   }
 
   async set(sel: Selection.Mutable, update: {}) {
@@ -356,8 +309,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     if (!filter) return {}
     const coll = this.db.collection(table)
 
-    const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-    const $set = mapValues(this.dump(model, update),
+    const transformer = new Builder(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
+    const $set = mapValues(this.builder.dump(model, update),
       (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
     const $unset = Object.entries($set)
       .filter(([_, value]) => typeof value === 'object')
@@ -418,7 +371,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       await this.ensurePrimary(table, [data])
 
       try {
-        const copy = this.unpatchVirtual(table, { ...this.dump(model, data) })
+        const copy = this.unpatchVirtual(table, { ...this.builder.dump(model, data) })
         const insertedId = (await coll.insertOne(copy, { session: this.session })).insertedId
         if (this.shouldFillPrimary(table)) {
           return { ...data, [model.primary as string]: insertedId }
@@ -451,7 +404,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
         if (item) {
           const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
-          const override = this.dump(model, omit(pick(executeUpdate(item, update, ref), updateFields), keys))
+          const override = this.builder.dump(model, omit(pick(executeUpdate(item, update, ref), updateFields), keys))
           const query = this.transformQuery(sel, pick(item, keys), table)
           if (!query) continue
           bulk.find(query).updateOne({ $set: override })
@@ -461,7 +414,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       }
       await this.ensurePrimary(table, insertion)
       for (const update of insertion) {
-        const copy = this.dump(model, executeUpdate(model.create(), update, ref))
+        const copy = this.builder.dump(model, executeUpdate(model.create(), update, ref))
         bulk.insert(this.unpatchVirtual(table, copy))
       }
       const result = await bulk.execute({ session: this.session })
@@ -473,8 +426,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
-        const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-        const $set = mapValues(this.dump(model, update),
+        const transformer = new Builder(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
+        const $set = mapValues(this.builder.dump(model, update),
           (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
@@ -519,12 +472,6 @@ See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-s
 }
 
 export namespace MongoDriver {
-  export interface Transformer<S = any, T = any> {
-    types: Field.Type<S>[]
-    dump: (value: S) => T | null
-    load: (value: T, initial?: S) => S | null
-  }
-
   export interface Config extends MongoClientOptions {
     username?: string
     password?: string

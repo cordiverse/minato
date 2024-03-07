@@ -1,5 +1,5 @@
 import { Dict, isNullable, valueMap } from 'cosmokit'
-import { Eval, isComparable, Query, Selection } from 'minato'
+import { Eval, Field, isComparable, isEvalExpr, Model, Query, Selection, Typed } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -70,6 +70,12 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   return result
 }
 
+export interface Transformer<S = any, T = any> {
+  types: Field.Type<S>[]
+  dump: (value: S) => T | null
+  load: (value: T, initial?: S) => S | null
+}
+
 export type ExtractUnary<T> = T extends [infer U] ? U : T
 
 export type EvalOperators = {
@@ -78,7 +84,7 @@ export type EvalOperators = {
 
 const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count', '$length', '$array']
 
-export class Transformer {
+export class Builder {
   private counter = 0
   public table!: string
   public walkedKeys: string[] = []
@@ -89,6 +95,7 @@ export class Transformer {
   private refVirtualKeys: Dict<string> = {}
   public aggrDefault: any
 
+  private types: Dict<Transformer> = Object.create(null)
   private evalOperators: EvalOperators
 
   constructor(private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
@@ -124,6 +131,10 @@ export class Transformer {
       $power: (arg, group) => ({ $pow: arg.map(val => this.eval(val, group)) }),
       $random: (arg, group) => ({ $rand: {} }),
 
+      $cast: (arg, group) => {
+        const converter = this.types[arg[1]]
+        return converter ? converter.dump(arg[0]) : arg[0]
+      },
       $number: (arg, group) => {
         const value = this.eval(arg, group)
         return {
@@ -179,6 +190,18 @@ export class Transformer {
         })
         return `$${name}`
       },
+    })
+
+    this.define<Buffer, Buffer>({
+      types: ['blob'],
+      dump: value => value,
+      load: (value: any) => value.buffer,
+    })
+
+    this.define<BigInt, string>({
+      types: ['bigint'],
+      dump: value => value ? value.toString() : value as any,
+      load: value => value ? BigInt(value) : value as any,
     })
   }
 
@@ -366,7 +389,7 @@ export class Transformer {
   }
 
   protected createSubquery(sel: Selection.Immutable) {
-    const predecessor = new Transformer(Object.keys(sel.tables))
+    const predecessor = new Builder(Object.keys(sel.tables))
     predecessor.refTables = [...this.refTables, ...this.tables]
     predecessor.refVirtualKeys = this.refVirtualKeys
     return predecessor.select(sel)
@@ -431,5 +454,40 @@ export class Transformer {
       this.evalKey = $
     }
     return this
+  }
+
+  define<S, T>(converter: Transformer<S, T>) {
+    converter.types.forEach(type => this.types[type] = converter)
+  }
+
+  dump(model: Model, obj: any): any {
+    // obj = model.format(obj)
+    const result = {}
+    for (const key in obj) {
+      const converter = this.types[model.fields[key]!?.type]
+      result[key] = converter ? converter.dump(obj[key]) : obj[key]
+    }
+    // return model.parse(result)
+    return result
+  }
+
+  load(model: Model, obj: any): any
+  load(typed: Typed | Eval.Expr, obj: any): any
+  load(model: Model | Typed | Eval.Expr, obj?: any) {
+    if (Typed.isTyped(model) || isEvalExpr(model)) {
+      const typed = Typed.transform(model)
+      const converter = this.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
+      return converter ? converter.load(obj) : obj
+    }
+
+    obj = model.format(obj)
+    const result = {}
+    for (const key in obj) {
+      if (!(key in model.fields)) continue
+      const { type, initial, typed } = model.fields[key]!
+      const converter = typed?.field ? this.types[typed.field] : this.types[type]
+      result[key] = converter ? converter.load(obj[key], initial) : obj[key]
+    }
+    return model.parse(result)
   }
 }

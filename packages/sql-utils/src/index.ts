@@ -162,6 +162,7 @@ export class Builder {
       $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ' NOT'), false),
 
       // typecast
+      $cast: ([value, type]) => this.escape(value, type),
       $number: (arg) => {
         const value = this.parseEval(arg)
         const typed = Typed.transform(arg)
@@ -190,6 +191,12 @@ export class Builder {
       dump: value => value ? value.toString() : value as any,
       load: value => value ? BigInt(value) : value as any,
     })
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => JSON.stringify(value),
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
   }
 
   protected unescapeId(value: string) {
@@ -216,7 +223,7 @@ export class Builder {
 
   protected createElementQuery(key: string, value: any) {
     if (this.isJsonQuery(key)) {
-      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+      return this.jsonContains(key, this.escape(value, 'json'))
     } else {
       return `find_in_set(${this.escape(value)}, ${key})`
     }
@@ -533,7 +540,8 @@ export class Builder {
     obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      result[key] = this.stringify(obj[key], model.fields[key])
+      const converter = this.types[model.fields[key]?.type!]
+      result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     return result
   }
@@ -558,8 +566,12 @@ export class Builder {
     return model.parse(result)
   }
 
-  escape(value: any, field?: Field) {
-    value = this.stringify(value, field)
+  escape(value: any, field?: Field | Field.Type) {
+    const converter = field && this.types[typeof field === 'string' ? field : field?.type]
+    return this.escapePrimitive(converter ? converter.dump(value) : value)
+  }
+
+  protected escapePrimitive(value: any) {
     if (isNullable(value)) return 'NULL'
 
     switch (typeof value) {
@@ -581,12 +593,7 @@ export class Builder {
     return `"${value}"`
   }
 
-  stringify(value: any, field?: Field) {
-    const converter = this.types[field!?.type]
-    return converter ? converter.dump(value) : value
-  }
-
-  quote(value: string) {
+  protected quote(value: string) {
     this.escapeRegExp ??= new RegExp(`[${Object.values(this.escapeMap).join('')}]`, 'g')
     let chunkIndex = this.escapeRegExp.lastIndex = 0
     let escapedVal = ''

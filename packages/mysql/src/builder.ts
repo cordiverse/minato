@@ -41,12 +41,6 @@ export class MySQLBuilder extends Builder {
       load: value => value ? value.split(',') : [],
     })
 
-    this.define<object, string>({
-      types: ['json'],
-      dump: value => JSON.stringify(value),
-      load: value => typeof value === 'string' ? JSON.parse(value) : value,
-    })
-
     this.define<Date, any>({
       types: ['time'],
       dump: value => value,
@@ -61,17 +55,17 @@ export class MySQLBuilder extends Builder {
     })
   }
 
-  escape(value: any, field?: Field) {
+  protected escapePrimitive(value: any) {
     if (value instanceof Date) {
       value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
       value = value.source
     } else if (value instanceof Buffer) {
       return `X'${value.toString('hex')}'`
-    } else if (!field && !!value && typeof value === 'object') {
+    } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
-    return super.escape(value, field)
+    return super.escapePrimitive(value)
   }
 
   protected encode(value: string, encoded: boolean, pure: boolean = false) {
@@ -150,7 +144,7 @@ export class MySQLBuilder extends Builder {
     // json_set cannot create deeply nested property when non-exist
     // therefore we merge a layout to it
     if (Object.keys(jsonInit).length !== 0) {
-      value = `json_merge(${value}, ${this.quote(JSON.stringify(jsonInit))})`
+      value = `json_merge(${value}, ${this.escape(jsonInit, 'json')})`
     }
 
     for (const prop in item) {

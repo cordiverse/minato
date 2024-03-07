@@ -31,12 +31,6 @@ export class SQLiteBuilder extends Builder {
       load: (value) => !!value,
     })
 
-    this.define<object, string>({
-      types: ['json'],
-      dump: value => JSON.stringify(value),
-      load: (value, initial) => value ? JSON.parse(value) : initial,
-    })
-
     this.define<string[], string>({
       types: ['list'],
       dump: value => Array.isArray(value) ? value.join(',') : value,
@@ -56,16 +50,16 @@ export class SQLiteBuilder extends Builder {
     })
   }
 
-  escape(value: any, field?: Field) {
+  protected escapePrimitive(value: any) {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
     else if (value instanceof Buffer) return `X'${value.toString('hex')}'`
-    return super.escape(value, field)
+    return super.escapePrimitive(value)
   }
 
   protected createElementQuery(key: string, value: any) {
     if (this.isJsonQuery(key)) {
-      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+      return this.jsonContains(key, this.escape(value, 'json'))
     } else {
       return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
     }
