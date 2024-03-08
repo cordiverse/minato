@@ -43,7 +43,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   static name = 'sqlite'
 
   db!: init.Database
-  sql = new SQLiteBuilder()
+  sql = new SQLiteBuilder(this)
   beforeUnload?: () => void
 
   private _transactionTask?: Promise<void>
@@ -175,6 +175,42 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
     this.db.create_function('modulo', (left, right) => left % right)
     this.db.create_function('rand', () => Math.random())
+
+    this.define<boolean, number>({
+      types: ['boolean'],
+      dump: value => +value,
+      load: (value) => !!value,
+    })
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => JSON.stringify(value),
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
+
+    this.define<string[], string>({
+      types: ['list'],
+      dump: value => Array.isArray(value) ? value.join(',') : value,
+      load: (value) => value ? value.split(',') : [],
+    })
+
+    this.define<Date, number>({
+      types: ['date', 'time', 'timestamp'],
+      dump: value => value === null ? null : +new Date(value),
+      load: (value) => value === null ? null : new Date(value),
+    })
+
+    this.define<Buffer, Uint8Array>({
+      types: ['blob'],
+      dump: value => value,
+      load: value => value === null ? null : Buffer.from(value),
+    })
+
+    this.define<BigInt, string>({
+      types: ['bigint'],
+      dump: value => value ? value.toString() : value as any,
+      load: value => value ? BigInt(value) : value as any,
+    })
   }
 
   #joinKeys(keys?: string[]) {
@@ -261,7 +297,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async get(sel: Selection.Immutable) {
     const { model, tables } = sel
-    const builder = new SQLiteBuilder(tables)
+    const builder = new SQLiteBuilder(this, tables)
     const sql = builder.get(sel)
     if (!sql) return []
     const rows = this.#all(sql)
@@ -269,7 +305,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const builder = new SQLiteBuilder(sel.tables)
+    const builder = new SQLiteBuilder(this, sel.tables)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)

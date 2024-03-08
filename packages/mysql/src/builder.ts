@@ -1,8 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Dict, Time } from 'cosmokit'
-import { Field, isEvalExpr, Model, randomId, Selection } from 'minato'
-
-export const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
+import { Driver, Field, isEvalExpr, Model, randomId, Selection } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -27,32 +25,13 @@ export class MySQLBuilder extends Builder {
 
   prequeries: string[] = []
 
-  constructor(tables?: Dict<Model>, private compat: Compat = {}) {
-    super(tables)
+  constructor(protected driver: Driver, tables?: Dict<Model>, private compat: Compat = {}) {
+    super(driver, tables)
 
     this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
     this.evalOperators.$min = (expr) => this.createAggr(expr, value => `min(${value})`, undefined, value => `minato_cfunc_min(${value})`)
     this.evalOperators.$max = (expr) => this.createAggr(expr, value => `max(${value})`, undefined, value => `minato_cfunc_max(${value})`)
-
-    this.define<string[], string>({
-      types: ['list'],
-      dump: value => value.join(','),
-      load: value => value ? value.split(',') : [],
-    })
-
-    this.define<Date, any>({
-      types: ['time'],
-      dump: value => value,
-      load: (value) => {
-        if (!value || typeof value === 'object') return value
-        const date = new Date(0)
-        const parsed = timeRegex.exec(value)
-        if (!parsed) throw Error(`unexpected time value: ${value}`)
-        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
-        return date
-      },
-    })
   }
 
   protected escapePrimitive(value: any) {

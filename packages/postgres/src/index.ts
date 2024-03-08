@@ -2,7 +2,7 @@ import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
 import { isBracketed } from '@minatojs/sql-utils'
-import { formatTime, PostgresBuilder } from './builder'
+import { escapeId, formatTime, PostgresBuilder } from './builder'
 
 interface ColumnInfo {
   table_catalog: string
@@ -55,9 +55,7 @@ interface QueryTask {
   reject: (reason: unknown) => void
 }
 
-function escapeId(value: string) {
-  return '"' + value.replace(/"/g, '""') + '"'
-}
+const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
 function getTypeDef(field: Field & { autoInc?: boolean }) {
   let { type, length, precision, scale, initial, autoInc } = field
@@ -161,7 +159,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   static name = 'postgres'
 
   public postgres!: postgres.Sql
-  public sql = new PostgresBuilder()
+  public sql = new PostgresBuilder(this)
 
   private session?: postgres.TransactionSql
   private _counter = 0
@@ -182,6 +180,37 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
         },
       },
       ...this.config,
+    })
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => JSON.stringify(value),
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
+
+    this.define<string[], any>({
+      types: ['list'],
+      dump: value => '{' + value.join(',') + '}',
+      load: value => value,
+    })
+
+    this.define<Date, string>({
+      types: ['time'],
+      dump: date => date ? (typeof date === 'string' ? date : formatTime(date)) : null,
+      load: str => {
+        if (isNullable(str)) return str
+        const date = new Date(0)
+        const parsed = timeRegex.exec(str)
+        if (!parsed) throw Error(`unexpected time value: ${str}`)
+        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
+        return date
+      },
+    })
+
+    this.define<BigInt, string>({
+      types: ['bigint'],
+      dump: value => value ? value.toString() : value as any,
+      load: value => value ? BigInt(value) : value as any,
     })
   }
 
@@ -352,7 +381,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   }
 
   async get(sel: Selection.Immutable) {
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(this, sel.tables)
     const query = builder.get(sel)
     if (!query) return []
     return this.queue(query).then(data => {
@@ -361,7 +390,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>) {
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(this, sel.tables)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const ref = isBracketed(inner) ? sel.ref : ''
@@ -371,7 +400,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
   async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table, tables, ref } = sel
-    const builder = new PostgresBuilder(tables)
+    const builder = new PostgresBuilder(this, tables)
     const filter = builder.parseQuery(query)
     const { fields } = model
     if (filter === '0') return {}
@@ -388,7 +417,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   }
 
   async remove(sel: Selection.Mutable) {
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(this, sel.tables)
     const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return {}
     const { count } = await this.query(`DELETE FROM ${sel.table} WHERE ${query}`)
@@ -397,7 +426,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
   async create(sel: Selection.Mutable, data: any) {
     const { table, model } = sel
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(this, sel.tables)
     const formatted = builder.dump(model, data)
     const keys = Object.keys(formatted)
     const [row] = await this.query([
@@ -411,7 +440,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
-    const builder = new PostgresBuilder(tables)
+    const builder = new PostgresBuilder(this, tables)
     builder.upsert(table)
 
     this._counter = (this._counter + 1) % 256

@@ -2,7 +2,7 @@ import { Awaitable, Dict, valueMap } from 'cosmokit'
 import { Context, Logger } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
-import { Model } from './model.ts'
+import { Field, Model } from './model.ts'
 import { Database } from './database.ts'
 import { Typed } from './typed.ts'
 
@@ -32,6 +32,12 @@ export namespace Driver {
     modified?: number
     removed?: number
   }
+
+  export interface Transformer<S = any, T = any> {
+    types: Field.Type<S>[]
+    dump: (value: S) => T | null
+    load: (value: T, initial?: S) => S | null
+  }
 }
 
 export namespace Driver {
@@ -57,6 +63,7 @@ export abstract class Driver<T = any> {
 
   public database: Database
   public logger: Logger
+  public types: Dict<Driver.Transformer> = Object.create(null)
 
   constructor(public ctx: Context, public config: T) {
     this.database = ctx.model
@@ -126,6 +133,10 @@ export abstract class Driver<T = any> {
         }
       }))
     }).then(hooks.finalize).catch(hooks.error)
+  }
+
+  define<S, T>(converter: Driver.Transformer<S, T>) {
+    converter.types.forEach(type => this.types[type] = converter)
   }
 }
 

@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Typed } from 'minato'
+import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Typed } from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -22,12 +22,6 @@ export type ExtractUnary<T> = T extends [infer U] ? U : T
 export type EvalOperators = {
   [K in keyof Eval.Static as `$${K}`]?: (expr: ExtractUnary<Parameters<Eval.Static[K]>>) => string
 } & { $: (expr: any) => string }
-
-export interface Transformer<S = any, T = any> {
-  types: Field.Type<S>[]
-  dump: (value: S) => T | null
-  load: (value: T, initial?: S) => S | null
-}
 
 interface State {
   // current table ref in get()
@@ -52,7 +46,7 @@ interface State {
 export class Builder {
   protected escapeMap = {}
   protected escapeRegExp?: RegExp
-  protected types: Dict<Transformer> = {}
+  // protected types: Dict<Transformer> = {}
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
@@ -63,7 +57,7 @@ export class Builder {
 
   private readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
 
-  constructor(tables?: Dict<Model>) {
+  constructor(protected driver: Driver, tables?: Dict<Model>) {
     this.state.tables = tables
 
     this.queryOperators = {
@@ -186,17 +180,17 @@ export class Builder {
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
 
-    this.define<BigInt, string>({
-      types: ['bigint'],
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
-    })
+    // this.define<BigInt, string>({
+    //   types: ['bigint'],
+    //   dump: value => value ? value.toString() : value as any,
+    //   load: value => value ? BigInt(value) : value as any,
+    // })
 
-    this.define<object, string>({
-      types: ['json'],
-      dump: value => JSON.stringify(value),
-      load: value => typeof value === 'string' ? JSON.parse(value) : value,
-    })
+    // this.define<object, string>({
+    //   types: ['json'],
+    //   dump: value => JSON.stringify(value),
+    //   load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    // })
   }
 
   protected unescapeId(value: string) {
@@ -532,15 +526,11 @@ export class Builder {
     return inline ? `(${result})` : result
   }
 
-  define<S, T>(converter: Transformer<S, T>) {
-    converter.types.forEach(type => this.types[type] = converter)
-  }
-
   dump(model: Model, obj: any): any {
     obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      const converter = this.types[model.fields[key]?.type!]
+      const converter = this.driver.types[model.fields[key]?.type!]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     return result
@@ -551,7 +541,7 @@ export class Builder {
   load(model: Model | Typed | Eval.Expr, obj?: any) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
       const typed = Typed.transform(model)
-      const converter = this.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
+      const converter = this.driver.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
       return converter ? converter.load(obj) : obj
     }
 
@@ -559,15 +549,15 @@ export class Builder {
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial, typed } = model.fields[key]!
-      const converter = this.isEncoded(key) ? this.types['json']
-        : typed?.field ? this.types[typed.field] : typed?.inner ? this.types['json'] : this.types[type]
+      const converter = this.isEncoded(key) ? this.driver.types['json']
+        : typed?.field ? this.driver.types[typed.field] : typed?.inner ? this.driver.types['json'] : this.driver.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)
   }
 
   escape(value: any, field?: Field | Field.Type) {
-    const converter = field && this.types[typeof field === 'string' ? field : field?.type]
+    const converter = field && this.driver.types[typeof field === 'string' ? field : field?.type]
     return this.escapePrimitive(converter ? converter.dump(value) : value)
   }
 

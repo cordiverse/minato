@@ -13,7 +13,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   public db!: Db
   public mongo = this
 
-  private builder = new Builder([])
+  private builder = new Builder(this, [])
   private session?: ClientSession
   private _createTasks: Dict<Promise<void>> = {}
 
@@ -45,6 +45,18 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       'writeConcern',
     ]))
     this.db = this.client.db(this.config.database)
+
+    this.define<Buffer, Buffer>({
+      types: ['blob'],
+      dump: value => value,
+      load: (value: any) => value.buffer,
+    })
+
+    this.define<BigInt, string>({
+      types: ['bigint'],
+      dump: value => value ? value.toString() : value as any,
+      load: value => value ? BigInt(value) : value as any,
+    })
   }
 
   stop() {
@@ -279,11 +291,11 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   private transformQuery(sel: Selection.Immutable, query: Query.Expr, table: string) {
-    return new Builder(Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
+    return new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
   }
 
   async get(sel: Selection.Immutable) {
-    const transformer = new Builder(Object.keys(sel.tables)).select(sel)
+    const transformer = new Builder(this, Object.keys(sel.tables)).select(sel)
     if (!transformer) return []
     this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     return this.db
@@ -293,7 +305,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const transformer = new Builder(Object.keys(sel.tables)).select(sel)
+    const transformer = new Builder(this, Object.keys(sel.tables)).select(sel)
     if (!transformer) return
     this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     const res = await this.db
@@ -309,7 +321,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     if (!filter) return {}
     const coll = this.db.collection(table)
 
-    const transformer = new Builder(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
+    const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
     const $set = mapValues(this.builder.dump(model, update),
       (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
     const $unset = Object.entries($set)
@@ -426,7 +438,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
-        const transformer = new Builder(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
+        const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
         const $set = mapValues(this.builder.dump(model, update),
           (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
         const $unset = Object.entries($set)

@@ -3,13 +3,15 @@ import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
 import { escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Compat, MySQLBuilder, timeRegex } from './builder'
+import { Compat, MySQLBuilder } from './builder'
 
 declare module 'mysql' {
   interface UntypedFieldInfo {
     packet: UntypedFieldInfo
   }
 }
+
+const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
 function getIntegerType(length = 4) {
   if (length <= 1) return 'tinyint'
@@ -95,7 +97,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
   static name = 'mysql'
 
   public pool!: Pool
-  public sql = new MySQLBuilder()
+  public sql = new MySQLBuilder(this)
 
   private session?: PoolConnection
   private _compat: Compat = {}
@@ -146,6 +148,37 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     if (this._compat.mysql57 || this._compat.maria) {
       await this._setupCompatFunctions()
     }
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => JSON.stringify(value),
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
+
+    this.define<string[], string>({
+      types: ['list'],
+      dump: value => value.join(','),
+      load: value => value ? value.split(',') : [],
+    })
+
+    this.define<Date, any>({
+      types: ['time'],
+      dump: value => value,
+      load: (value) => {
+        if (!value || typeof value === 'object') return value
+        const date = new Date(0)
+        const parsed = timeRegex.exec(value)
+        if (!parsed) throw Error(`unexpected time value: ${value}`)
+        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
+        return date
+      },
+    })
+
+    this.define<BigInt, string>({
+      types: ['bigint'],
+      dump: value => value ? value.toString() : value as any,
+      load: value => value ? BigInt(value) : value as any,
+    })
   }
 
   async stop() {
@@ -377,7 +410,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   async get(sel: Selection.Immutable) {
     const { model, tables } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
     const sql = builder.get(sel)
     if (!sql) return []
     return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
@@ -386,7 +419,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const builder = new MySQLBuilder(sel.tables, this._compat)
+    const builder = new MySQLBuilder(this, sel.tables, this._compat)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const ref = isBracketed(inner) ? sel.ref : ''
@@ -398,7 +431,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
     const filter = builder.parseQuery(query)
     const { fields } = model
     if (filter === '0') return {}
@@ -416,7 +449,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   async remove(sel: Selection.Mutable) {
     const { query, table, tables } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
     const filter = builder.parseQuery(query)
     if (filter === '0') return {}
     const result = await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
@@ -439,7 +472,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
 
     const merged = {}
     const insertion = data.map((item) => {

@@ -1,14 +1,14 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { Dict, isNullable } from 'cosmokit'
-import { Field, Model, randomId, Typed } from 'minato'
+import { Driver, Field, Model, randomId, Typed } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
     "'": "''",
   }
 
-  constructor(tables?: Dict<Model>) {
-    super(tables)
+  constructor(protected driver: Driver, tables?: Dict<Model>) {
+    super(driver, tables)
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
@@ -24,30 +24,6 @@ export class SQLiteBuilder extends Builder {
       const res = Field.date.includes(typed.field!) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
-
-    this.define<boolean, number>({
-      types: ['boolean'],
-      dump: value => +value,
-      load: (value) => !!value,
-    })
-
-    this.define<string[], string>({
-      types: ['list'],
-      dump: value => Array.isArray(value) ? value.join(',') : value,
-      load: (value) => value ? value.split(',') : [],
-    })
-
-    this.define<Date, number>({
-      types: ['date', 'time', 'timestamp'],
-      dump: value => value === null ? null : +new Date(value),
-      load: (value) => value === null ? null : new Date(value),
-    })
-
-    this.define<Buffer, Uint8Array>({
-      types: ['blob'],
-      dump: value => value,
-      load: value => value === null ? null : Buffer.from(value),
-    })
   }
 
   protected escapePrimitive(value: any) {

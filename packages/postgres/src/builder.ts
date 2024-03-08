@@ -1,8 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Field, isEvalExpr, Model, randomId, Selection, Typed } from 'minato'
-
-const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
+import { Driver, Field, isEvalExpr, Model, randomId, Selection, Typed } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -38,8 +36,8 @@ export class PostgresBuilder extends Builder {
   protected $true = 'TRUE'
   protected $false = 'FALSE'
 
-  constructor(public tables?: Dict<Model>) {
-    super(tables)
+  constructor(protected driver: Driver, public tables?: Dict<Model>) {
+    super(driver, tables)
 
     this.queryOperators = {
       ...this.queryOperators,
@@ -100,25 +98,6 @@ export class PostgresBuilder extends Builder {
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg, 'text')).join('||')}`,
     }
-
-    this.define<Date, string>({
-      types: ['time'],
-      dump: date => date ? (typeof date === 'string' ? date : formatTime(date)) : null,
-      load: str => {
-        if (isNullable(str)) return str
-        const date = new Date(0)
-        const parsed = timeRegex.exec(str)
-        if (!parsed) throw Error(`unexpected time value: ${str}`)
-        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
-        return date
-      },
-    })
-
-    this.define<string[], any>({
-      types: ['list'],
-      dump: value => '{' + value.join(',') + '}',
-      load: value => value,
-    })
   }
 
   upsert(table: string) {
