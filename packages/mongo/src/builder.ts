@@ -441,7 +441,8 @@ export class Builder {
     // obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      const converter = this.driver.types[model.fields[key]!?.type]
+      const { type, typed } = model.fields[key] ?? {}
+      const converter = typed?.field ? this.driver.types[typed.field] : type && this.driver.types[type]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     // return model.parse(result)

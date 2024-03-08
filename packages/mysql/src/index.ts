@@ -36,7 +36,7 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'unsigned':
       if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
       return `${getIntegerType(length)} unsigned`
-    case 'decimal': return `decimal(${precision}, ${scale}) unsigned`
+    case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`
     case 'char': return `char(${length || 255})`
     case 'bigint':
     case 'string': return `varchar(${length || 255})`
@@ -230,7 +230,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
           def += (nullable ? ' ' : ' not ') + 'null'
         }
         // blob, text, geometry or json columns cannot have default values
-        if (initial && !typedef.startsWith('text')) {
+        if (initial && !typedef.startsWith('text') && !typedef.startsWith('blob')) {
           def += ' default ' + this.sql.escape(initial, fields[key])
         }
       }

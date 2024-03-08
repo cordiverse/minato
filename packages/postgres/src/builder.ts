@@ -202,6 +202,8 @@ export class PostgresBuilder extends Builder {
       value = value.source
     } else if (value instanceof Buffer) {
       return `'\\x${value.toString('hex')}'::bytea`
+    } else if (Array.isArray(value)) {
+      return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
     } else if (!!value && typeof value === 'object') {
       return `${this.quote(JSON.stringify(value))}::jsonb`
     }

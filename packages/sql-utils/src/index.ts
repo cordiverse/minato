@@ -179,18 +179,6 @@ export class Builder {
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
-
-    // this.define<BigInt, string>({
-    //   types: ['bigint'],
-    //   dump: value => value ? value.toString() : value as any,
-    //   load: value => value ? BigInt(value) : value as any,
-    // })
-
-    // this.define<object, string>({
-    //   types: ['json'],
-    //   dump: value => JSON.stringify(value),
-    //   load: value => typeof value === 'string' ? JSON.parse(value) : value,
-    // })
   }
 
   protected unescapeId(value: string) {
@@ -530,7 +518,8 @@ export class Builder {
     obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      const converter = this.driver.types[model.fields[key]?.type!]
+      const { type, typed } = model.fields[key] ?? {}
+      const converter = typed?.field ? this.driver.types[typed.field] : type && this.driver.types[type]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     return result
@@ -557,7 +546,13 @@ export class Builder {
   }
 
   escape(value: any, field?: Field | Field.Type) {
-    const converter = field && this.driver.types[typeof field === 'string' ? field : field?.type]
+    let converter: Driver.Transformer | undefined
+    if (typeof field === 'string') converter = this.driver.types[field]
+    else {
+      const { type, typed } = field ?? {}
+      converter = typed?.field ? this.driver.types[typed.field] : type && this.driver.types[type]
+    }
+
     return this.escapePrimitive(converter ? converter.dump(value) : value)
   }
 
@@ -583,7 +578,7 @@ export class Builder {
     return `"${value}"`
   }
 
-  protected quote(value: string) {
+  quote(value: string) {
     this.escapeRegExp ??= new RegExp(`[${Object.values(this.escapeMap).join('')}]`, 'g')
     let chunkIndex = this.escapeRegExp.lastIndex = 0
     let escapedVal = ''

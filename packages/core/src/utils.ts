@@ -1,4 +1,4 @@
-import { Intersect } from 'cosmokit'
+import { Intersect, is, mapValues } from 'cosmokit'
 import { Eval } from './eval.ts'
 
 export type Values<S> = S[keyof S]
@@ -50,4 +50,14 @@ export function randomId() {
 
 export function makeRegExp(source: string | RegExp) {
   return source instanceof RegExp ? source : new RegExp(source)
+}
+
+export function clone<T>(source: T): T
+export function clone(source: any) {
+  if (!source || typeof source !== 'object') return source
+  if (Buffer.isBuffer(source)) return Buffer.copyBytesFrom(source)
+  if (Array.isArray(source)) return source.map(clone)
+  if (is('Date', source)) return new Date(source.valueOf())
+  if (is('RegExp', source)) return new RegExp(source.source, source.flags)
+  return mapValues(source, clone)
 }

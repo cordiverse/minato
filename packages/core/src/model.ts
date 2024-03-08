@@ -1,8 +1,8 @@
-import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
+import { isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Selection } from './selection.ts'
-import { Flatten, Keys } from './utils.ts'
+import { clone, Flatten, Keys } from './utils.ts'
 import { Typed } from './typed.ts'
 
 export const Primary = Symbol('Primary')
@@ -43,7 +43,7 @@ export namespace Field {
   type Shorthand<S extends string> = S | `${S}(${any})`
 
   type MapField<O = any> = {
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]>
+    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | NewType<O[K]>
   }
 
   export type Extension<O = any> = MapField<Flatten<O>>
@@ -52,11 +52,17 @@ export namespace Field {
     [K in keyof O]?: Field<O[K]>
   }
 
+  export type NewType<S = any, T = any> = {
+    type: Type<T>
+    dump: (value: S) => T | null
+    load: (value: T, initial?: S) => S | null
+  } & Omit<Field<T>, 'type'>
+
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
   export function parse(source: string | Field): Field {
     if (typeof source === 'function') return { type: 'expr', expr: source }
-    if (typeof source !== 'string') return { initial: null, ...source, typed: Typed.fromField(source) }
+    if (typeof source !== 'string') return { initial: null, typed: Typed.fromField(source), ...source }
 
     // parse string definition
     const capture = regexp.exec(source)

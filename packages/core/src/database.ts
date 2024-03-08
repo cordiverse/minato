@@ -6,6 +6,7 @@ import { Field, Model } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
+import { Typed } from './typed.ts'
 
 type TableLike<S> = Keys<S> | Selection
 
@@ -90,7 +91,23 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     await this.prepareTasks[name]
     await Promise.resolve()
     if (!this.stashed.delete(name)) return
-    await this.getDriver(name)?.prepare(name)
+
+    const driver = this.getDriver(name)
+    if (!driver) return
+
+    const { fields } = driver.model(name)
+    Object.entries(fields).forEach(([key, field]: [string, Field.NewType]) => {
+      if (field.dump && field.load) {
+        field.typed!.field = `$${name}_$newtype_$${key}` as any
+        driver.define({
+          types: [field.typed!.field!],
+          dump: field.dump,
+          load: field.load,
+        })
+      }
+    })
+
+    await driver.prepare(name)
   }
 
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Partial<Model.Config<S[K]>> = {}) {
@@ -99,6 +116,12 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
       model = this.tables[name] = new Model(name)
       // model.driver = config.driver
     }
+    Object.entries(fields).forEach(([key, field]: [string, any]) => {
+      if (typeof field === 'object' && field.dump) {
+        field.typed = Typed.$Expr
+        field.typed.field = `$${name}_$newtype_$${key}`
+      }
+    })
     model.extend(fields, config)
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
