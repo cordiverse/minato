@@ -83,7 +83,6 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
     case 'date': return 'timestamp with time zone'
     case 'time': return 'time with time zone'
     case 'timestamp': return 'timestamp with time zone'
-    case 'bigint': return 'text'
     case 'blob': return 'bytea'
     default: throw new Error(`unsupported type: ${type}`)
   }
@@ -165,12 +164,6 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
         date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
         return date
       },
-    })
-
-    this.define<BigInt, string>({
-      types: ['bigint'],
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
     })
   }
 

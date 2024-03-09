@@ -46,7 +46,6 @@ interface State {
 export class Builder {
   protected escapeMap = {}
   protected escapeRegExp?: RegExp
-  // protected types: Dict<Transformer> = {}
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
@@ -156,7 +155,7 @@ export class Builder {
       $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ' NOT'), false),
 
       // typecast
-      $cast: ([value, type]) => this.escape(value, type),
+      $cast: ([value, type]) => this.escape(value, type as any),
       $number: (arg) => {
         const value = this.parseEval(arg)
         const typed = Typed.transform(arg)

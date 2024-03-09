@@ -51,12 +51,6 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       dump: value => value,
       load: (value: any) => value.buffer,
     })
-
-    this.define<BigInt, string>({
-      types: ['bigint'],
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
-    })
   }
 
   stop() {

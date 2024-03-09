@@ -38,7 +38,6 @@ function getTypeDef({ type, length, precision, scale }: Field) {
       return `${getIntegerType(length)} unsigned`
     case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`
     case 'char': return `char(${length || 255})`
-    case 'bigint':
     case 'string': return `varchar(${length || 255})`
     case 'text': return `text(${length || 65535})`
     case 'blob': return 'blob'
@@ -172,12 +171,6 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
         date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
         return date
       },
-    })
-
-    this.define<BigInt, string>({
-      types: ['bigint'],
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
     })
   }
 

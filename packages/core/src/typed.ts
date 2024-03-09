@@ -56,7 +56,8 @@ export namespace Typed {
     throw new TypeError(`invalid primitive: ${value}`)
   }
 
-  export function fromField<T>(field: Field<T>): Typed {
+  export function fromField<T>(field: Field<T> | Field.Type<T>): Typed {
+    if (typeof field === 'string') return defineProperty({ ...$Expr, field }, symbol, true)
     if (field.typed) return field.typed
     else if (field.expr?.[symbol]) return field.expr[symbol]
     else if (field.type === 'primary') return defineProperty({ type: 'primary', field: field.type }, symbol, true)
@@ -65,7 +66,7 @@ export namespace Typed {
     else if (Field.boolean.includes(field.type)) return defineProperty({ ...Boolean, field: field.type }, symbol, true)
     else if (Field.date.includes(field.type)) return defineProperty({ ...$Date, field: field.type }, symbol, true)
     else if (Field.object.includes(field.type)) return defineProperty({ ...$Object, field: field.type }, symbol, true) as any
-    else return defineProperty({ ...$Expr, field: field.type }, symbol, true) as any
+    else return defineProperty({ ...$Expr, field: field.type }, symbol, true)
   }
 
   export function transform<T>(value: Eval.Expr<T> | T | Typed<T>): Typed<T> {

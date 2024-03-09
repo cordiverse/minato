@@ -1,5 +1,11 @@
-import { $, Database } from 'minato'
+import { $, Database, Field } from 'minato'
 import { expect } from 'chai'
+
+declare module 'minato' {
+  interface Database {
+    bigint: Field.NewTypeName<bigint>
+  }
+}
 
 interface Bar {
   id: number
@@ -21,6 +27,13 @@ interface Tables {
 }
 
 function ModelOperations(database: Database<Tables>) {
+  database.bigint = database.define({
+    type: 'string',
+    dump: value => value ? value.toString() : value as any,
+    load: value => value ? BigInt(value) : value as any,
+    initial: 123n
+  })
+
   database.extend('dtypes', {
     id: 'unsigned',
     text: {
@@ -64,12 +77,7 @@ function ModelOperations(database: Database<Tables>) {
       type: 'blob',
       initial: Buffer.from('initial buffer')
     },
-    bigint: {
-      type: 'string',
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
-      initial: 123n
-    },
+    bigint: database.bigint,
   }, {
     autoInc: true,
   })
@@ -100,7 +108,13 @@ namespace ModelOperations {
     return result
   }
 
-  export const fields = function Fields(database: Database<Tables>) {
+  interface FieldsOptions {
+    cast?: boolean
+  }
+
+  export const fields = function Fields(database: Database<Tables>, options: FieldsOptions = {}) {
+    const { cast = true } = options
+
     it('basic', async () => {
       const table = await setup(database, 'dtypes', barTable)
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
@@ -108,6 +122,12 @@ namespace ModelOperations {
       await database.remove('dtypes', {})
       await database.upsert('dtypes', barTable)
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+    })
+
+    cast && it('cast newtype', async () => {
+      await setup(database, 'dtypes', barTable)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.cast(234n, database.bigint)))).to.eventually.have.length(0)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.cast(BigInt(1e63), database.bigint)))).to.eventually.have.length(1)
     })
   }
 }

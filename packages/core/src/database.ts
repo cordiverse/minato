@@ -1,6 +1,6 @@
 import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { Flatten, Indexable, Keys, Row } from './utils.ts'
+import { Flatten, Indexable, Keys, randomId, Row } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model } from './model.ts'
 import { Driver } from './driver.ts'
@@ -57,6 +57,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
   public migrating = false
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   private migrateTasks: Dict<Promise<void>> = Object.create(null)
+  private types: Dict<Field.NewType> = Object.create(null)
 
   private stashed = new Set<string>()
 
@@ -98,7 +99,6 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     const { fields } = driver.model(name)
     Object.entries(fields).forEach(([key, field]: [string, Field.NewType]) => {
       if (field.dump && field.load) {
-        field.typed!.field = `$${name}_$newtype_$${key}` as any
         driver.define({
           types: [field.typed!.field!],
           dump: field.dump,
@@ -117,14 +117,26 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
       // model.driver = config.driver
     }
     Object.entries(fields).forEach(([key, field]: [string, any]) => {
-      if (typeof field === 'object' && field.dump) {
-        field.typed = Typed.$Expr
-        field.typed.field = `$${name}_$newtype_$${key}`
+      if (typeof field === 'string' && this.types[field]) {
+        this.types[field].typed = Typed.fromField(field as any)
+        fields[key] = this.types[field]
+      } else if (typeof field === 'object' && field.load && field.dump) {
+        field.typed = Typed.fromField(`_newtype_${name}_$unnamed_${key}` as any)
+        fields[key] = field
       }
     })
     model.extend(fields, config)
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
+  }
+
+  define<S>(field: Field.NewType<S>): Field.NewTypeName<S> {
+    const name = '_define_' + randomId()
+    this[Context.current].effect(() => {
+      this.types[name] = field
+      return () => delete this.types[name]
+    })
+    return name as any
   }
 
   migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {

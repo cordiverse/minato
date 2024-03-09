@@ -35,15 +35,24 @@ export namespace Field {
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends Buffer ? 'blob'
-    : T extends BigInt ? 'bigint'
     : T extends unknown[] ? 'list' | 'json'
     : T extends object ? 'json'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
+  export type NewType<S = any, T = any> = {
+    type: Type<T>
+    dump: (value: S) => T | null
+    load: (value: T, initial?: S) => S | null
+    initial?: S
+  } & Omit<Field<T>, 'type' | 'initial'>
+
+  const NewType = Symbol('NewType')
+  export type NewTypeName<S = any> = string & { [NewType]: S }
+
   type MapField<O = any> = {
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | NewType<O[K]>
+    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | NewType<O[K]> | NewTypeName<O[K]>
   }
 
   export type Extension<O = any> = MapField<Flatten<O>>
@@ -51,12 +60,6 @@ export namespace Field {
   export type Config<O = any> = {
     [K in keyof O]?: Field<O[K]>
   }
-
-  export type NewType<S = any, T = any> = {
-    type: Type<T>
-    dump: (value: S) => T | null
-    load: (value: T, initial?: S) => S | null
-  } & Omit<Field<T>, 'type'>
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
 

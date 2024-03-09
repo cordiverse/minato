@@ -20,7 +20,6 @@ function getTypeDef({ type }: Field) {
     case 'float':
     case 'double':
     case 'decimal': return `REAL`
-    case 'bigint':
     case 'char':
     case 'string':
     case 'text':
@@ -204,12 +203,6 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       types: ['blob'],
       dump: value => value,
       load: value => value === null ? null : Buffer.from(value),
-    })
-
-    this.define<BigInt, string>({
-      types: ['bigint'],
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
     })
   }
 
