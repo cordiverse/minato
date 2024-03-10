@@ -222,7 +222,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     const selection = new Selection(this.driver, this)
     if (!callback) callback = (row) => Eval.array(Eval.object(row))
     const expr = this.resolveField(callback)
-    if (expr['$']) expr[Typed.kTyped] = Typed.List(expr[Typed.kTyped])
+    if (expr['$']) defineProperty(expr, Typed.kTyped, Typed.List(Typed.transform(expr)))
     return Eval.exec(selection._action('eval', expr))
   }
 

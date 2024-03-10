@@ -29,7 +29,7 @@ export namespace Eval {
     [kExpr]: true
     [kType]?: T
     [kAggr]?: A
-    [Typed.kTyped]: Typed<T>
+    [Typed.kTyped]?: Typed<T>
   }
 
   export type Any<A extends boolean = boolean> = Comparable | Expr<any, A>
@@ -257,7 +257,7 @@ Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data))
   : Array.from(executeEval(table, expr)), (expr) => Typed.List(Typed.transform(expr)))
 
-Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => expr.args[0][Typed.kTyped])
+Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Typed.transform(expr.args[0]))
 
 export { Eval as $ }
 

@@ -49,7 +49,7 @@ export namespace Typed {
 
   export function transform<T>(value: Eval.Expr<T> | T | Typed<T>): Typed<T> {
     if (isTyped(value)) return value
-    else if (isEvalExpr(value)) return value[kTyped]
+    else if (isEvalExpr(value)) return value[kTyped] ?? fromField('expr' as any)
     else return fromPrimitive(value)
   }
 

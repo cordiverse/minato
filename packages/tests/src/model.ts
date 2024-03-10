@@ -125,13 +125,13 @@ namespace ModelOperations {
     })
 
     it('primitive', async () => {
-      expect($.literal(123)[Typed.kTyped].type).to.equal(Typed.Number.type)
-      expect($.literal('abc')[Typed.kTyped].type).to.equal(Typed.String.type)
-      expect($.literal(true)[Typed.kTyped].type).to.equal(Typed.Boolean.type)
-      expect($.literal(new Date('1970-01-01'))[Typed.kTyped].type).to.equal('timestamp')
-      expect($.literal(Buffer.from('hello'))[Typed.kTyped].type).to.equal('blob')
-      expect($.literal([1, 2, 3])[Typed.kTyped].type).to.equal('json')
-      expect($.literal({ a: 1 })[Typed.kTyped].inner?.a.type).to.equal(Typed.Number.type)
+      expect(Typed.transform($.literal(123)).type).to.equal(Typed.Number.type)
+      expect(Typed.transform($.literal('abc')).type).to.equal(Typed.String.type)
+      expect(Typed.transform($.literal(true)).type).to.equal(Typed.Boolean.type)
+      expect(Typed.transform($.literal(new Date('1970-01-01'))).type).to.equal('timestamp')
+      expect(Typed.transform($.literal(Buffer.from('hello'))).type).to.equal('blob')
+      expect(Typed.transform($.literal([1, 2, 3])).type).to.equal('json')
+      expect(Typed.transform($.literal({ a: 1 })).inner?.a.type).to.equal(Typed.Number.type)
     })
 
     cast && it('cast newtype', async () => {
