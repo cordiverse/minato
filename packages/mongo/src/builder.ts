@@ -94,7 +94,7 @@ export class Builder {
   constructor(private driver: Driver, private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
     this.walkedKeys = []
 
-    this.evalOperators = Object.assign(Object.create(null), {
+    this.evalOperators = {
       $: (arg, group) => {
         if (typeof arg === 'string') {
           this.walkedKeys.push(this.getActualKey(arg))
@@ -124,8 +124,8 @@ export class Builder {
       $power: (arg, group) => ({ $pow: arg.map(val => this.eval(val, group)) }),
       $random: (arg, group) => ({ $rand: {} }),
 
-      $cast: (arg, group) => {
-        const converter = this.driver.types[arg[1]]
+      $literal: (arg, group) => {
+        const converter = this.driver.types[arg[1]!]
         return converter ? converter.dump(arg[0]) : arg[0]
       },
       $number: (arg, group) => {
@@ -183,7 +183,8 @@ export class Builder {
         })
         return `$${name}`
       },
-    })
+    }
+    this.evalOperators = Object.assign(Object.create(null), this.evalOperators)
   }
 
   public createKey() {

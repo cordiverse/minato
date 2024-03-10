@@ -155,7 +155,7 @@ export class Builder {
       $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ' NOT'), false),
 
       // typecast
-      $cast: ([value, type]) => this.escape(value, type as any),
+      $literal: ([value, type]) => this.escape(value, type as any),
       $number: (arg) => {
         const value = this.parseEval(arg)
         const typed = Typed.transform(arg)

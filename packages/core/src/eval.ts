@@ -105,7 +105,7 @@ export namespace Eval {
     not: Unary<boolean, boolean>
 
     // typecast
-    cast<T>(value: T, type: Field.Type<T> | Field.NewType<T>): Expr<T, false>
+    literal<T>(value: T, type?: Field.Type<T> | Field.NewType<T>): Expr<T, false>
     number: Unary<any, number>
 
     // aggregation / json
@@ -209,7 +209,10 @@ Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg))
 Eval.not = unary('not', (value, data) => !executeEval(data, value), Typed.Boolean)
 
 // typecast
-Eval.cast = multary('cast', () => { throw new TypeError('cast is not supported') }, (value, type) => Typed.fromField(type))
+Eval.literal = multary('literal', ([value, type]) => {
+  if (type) throw new TypeError('literal cast is not supported')
+  else return value
+}, (value, type) => type ? Typed.fromField(type) : Typed.transform(value))
 Eval.number = unary('number', (arg, data) => {
   const value = executeEval(data, arg)
   return value instanceof Date ? Math.floor(value.valueOf() / 1000) : Number(value)

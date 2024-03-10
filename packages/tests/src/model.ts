@@ -1,4 +1,4 @@
-import { $, Database } from 'minato'
+import { $, Database, Typed } from 'minato'
 import { expect } from 'chai'
 
 declare module 'minato' {
@@ -124,10 +124,20 @@ namespace ModelOperations {
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
     })
 
+    it('primitive', async () => {
+      expect($.literal(123)[Typed.kTyped].type).to.equal(Typed.Number.type)
+      expect($.literal('abc')[Typed.kTyped].type).to.equal(Typed.String.type)
+      expect($.literal(true)[Typed.kTyped].type).to.equal(Typed.Boolean.type)
+      expect($.literal(new Date('1970-01-01'))[Typed.kTyped].type).to.equal('timestamp')
+      expect($.literal(Buffer.from('hello'))[Typed.kTyped].type).to.equal('blob')
+      expect($.literal([1, 2, 3])[Typed.kTyped].type).to.equal('json')
+      expect($.literal({ a: 1 })[Typed.kTyped].inner?.a.type).to.equal(Typed.Number.type)
+    })
+
     cast && it('cast newtype', async () => {
       await setup(database, 'dtypes', barTable)
-      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.cast(234n, database.bigint)))).to.eventually.have.length(0)
-      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.cast(BigInt(1e63), database.bigint)))).to.eventually.have.length(1)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(234n, database.bigint)))).to.eventually.have.length(0)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), database.bigint)))).to.eventually.have.length(1)
     })
   }
 }
