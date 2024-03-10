@@ -83,7 +83,7 @@ export class PostgresBuilder extends Builder {
       $number: (arg) => {
         const value = this.parseEval(arg)
         const typed = Typed.transform(arg)
-        const res = Field.date.includes(typed.field!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
+        const res = Field.date.includes(typed.type!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
         return this.asEncoded(`coalesce(${res}, 0)`, false)
       },
 

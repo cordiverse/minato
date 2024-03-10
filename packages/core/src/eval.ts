@@ -29,7 +29,7 @@ export namespace Eval {
     [kExpr]: true
     [kType]?: T
     [kAggr]?: A
-    [Typed.symbol]: Typed<T>
+    [Typed.kTyped]: Typed<T>
   }
 
   export type Any<A extends boolean = boolean> = Comparable | Expr<any, A>
@@ -105,7 +105,7 @@ export namespace Eval {
     not: Unary<boolean, boolean>
 
     // typecast
-    cast<T>(value: T, type: Field.Type<T> | Field.NewTypeName<T>): Expr<T, false>
+    cast<T>(value: T, type: Field.Type<T> | Field.NewType<T>): Expr<T, false>
     number: Unary<any, number>
 
     // aggregation / json
@@ -124,7 +124,7 @@ export namespace Eval {
   }
 }
 
-export const Eval = ((key, value, type) => defineProperty(defineProperty({ ['$' + key]: value }, kExpr, true), Typed.symbol, type)) as Eval.Static
+export const Eval = ((key, value, type) => defineProperty(defineProperty({ ['$' + key]: value }, kExpr, true), Typed.kTyped, type)) as Eval.Static
 
 const operators = Object.create(null) as Record<`$${keyof Eval.Static}`, (args: any, data: any) => any>
 
@@ -246,9 +246,6 @@ Eval.object = (fields) => {
       .filter(([path]) => path.startsWith(prefix))
       .map(([k]) => [k.slice(prefix.length), fields[k.slice(prefix.length)]]))
     const typed = Typed.Object(fields)
-    // GetRecursive from Row already handles typed
-    // modelFields.filter(([path]) => path.startsWith(prefix))
-    //   .forEach(([k, v]) => typed.inner![k.slice(prefix.length)] = Typed.fromField(v))
     return Eval('object', fields, typed)
   }
   return Eval('object', fields, Typed.Object(fields)) as any
@@ -257,7 +254,7 @@ Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data))
   : Array.from(executeEval(table, expr)), (expr) => Typed.List(Typed.transform(expr)))
 
-Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => expr.args[0][Typed.symbol])
+Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => expr.args[0][Typed.kTyped])
 
 export { Eval as $ }
 

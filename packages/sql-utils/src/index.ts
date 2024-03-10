@@ -10,7 +10,7 @@ export function isBracketed(value: string) {
 }
 
 export function isSqlJson(typed?: Typed) {
-  return typed ? (typed.field === 'json' || !!typed.inner) : false
+  return typed ? (typed.type === 'json' || !!typed.inner) : false
 }
 
 export type QueryOperators = {
@@ -159,8 +159,8 @@ export class Builder {
       $number: (arg) => {
         const value = this.parseEval(arg)
         const typed = Typed.transform(arg)
-        const res = typed.field === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
-          : ['timestamp', 'date'].includes(typed.field!) ? `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))` : `(0+${value})`
+        const res = typed.type === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
+          : ['timestamp', 'date'].includes(typed.type!) ? `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))` : `(0+${value})`
         return this.asEncoded(`ifnull(${res}, 0)`, false)
       },
 
@@ -518,7 +518,7 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       const { type, typed } = model.fields[key] ?? {}
-      const converter = typed?.field ? this.driver.types[typed.field] : type && this.driver.types[type]
+      const converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     return result
@@ -529,7 +529,7 @@ export class Builder {
   load(model: Model | Typed | Eval.Expr, obj?: any) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
       const typed = Typed.transform(model)
-      const converter = this.driver.types[typed?.field ?? (typed?.inner ? 'json' : 'raw')]
+      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!]
       return converter ? converter.load(obj) : obj
     }
 
@@ -537,8 +537,8 @@ export class Builder {
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial, typed } = model.fields[key]!
-      const converter = this.isEncoded(key) ? this.driver.types['json']
-        : typed?.field ? this.driver.types[typed.field] : typed?.inner ? this.driver.types['json'] : this.driver.types[type]
+      const converter = (this.isEncoded(key) || typed?.inner) ? this.driver.types['json']
+        : typed?.type ? this.driver.types[typed.type] : this.driver.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
     }
     return model.parse(result)
@@ -549,7 +549,7 @@ export class Builder {
     if (typeof field === 'string') converter = this.driver.types[field]
     else {
       const { type, typed } = field ?? {}
-      converter = typed?.field ? this.driver.types[typed.field] : type && this.driver.types[type]
+      converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
     }
 
     return this.escapePrimitive(converter ? converter.dump(value) : value)

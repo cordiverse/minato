@@ -41,7 +41,7 @@ export namespace Field {
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
-  export type NewType<S = any, T = any> = {
+  export type Transform<S = any, T = any> = {
     type: Type<T>
     dump: (value: S) => T | null
     load: (value: T, initial?: S) => S | null
@@ -49,10 +49,10 @@ export namespace Field {
   } & Omit<Field<T>, 'type' | 'initial'>
 
   const NewType = Symbol('NewType')
-  export type NewTypeName<S = any> = string & { [NewType]: S }
+  export type NewType<S = any> = string & { [NewType]: S }
 
   type MapField<O = any> = {
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | NewType<O[K]> | NewTypeName<O[K]>
+    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | Transform<O[K]> | NewType<O[K]>
   }
 
   export type Extension<O = any> = MapField<Flatten<O>>

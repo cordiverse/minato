@@ -97,7 +97,7 @@ export abstract class Driver<T = any> {
       const model = new Model('temp')
       model.fields = valueMap(table.args[0].fields, (expr, key) => ({
         type: 'expr',
-        typed: expr[Typed.symbol],
+        typed: expr[Typed.kTyped],
       }))
       return model
     }

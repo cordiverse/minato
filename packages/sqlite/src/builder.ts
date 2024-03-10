@@ -21,7 +21,7 @@ export class SQLiteBuilder extends Builder {
     this.evalOperators.$number = (arg) => {
       const typed = Typed.transform(arg)
       const value = this.parseEval(arg)
-      const res = Field.date.includes(typed.field!) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
+      const res = Field.date.includes(typed.type!) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
   }

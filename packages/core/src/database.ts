@@ -57,7 +57,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
   public migrating = false
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   private migrateTasks: Dict<Promise<void>> = Object.create(null)
-  private types: Dict<Field.NewType> = Object.create(null)
+  private types: Dict<Field.Transform> = Object.create(null)
 
   private stashed = new Set<string>()
 
@@ -97,10 +97,10 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     if (!driver) return
 
     const { fields } = driver.model(name)
-    Object.entries(fields).forEach(([key, field]: [string, Field.NewType]) => {
+    Object.entries(fields).forEach(([key, field]: [string, Field.Transform]) => {
       if (field.dump && field.load) {
         driver.define({
-          types: [field.typed!.field!],
+          types: [field.typed!.type!],
           dump: field.dump,
           load: field.load,
         })
@@ -130,7 +130,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     ;(this.ctx as Context).emit('model', name)
   }
 
-  define<S>(field: Field.NewType<S>): Field.NewTypeName<S> {
+  define<S>(field: Field.Transform<S>): Field.NewType<S> {
     const name = '_define_' + randomId()
     this[Context.current].effect(() => {
       this.types[name] = field

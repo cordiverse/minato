@@ -1,9 +1,9 @@
-import { $, Database, Field } from 'minato'
+import { $, Database } from 'minato'
 import { expect } from 'chai'
 
 declare module 'minato' {
   interface Database {
-    bigint: Field.NewTypeName<bigint>
+    bigint: Field.NewType<bigint>
   }
 }
 
