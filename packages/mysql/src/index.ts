@@ -109,24 +109,6 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       charset: 'utf8mb4_general_ci',
       multipleStatements: true,
       typeCast: (field, next) => {
-        const { orgName, orgTable } = field.packet
-        const meta = this.database.tables[orgTable]?.fields[orgName]
-
-        if (Field.string.includes(meta!?.type)) {
-          return field.string()
-        } else if (meta?.type === 'json') {
-          const source = field.string()
-          return source ? JSON.parse(source) : meta.initial
-        } else if (meta?.type === 'time') {
-          const source = field.string()
-          if (!source) return meta.initial
-          const date = new Date(0)
-          const parsed = timeRegex.exec(source)
-          if (!parsed) throw Error(`unexpected time value: ${source}`)
-          date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
-          return date
-        }
-
         if (field.type === 'BIT') {
           return Boolean(field.buffer()?.readUInt8(0))
         } else {

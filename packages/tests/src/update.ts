@@ -43,8 +43,8 @@ function OrmOperations(database: Database<Tables>) {
     binary: 'blob',
     bigint: {
       type: 'string',
-      dump: value => value ? value.toString() : value as any,
-      load: value => value ? BigInt(value) : value as any,
+      dump: value => value ? value.toString() : value,
+      load: value => value ? BigInt(value) : value,
     },
   }, {
     autoInc: true,
