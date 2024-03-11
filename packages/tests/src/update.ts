@@ -272,6 +272,15 @@ namespace OrmOperations {
         { ida: 12, idb: 'c', value: 'd' },
       ], ['value'] as any)).to.eventually.have.shape({ inserted: 2, matched: 1 })
     })
+
+    it('set primary with autoInc', async () => {
+      await setup(database, 'temp2', barTable)
+      await expect(database.upsert('temp2', [
+        { id: 100, text: '100' },
+        { text: 'new row' },
+      ])).to.eventually.have.shape({ inserted: 2, matched: 0 })
+      await expect(database.get('temp2', {})).to.eventually.have.length(barTable.length + 2)
+    })
   }
 
   export const remove = function Remove(database: Database<Tables>) {

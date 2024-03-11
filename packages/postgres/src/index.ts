@@ -393,10 +393,17 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const { table, model } = sel
     const builder = new PostgresBuilder(sel.tables)
     const formatted = builder.dump(model, data)
+
     const keys = Object.keys(formatted)
     const [row] = await this.query([
       `INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})`,
-      `VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})`,
+      `VALUES (${keys.map(key => {
+        if (model.autoInc && key === model.primary) {
+          return `(select ${formatted[key]} from (select setval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}),
+          greatest(nextval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}))-1, ${formatted[key]}))))`
+        }
+        return builder.escape(formatted[key])
+      }).join(', ')})`,
       `RETURNING *`,
     ].join(' '))
     return builder.load(model, row)
@@ -436,11 +443,17 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const formatValues = (table: string, data: object, keys: readonly string[]) => {
       return keys.map((key) => {
         const field = this.database.tables[table]?.fields[key]
-        if (model.autoInc && model.primary === key && !data[key]) return 'default'
+        // if (model.autoInc && model.primary === key && !data[key]) return 'default'
+
+        if (model.autoInc && model.primary === key) {
+          return data[key] ? `(select ${data[key]} from (select setval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}),
+            greatest(nextval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}))-1, ${data[key]}))))`
+            : 'default'
+        }
         return builder.escape(data[key], field)
       }).join(', ')
     }
-
+    // console.log(updateFields, dataFields)
     const update = updateFields.map((field) => {
       const escaped = builder.escapeId(field)
       const branches: Dict<any[]> = {}
