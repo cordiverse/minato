@@ -235,7 +235,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       }
 
       if (!column) {
-        create.push(`${escapeId(key)} ${typedef} ${makeArray(primary).includes(key) || !nullable ? ' not null' : ' null'}`
+        create.push(`${escapeId(key)} ${typedef} ${makeArray(primary).includes(key) || !nullable ? 'not null' : 'null'}`
          + (initial ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
       } else if (shouldUpdate) {
         if (column.column_name !== key) rename.push(`RENAME ${escapeId(column.column_name)} TO ${escapeId(key)}`)
