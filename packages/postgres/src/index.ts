@@ -229,22 +229,18 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       const column = columns.find(info => legacy.includes(info.column_name))
       let shouldUpdate = column?.column_name !== key
       const field = Object.assign({ autoInc: primary.includes(key) && table.autoInc }, fields[key]!)
-      let typedef = getTypeDef(field)
+      const typedef = getTypeDef(field)
       if (column && !shouldUpdate) {
         shouldUpdate = isDefUpdated(field, column, typedef)
       }
 
-      if (makeArray(primary).includes(key)) {
-        typedef += ' not null'
-      } else {
-        typedef += (nullable ? ' ' : ' not ') + 'null'
-      }
-
       if (!column) {
-        create.push(`${escapeId(key)} ${typedef}` + (initial ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
+        create.push(`${escapeId(key)} ${typedef} ${makeArray(primary).includes(key) || !nullable ? ' not null' : ' null'}`
+         + (initial ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
       } else if (shouldUpdate) {
         if (column.column_name !== key) rename.push(`RENAME ${escapeId(column.column_name)} TO ${escapeId(key)}`)
         update.push(`ALTER ${escapeId(key)} TYPE ${typedef}`)
+        update.push(`ALTER ${escapeId(key)} ${makeArray(primary).includes(key) || !nullable ? 'SET' : 'DROP'} NOT NULL`)
         if (initial) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${this.sql.escape(initial, fields[key])}`)
       }
     }
