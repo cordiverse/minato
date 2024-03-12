@@ -223,15 +223,21 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     // field definitions
     for (const key in fields) {
-      const { deprecated, initial } = fields[key]!
+      const { deprecated, initial, nullable = true } = fields[key]!
       if (deprecated) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.column_name))
       let shouldUpdate = column?.column_name !== key
       const field = Object.assign({ autoInc: primary.includes(key) && table.autoInc }, fields[key]!)
-      const typedef = getTypeDef(field)
+      let typedef = getTypeDef(field)
       if (column && !shouldUpdate) {
         shouldUpdate = isDefUpdated(field, column, typedef)
+      }
+
+      if (makeArray(primary).includes(key)) {
+        typedef += ' not null'
+      } else {
+        typedef += (nullable ? ' ' : ' not ') + 'null'
       }
 
       if (!column) {

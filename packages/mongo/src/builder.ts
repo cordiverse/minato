@@ -439,14 +439,12 @@ export class Builder {
   }
 
   dump(model: Model, obj: any): any {
-    // obj = model.format(obj)
     const result = {}
     for (const key in obj) {
       const { type, typed } = model.fields[key] ?? {}
       const converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
-    // return model.parse(result)
     return result
   }
 
@@ -455,7 +453,7 @@ export class Builder {
   load(model: Model | Typed | Eval.Expr, obj?: any) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
       const typed = Typed.transform(model)
-      const converter = this.driver.types[typed?.type ?? (typed?.inner ? 'json' : 'raw')]
+      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!]
       return converter ? converter.load(obj) : obj
     }
 
