@@ -34,10 +34,10 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'unsigned':
       if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
       return `${getIntegerType(length)} unsigned`
-    case 'decimal': return `decimal(${precision}, ${scale}) unsigned`
+    case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`
     case 'char': return `char(${length || 255})`
-    case 'string': return `varchar(${length || 255})`
-    case 'text': return `text(${length || 65535})`
+    case 'string': return (length || 255) > 65536 ? 'longtext' : `varchar(${length || 255})`
+    case 'text': return (length || 255) > 65536 ? 'longtext' : `text(${length || 65535})`
     case 'list': return `text(${length || 65535})`
     case 'json': return `text(${length || 65535})`
     default: throw new Error(`unsupported type: ${type}`)

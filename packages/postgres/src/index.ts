@@ -1,8 +1,8 @@
 import postgres from 'postgres'
-import { Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
+import { Dict, difference, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
 import { isBracketed } from '@minatojs/sql-utils'
-import { formatTime, PostgresBuilder } from './builder'
+import { PostgresBuilder } from './builder'
 
 interface ColumnInfo {
   table_catalog: string
@@ -60,61 +60,34 @@ function escapeId(value: string) {
 }
 
 function getTypeDef(field: Field & { autoInc?: boolean }) {
-  let { type, length, precision, scale, initial, autoInc } = field
-  let def = ''
-  if (['primary', 'unsigned', 'integer'].includes(type)) {
-    length ||= 4
-    if (precision) def += `numeric(${precision}, ${scale ?? 0})`
-    else if (length <= 2) def += autoInc ? 'smallserial' : 'smallint'
-    else if (length <= 4) def += autoInc ? 'serial' : 'integer'
-    else {
-      if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
-      def += autoInc ? 'bigserial' : 'bigint'
-    }
-    if (!isNullable(initial) && !autoInc) def += ` DEFAULT ${initial}`
-  } else if (type === 'decimal') {
-    def += `numeric(${precision}, ${scale})`
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'float') {
-    def += 'real'
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'double') {
-    def += 'double precision'
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'char') {
-    def += `varchar(${length || 64}) `
-    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
-  } else if (type === 'string') {
-    def += `varchar(${length || 255})`
-    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
-  } else if (type === 'text') {
-    def += `text`
-    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
-  } else if (type === 'boolean') {
-    def += 'boolean'
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'list') {
-    def += 'text[]'
-    if (initial) {
-      def += ` DEFAULT ${transformArray(initial)}`
-    }
-  } else if (type === 'json') {
-    def += 'jsonb'
-    if (initial) def += ` DEFAULT '${JSON.stringify(initial)}'::JSONB` // TODO
-  } else if (type === 'date') {
-    def += 'timestamp with time zone'
-    if (initial) def += ` DEFAULT ${formatTime(initial)}`
-  } else if (type === 'time') {
-    def += 'time with time zone'
-    if (initial) def += ` DEFAULT ${formatTime(initial)}`
-  } else if (type === 'timestamp') {
-    def += 'timestamp with time zone'
-    if (initial) def += ` DEFAULT ${formatTime(initial)}`
-  } else throw new Error(`unsupported type: ${type}`)
-
-  return def
+  let { type, length, precision, scale, autoInc } = field
+  switch (type) {
+    case 'primary':
+    case 'unsigned':
+    case 'integer':
+      length ||= 4
+      if (precision) return `numeric(${precision}, ${scale ?? 0})`
+      else if (length <= 2) return autoInc ? 'smallserial' : 'smallint'
+      else if (length <= 4) return autoInc ? 'serial' : 'integer'
+      else {
+        if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+        return autoInc ? 'bigserial' : 'bigint'
+      }
+    case 'decimal': return `numeric(${precision ?? 10}, ${scale ?? 0})`
+    case 'float': return 'real'
+    case 'double': return 'double precision'
+    case 'char': return `varchar(${length || 64}) `
+    case 'string': return `varchar(${length || 255})`
+    case 'text': return `text`
+    case 'boolean': return 'boolean'
+    case 'list': return 'text[]'
+    case 'json': return 'jsonb'
+    case 'date': return 'timestamp with time zone'
+    case 'time': return 'time with time zone'
+    case 'timestamp': return 'timestamp with time zone'
+    default: throw new Error(`unsupported type: ${type}`)
+  }
 }
-
 function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, def: string) {
   const typename = def.split(/[ (]/)[0]
   if (field.autoInc) return false
@@ -145,10 +118,6 @@ function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, 
 
 function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
-}
-
-function transformArray(arr: any[]) {
-  return `ARRAY[${arr.map(v => `'${v.replace(/'/g, "''")}'`).join(',')}]::TEXT[]`
 }
 
 export class PostgresDriver extends Driver<PostgresDriver.Config> {
@@ -235,7 +204,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     // field definitions
     for (const key in fields) {
-      const { deprecated } = fields[key]!
+      const { deprecated, initial, nullable = true } = fields[key]!
       if (deprecated) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.column_name))
@@ -247,12 +216,13 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       }
 
       if (!column) {
-        create.push(`${escapeId(key)} ${typedef}`)
+        create.push(`${escapeId(key)} ${typedef} ${makeArray(primary).includes(key) || !nullable ? ' not null' : ' null'}`
+         + (initial ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
       } else if (shouldUpdate) {
         if (column.column_name !== key) rename.push(`RENAME ${escapeId(column.column_name)} TO ${escapeId(key)}`)
-        const [ctype, cdefault] = typedef.split('DEFAULT')
-        update.push(`ALTER ${escapeId(key)} TYPE ${ctype}`)
-        if (cdefault) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${cdefault}`)
+        update.push(`ALTER ${escapeId(key)} TYPE ${typedef}`)
+        update.push(`ALTER ${escapeId(key)} ${makeArray(primary).includes(key) || !nullable ? 'SET' : 'DROP'} NOT NULL`)
+        if (initial) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${this.sql.escape(initial, fields[key])}`)
       }
     }
 
