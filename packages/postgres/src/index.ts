@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, randomId, Selection, z } from 'minato'
 import { isBracketed } from '@minatojs/sql-utils'
 import { formatTime, PostgresBuilder } from './builder'
 
@@ -400,7 +400,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       `VALUES (${keys.map(key => {
         if (model.autoInc && key === model.primary) {
           return `(select ${formatted[key]} from (select setval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}),
-          greatest(nextval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}))-1, ${formatted[key]}))))`
+          greatest(nextval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}))-1, ${formatted[key]}))) ${randomId()})`
         }
         return builder.escape(formatted[key])
       }).join(', ')})`,
@@ -443,17 +443,15 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const formatValues = (table: string, data: object, keys: readonly string[]) => {
       return keys.map((key) => {
         const field = this.database.tables[table]?.fields[key]
-        // if (model.autoInc && model.primary === key && !data[key]) return 'default'
-
         if (model.autoInc && model.primary === key) {
           return data[key] ? `(select ${data[key]} from (select setval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}),
-            greatest(nextval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}))-1, ${data[key]}))))`
+            greatest(nextval(pg_get_serial_sequence(${builder.escapeKey(table)}, ${builder.escapeKey(key)}))-1, ${data[key]}))) ${randomId()})`
             : 'default'
         }
         return builder.escape(data[key], field)
       }).join(', ')
     }
-    // console.log(updateFields, dataFields)
+
     const update = updateFields.map((field) => {
       const escaped = builder.escapeId(field)
       const branches: Dict<any[]> = {}
