@@ -229,12 +229,15 @@ namespace OrmOperations {
       const data = [
         { id: table[0].id, text: 'thu' },
         { id: table[1].id, num: 1911 },
+        { id: table[2].id, list: ['2', '3', '3'] },
       ]
       data.forEach(update => {
         const index = table.findIndex(obj => obj.id === update.id)
         table[index] = merge(table[index], update)
       })
-      await expect(database.upsert('temp2', data)).to.eventually.have.shape({ inserted: 0, matched: 2 })
+      await expect(database.upsert('temp2', data.slice(0, 2))).to.eventually.have.shape({ inserted: 0, matched: 2 })
+      await expect(database.upsert('temp2', data.slice(0, 2))).to.eventually.have.shape({ inserted: 0, matched: 2 })
+      await expect(database.upsert('temp2', data.slice(2))).to.eventually.have.shape({ inserted: 0, matched: 1 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
@@ -243,9 +246,12 @@ namespace OrmOperations {
       const data = [
         { id: table[table.length - 1].id + 1, text: 'wm"lake' },
         { id: table[table.length - 1].id + 2, text: 'by\'tower' },
+        { id: table[table.length - 1].id + 3, text: 'over' },
       ]
       table.push(...data.map(bar => merge(database.tables.temp2.create(), bar)))
-      await expect(database.upsert('temp2', data)).to.eventually.have.shape({ inserted: 2, matched: 0 })
+      await expect(database.upsert('temp2', data.slice(0, 2))).to.eventually.have.shape({ inserted: 2, matched: 0 })
+      await expect(database.upsert('temp2', data.slice(2))).to.eventually.have.shape({ inserted: 1, matched: 0 })
+      await expect(database.upsert('temp2', data.slice(2))).to.eventually.have.shape({ inserted: 0, matched: 1 })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
