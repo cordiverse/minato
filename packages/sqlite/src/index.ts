@@ -195,14 +195,14 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     this.define<Date, number>({
       types: ['date', 'time', 'timestamp'],
-      dump: value => value === null ? null : +new Date(value),
-      load: (value) => value === null ? null : new Date(value),
+      dump: value => isNullable(value) ? value as any : +new Date(value),
+      load: (value) => isNullable(value) ? value : new Date(value),
     })
 
     this.define<Buffer, Uint8Array>({
       types: ['blob'],
       dump: value => value,
-      load: value => value === null ? null : Buffer.from(value),
+      load: value => value ? Buffer.from(value) : value,
     })
   }
 

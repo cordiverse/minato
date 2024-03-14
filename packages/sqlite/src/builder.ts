@@ -49,10 +49,6 @@ export class SQLiteBuilder extends Builder {
     return this.asEncoded(`json_array_contains(${obj}, ${value})`, false)
   }
 
-  // protected jsonUnquote(value: string, pure: boolean = false) {
-  //   return value
-  // }
-
   protected encode(value: string, encoded: boolean, pure: boolean = false) {
     return encoded ? super.encode(value, encoded, pure) : value
   }

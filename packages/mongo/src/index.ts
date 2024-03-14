@@ -49,7 +49,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     this.define<Buffer, Buffer>({
       types: ['blob'],
       dump: value => value,
-      load: (value: any) => value.buffer,
+      load: (value: any) => value ? value.buffer : value,
     })
   }
 
