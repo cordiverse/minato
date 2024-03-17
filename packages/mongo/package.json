@@ -1,9 +1,20 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "MongoDB Driver for Minato",
-  "main": "lib/index.js",
+  "type": "module",
+  "main": "lib/index.cjs",
+  "module": "lib/index.mjs",
   "typings": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/index.mjs",
+      "require": "./lib/index.cjs",
+      "types": "./lib/index.d.ts"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
   "files": [
     "lib",
     "src"
@@ -27,10 +38,10 @@
     "mongodb"
   ],
   "devDependencies": {
-    "@minatojs/tests": "^2.0.0"
+    "@minatojs/tests": "^2.0.1"
   },
   "peerDependencies": {
-    "minato": "^3.0.0"
+    "minato": "^3.0.1"
   },
   "dependencies": {
     "cosmokit": "^1.5.2",
