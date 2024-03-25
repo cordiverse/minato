@@ -165,7 +165,7 @@ namespace JsonTests {
     })
 
     it('$.object on cell', async () => {
-      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      const res = await database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('bar', {
           x: row => $.array($.object(row.foo)),
         })
@@ -179,7 +179,7 @@ namespace JsonTests {
     })
 
     it('$.array groupBy', async () => {
-      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      await expect(database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['foo'], {
           x: row => $.array(row.bar.obj.x),
           y: row => $.array(row.bar.obj.y),
@@ -191,7 +191,7 @@ namespace JsonTests {
         { foo: { id: 2, value: 2 }, x: [3], y: ['c'] },
       ])
 
-      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      await expect(database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['foo'], {
           x: row => $.array(row.bar.obj.x),
           y: row => $.array(row.bar.obj.y),
@@ -203,7 +203,7 @@ namespace JsonTests {
         ['c'],
       ])
 
-      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      await expect(database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['foo'], {
           x: row => $.array(row.bar.obj.x),
           y: row => $.array(row.bar.obj.y),
@@ -234,7 +234,7 @@ namespace JsonTests {
     })
 
     it('$.array in json', async () => {
-      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      const res = await database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
           bars: row => $.array($.object({
             value: row.bar.value,
@@ -278,7 +278,7 @@ namespace JsonTests {
     })
 
     it('$.array with expressions', async () => {
-      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      const res = await database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
           bars: row => $.array($.object({
             value: row.bar.value,
@@ -307,7 +307,7 @@ namespace JsonTests {
     })
 
     it('$.array nested', async () => {
-      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      const res = await database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .orderBy(row => row.foo.id)
         .groupBy('foo', {
           y: row => $.array(row.bar.obj.x),
@@ -325,7 +325,7 @@ namespace JsonTests {
     })
 
     it('non-aggr func', async () => {
-      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      const res = await database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', {
           y: row => $.array(row.bar.obj.x),
         })
@@ -346,7 +346,7 @@ namespace JsonTests {
     })
 
     it('non-aggr func inside aggr', async () => {
-      const res = await database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      const res = await database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .orderBy(row => row.foo.id)
         .groupBy('foo', {
           y: row => $.array(row.bar.obj.x),

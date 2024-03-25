@@ -114,8 +114,8 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     return new Selection(this.getDriver(table), table, query)
   }
 
-  join<U extends Join1.Input<S>>(tables: U, callback?: Join1.Predicate<S, U>, optional?: boolean[]): Selection<Join1.Output<S, U>>
-  join<U extends Join2.Input<S>>(tables: U, callback?: Join2.Predicate<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<Join2.Output<S, U>>
+  join<const U extends Join1.Input<S>>(tables: U, callback?: Join1.Predicate<S, U>, optional?: boolean[]): Selection<Join1.Output<S, U>>
+  join<const U extends Join2.Input<S>>(tables: U, callback?: Join2.Predicate<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<Join2.Output<S, U>>
   join(tables: any, query?: any, optional?: any) {
     if (Array.isArray(tables)) {
       const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, this.select(name)])))
