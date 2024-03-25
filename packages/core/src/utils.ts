@@ -55,9 +55,36 @@ export function makeRegExp(source: string | RegExp) {
 export function clone<T>(source: T): T
 export function clone(source: any) {
   if (!source || typeof source !== 'object') return source
-  if (Buffer.isBuffer(source)) return Buffer.copyBytesFrom(source)
+  if (isUint8Array(source)) return (hasGlobalBuffer && Buffer.isBuffer(source)) ? Buffer.copyBytesFrom(source) : source.slice()
   if (Array.isArray(source)) return source.map(clone)
   if (is('Date', source)) return new Date(source.valueOf())
   if (is('RegExp', source)) return new RegExp(source.source, source.flags)
   return mapValues(source, clone)
+}
+
+const hasGlobalBuffer = typeof Buffer === 'function' && Buffer.prototype?._isBuffer !== true
+
+export function isUint8Array(value: any): value is Uint8Array {
+  const stringTag = value?.[Symbol.toStringTag] ?? Object.prototype.toString.call(value)
+  return (hasGlobalBuffer && Buffer.isBuffer(value))
+    || ArrayBuffer.isView(value)
+    || ['ArrayBuffer', 'SharedArrayBuffer', '[object ArrayBuffer]', '[object SharedArrayBuffer]'].includes(stringTag)
+}
+
+export function Uint8ArrayToHex(source: Uint8Array) {
+  return (hasGlobalBuffer) ? toLocalUint8Array(source).toString('hex')
+    : Array.from(toLocalUint8Array(source), byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+export function toLocalUint8Array(source: Uint8Array) {
+  if (hasGlobalBuffer) {
+    return Buffer.isBuffer(source) ? Buffer.from(source)
+      : ArrayBuffer.isView(source) ? Buffer.from(source.buffer, source.byteOffset, source.byteLength)
+        : Buffer.from(source)
+  } else {
+    const stringTag = source?.[Symbol.toStringTag] ?? Object.prototype.toString.call(source)
+    return stringTag === 'Uint8Array' ? source
+      : ArrayBuffer.isView(source) ? new Uint8Array(source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength))
+        : new Uint8Array(source)
+  }
 }

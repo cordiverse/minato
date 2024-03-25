@@ -34,7 +34,7 @@ export namespace Typed {
     else if (typeof value === 'string') return String as any
     else if (typeof value === 'boolean') return Boolean as any
     else if (value instanceof Date) return fromField('timestamp' as any)
-    else if (Buffer.isBuffer(value)) return fromField('blob' as any)
+    else if (ArrayBuffer.isView(value)) return fromField('binary' as any)
     else if (Array.isArray(value)) return List(value.length ? fromPrimitive(value[0]) : undefined) as any
     else if (typeof value === 'object') return Object(value!) as any
     throw new TypeError(`invalid primitive: ${value}`)

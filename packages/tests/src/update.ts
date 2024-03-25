@@ -40,7 +40,7 @@ function OrmOperations(database: Database<Tables>) {
     date: 'date',
     time: 'time',
     bigtext: 'text',
-    binary: 'blob',
+    binary: 'binary',
     bigint: {
       type: 'string',
       dump: value => value ? value.toString() : value,

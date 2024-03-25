@@ -83,7 +83,7 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
     case 'date': return 'timestamp with time zone'
     case 'time': return 'time with time zone'
     case 'timestamp': return 'timestamp with time zone'
-    case 'blob': return 'bytea'
+    case 'binary': return 'bytea'
     default: throw new Error(`unsupported type: ${type}`)
   }
 }

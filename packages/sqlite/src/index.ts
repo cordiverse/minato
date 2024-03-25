@@ -1,5 +1,5 @@
 import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { clone, Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
+import { clone, Driver, Eval, executeUpdate, Field, Selection, toLocalUint8Array, z } from 'minato'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -25,7 +25,7 @@ function getTypeDef({ type }: Field) {
     case 'text':
     case 'list':
     case 'json': return `TEXT`
-    case 'blob': return `BLOB`
+    case 'binary': return `BLOB`
   }
 }
 
@@ -199,10 +199,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       load: (value) => isNullable(value) ? value : new Date(value),
     })
 
-    this.define<Buffer, Uint8Array>({
-      types: ['blob'],
+    this.define<Uint8Array, Uint8Array>({
+      types: ['binary'],
       dump: value => value,
-      load: value => value ? Buffer.from(value) : value,
+      load: value => value ? toLocalUint8Array(value) : value,
     })
   }
 

@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, Model, randomId, Selection, Typed } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Typed, Uint8ArrayToHex } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -200,8 +200,8 @@ export class PostgresBuilder extends Builder {
       value = formatTime(value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (value instanceof Buffer) {
-      return `'\\x${value.toString('hex')}'::bytea`
+    } else if (isUint8Array(value)) {
+      return `'\\x${Uint8ArrayToHex(value)}'::bytea`
     } else if (Array.isArray(value)) {
       return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
     } else if (!!value && typeof value === 'object') {

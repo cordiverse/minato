@@ -74,7 +74,7 @@ function ModelOperations(database: Database<Tables>) {
       initial: new Date('1970-01-01 12:00:00'),
     },
     binary: {
-      type: 'blob',
+      type: 'binary',
       initial: Buffer.from('initial buffer')
     },
     bigint: database.bigint,
@@ -129,7 +129,7 @@ namespace ModelOperations {
       expect(Typed.transform($.literal('abc')).type).to.equal(Typed.String.type)
       expect(Typed.transform($.literal(true)).type).to.equal(Typed.Boolean.type)
       expect(Typed.transform($.literal(new Date('1970-01-01'))).type).to.equal('timestamp')
-      expect(Typed.transform($.literal(Buffer.from('hello'))).type).to.equal('blob')
+      expect(Typed.transform($.literal(Buffer.from('hello'))).type).to.equal('binary')
       expect(Typed.transform($.literal([1, 2, 3])).type).to.equal('json')
       expect(Typed.transform($.literal({ a: 1 })).inner?.a.type).to.equal(Typed.Number.type)
     })

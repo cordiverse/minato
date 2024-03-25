@@ -40,7 +40,7 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'char': return `char(${length || 255})`
     case 'string': return (length || 255) > 65536 ? 'longtext' : `varchar(${length || 255})`
     case 'text': return (length || 255) > 65536 ? 'longtext' : `text(${length || 65535})`
-    case 'blob': return 'blob'
+    case 'binary': return 'blob'
     case 'list': return `text(${length || 65535})`
     case 'json': return `text(${length || 65535})`
     default: throw new Error(`unsupported type: ${type}`)
@@ -110,7 +110,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       multipleStatements: true,
       typeCast: (field, next) => {
         if (field.type === 'BIT') {
-          return Boolean(field.buffer()?.readUInt8(0))
+          return Boolean(field.buffer()?.readUint8(0))
         } else {
           return next()
         }

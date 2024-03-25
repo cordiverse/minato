@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { Dict, isNullable } from 'cosmokit'
-import { Driver, Field, Model, randomId, Typed } from 'minato'
+import { Driver, Field, isUint8Array, Model, randomId, Typed, Uint8ArrayToHex } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -29,7 +29,7 @@ export class SQLiteBuilder extends Builder {
   protected escapePrimitive(value: any) {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
-    else if (value instanceof Buffer) return `X'${value.toString('hex')}'`
+    else if (isUint8Array(value)) return `X'${Uint8ArrayToHex(value)}'`
     return super.escapePrimitive(value)
   }
 

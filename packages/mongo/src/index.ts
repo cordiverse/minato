@@ -46,8 +46,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     ]))
     this.db = this.client.db(this.config.database)
 
-    this.define<Buffer, Buffer>({
-      types: ['blob'],
+    this.define<Uint8Array, Uint8Array>({
+      types: ['binary'],
       dump: value => value,
       load: (value: any) => value ? value.buffer : value,
     })

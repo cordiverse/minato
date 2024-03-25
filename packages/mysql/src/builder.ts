@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Dict, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, Model, randomId, Selection } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Uint8ArrayToHex } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -39,8 +39,8 @@ export class MySQLBuilder extends Builder {
       value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (value instanceof Buffer) {
-      return `X'${value.toString('hex')}'`
+    } else if (isUint8Array(value)) {
+      return `X'${Uint8ArrayToHex(value)}'`
     } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
