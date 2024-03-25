@@ -15,6 +15,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   private session?: ClientSession
   private _createTasks: Dict<Promise<void>> = {}
+  private _ensureTask: Dict<Promise<void>> = {}
 
   private connectionStringFromConfig() {
     const {
@@ -349,15 +350,27 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const { primary, autoInc } = model
     if (typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary') {
       const missing = data.filter(item => !(primary in item))
-      if (!missing.length) return
-      const doc = await this.db.collection('_fields').findOneAndUpdate(
-        { table, field: primary },
-        { $inc: { autoInc: missing.length } },
-        { session: this.session, upsert: true },
-      )
-      for (let i = 1; i <= missing.length; i++) {
-        missing[i - 1][primary] = (doc!.autoInc ?? 0) + i
-      }
+      const lastTask = Promise.resolve(this._ensureTask[table]).catch(noop)
+      return this._ensureTask[table] = lastTask.then(async () => {
+        if (!missing.length) {
+          return this.db.collection('_fields').updateOne(
+            { table, field: primary },
+            [{ $set: { autoInc: { $max: ['$autoInc', Math.max(...data.map(x => x[primary]))] } } }],
+            { session: this.session, upsert: true },
+          ).then(noop)
+        }
+        const doc = await this.db.collection('_fields').findOne({ table, field: primary }, { session: this.session })
+        const exists = data.filter(item => item[primary] > (doc?.autoInc ?? 0)).map(x => x[primary]).sort()
+        let j = 0
+        for (let i = 1; i <= missing.length; i++) {
+          while (exists[j] && (doc?.autoInc ?? 0) + i + j >= exists[j]) j++
+          missing[i - 1][primary] = (doc?.autoInc ?? 0) + i + j
+        }
+        await this.db.collection('_fields').updateOne(
+          { table, field: primary },
+          { $set: { autoInc: (doc?.autoInc ?? 0) + missing.length + j } },
+          { session: this.session, upsert: true })
+      })
     }
   }
 
