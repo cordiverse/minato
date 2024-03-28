@@ -3,10 +3,12 @@ import { clone, Driver, Eval, executeUpdate, Field, Selection, toLocalUint8Array
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import init from '@minatojs/sql.js'
 import enUS from './locales/en-US.yml'
 import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
+import { pathToFileURL } from 'node:url'
 
 function getTypeDef({ type }: Field) {
   switch (type) {
@@ -157,7 +159,8 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
         ? process.env.KOISHI_BASE + '/' + file
         : isBrowser
           ? '/modules/@koishijs/plugin-database-sqlite/' + file
-          : require.resolve('@minatojs/sql.js/dist/' + file),
+          // @ts-ignore
+          : createRequire(import.meta.url || pathToFileURL(__filename).href).resolve('@minatojs/sql.js/dist/' + file),
     })
     if (!isBrowser || this.config.path === ':memory:') {
       this.db = new sqlite.Database(this.config.path)

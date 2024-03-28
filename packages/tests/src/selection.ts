@@ -277,18 +277,18 @@ namespace SelectionTests {
   export function join(database: Database<Tables>) {
     it('inner join', async () => {
       await expect(database
-        .join(['foo', 'bar'] as const)
+        .join(['foo', 'bar'])
         .execute()
       ).to.eventually.have.length(18)
 
       await expect(database
-        .join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.value, bar.value))
+        .join(['foo', 'bar'], (foo, bar) => $.eq(foo.value, bar.value))
         .execute()
       ).to.eventually.have.length(2)
     })
 
     it('group', async () => {
-      await expect(database.join(['foo', 'bar'] as const, (foo, bar) => $.eq(foo.id, bar.pid))
+      await expect(database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', { count: row => $.sum(row.bar.uid) })
         .orderBy(row => row.foo.id)
         .execute()).to.eventually.deep.equal([
@@ -330,7 +330,7 @@ namespace SelectionTests {
 
     it('aggregate', async () => {
       await expect(database
-        .join(['foo', 'bar'] as const)
+        .join(['foo', 'bar'])
         .execute(row => $.count(row.bar.id))
       ).to.eventually.equal(6)
     })
@@ -432,12 +432,12 @@ namespace SelectionTests {
       const one = database.select('bar').evaluate(row => $.subtract($.count(row.id), 5))
       const sel = x => database.select('bar').where(row => $.eq(x, row.uid)).evaluate(row => $.count(row.id))
       await expect(database
-        .join(['foo', 'bar'] as const, (foo, bar) => $.gt(foo.value, one))
+        .join(['foo', 'bar'], (foo, bar) => $.gt(foo.value, one))
         .execute()
       ).to.eventually.have.length(12)
 
       await expect(database
-        .join(['foo', 'bar'] as const, (foo, bar) => $.lt(foo.value, sel(foo.id)))
+        .join(['foo', 'bar'], (foo, bar) => $.lt(foo.value, sel(foo.id)))
         .execute()
       ).to.eventually.have.length(6)
     })
