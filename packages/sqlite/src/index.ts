@@ -1,5 +1,5 @@
-import { clone, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
+import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
+import { clone, Driver, Eval, executeUpdate, Field, Selection, toLocalUint8Array, z } from 'minato'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -27,6 +27,7 @@ function getTypeDef({ type }: Field) {
     case 'text':
     case 'list':
     case 'json': return `TEXT`
+    case 'binary': return `BLOB`
   }
 }
 
@@ -43,7 +44,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   static name = 'sqlite'
 
   db!: init.Database
-  sql = new SQLiteBuilder()
+  sql = new SQLiteBuilder(this)
   beforeUnload?: () => void
 
   private _transactionTask?: Promise<void>
@@ -176,6 +177,36 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
     this.db.create_function('modulo', (left, right) => left % right)
     this.db.create_function('rand', () => Math.random())
+
+    this.define<boolean, number>({
+      types: ['boolean'],
+      dump: value => +value,
+      load: (value) => !!value,
+    })
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => JSON.stringify(value),
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
+
+    this.define<string[], string>({
+      types: ['list'],
+      dump: value => Array.isArray(value) ? value.join(',') : value,
+      load: value => value ? value.split(',') : [],
+    })
+
+    this.define<Date, number>({
+      types: ['date', 'time', 'timestamp'],
+      dump: value => isNullable(value) ? value as any : +new Date(value),
+      load: value => isNullable(value) ? value : new Date(value),
+    })
+
+    this.define<Uint8Array, Uint8Array>({
+      types: ['binary'],
+      dump: value => value,
+      load: value => value ? toLocalUint8Array(value) : value,
+    })
   }
 
   #joinKeys(keys?: string[]) {
@@ -262,7 +293,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async get(sel: Selection.Immutable) {
     const { model, tables } = sel
-    const builder = new SQLiteBuilder(tables)
+    const builder = new SQLiteBuilder(this, tables)
     const sql = builder.get(sel)
     if (!sql) return []
     const rows = this.#all(sql)
@@ -270,11 +301,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const builder = new SQLiteBuilder(sel.tables)
+    const builder = new SQLiteBuilder(this, sel.tables)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
-    return builder.load(value)
+    return builder.load(expr, value)
   }
 
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
@@ -315,7 +346,6 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async create(sel: Selection.Mutable, data: {}) {
     const { model, table } = sel
-    data = model.create(data)
     const { id } = this.#create(table, data)
     const { autoInc, primary } = model
     if (!autoInc || Array.isArray(primary)) return data as any

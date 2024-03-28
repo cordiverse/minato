@@ -1,11 +1,12 @@
 import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { Flatten, Indexable, Keys, Row } from './utils.ts'
+import { Flatten, Indexable, Keys, randomId, Row } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
+import { Typed } from './typed.ts'
 
 type TableLike<S> = Keys<S> | Selection
 
@@ -53,6 +54,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
 
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
+  public types: Dict<Field.Transform> = Object.create(null)
   public migrating = false
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   private migrateTasks: Dict<Promise<void>> = Object.create(null)
@@ -90,7 +92,22 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     await this.prepareTasks[name]
     await Promise.resolve()
     if (!this.stashed.delete(name)) return
-    await this.getDriver(name)?.prepare(name)
+
+    const driver = this.getDriver(name)
+    if (!driver) return
+
+    const { fields } = driver.model(name)
+    Object.entries(fields).forEach(([key, field]: [string, Field.Transform]) => {
+      if (field.dump && field.load) {
+        driver.define({
+          types: [field.typed!.type!],
+          dump: field.dump,
+          load: field.load,
+        })
+      }
+    })
+
+    await driver.prepare(name)
   }
 
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Partial<Model.Config<S[K]>> = {}) {
@@ -99,9 +116,29 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
       model = this.tables[name] = new Model(name)
       // model.driver = config.driver
     }
+    Object.entries(fields).forEach(([key, field]: [string, any]) => {
+      if (typeof field === 'string' && this.types[field]) {
+        this.types[field].typed = Typed.fromField(field as any)
+        fields[key] = this.types[field]
+      } else if (typeof field === 'object' && field.load && field.dump) {
+        field.typed = Typed.fromField(`_newtype_${name}_$unnamed_${key}` as any)
+        this.define(field)
+      }
+    })
     model.extend(fields, config)
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
+  }
+
+  define<S>(field: Field.Transform<S>): Field.NewType<S> {
+    let name: string | undefined = field.typed?.type
+    if (!name) while (this.types[name = '_define_' + randomId()]);
+    this[Context.current].effect(() => {
+      this.types[name] = field
+      return () => delete this.types[name]
+    })
+
+    return name as any
   }
 
   migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {
@@ -183,8 +220,8 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     return await sel._action('upsert', upsert, keys).execute()
   }
 
-  async withTransaction(callback: (database: Database<S>) => Promise<void>): Promise<void>
-  async withTransaction<T extends Keys<S>>(table: T, callback: (database: Database<S>) => Promise<void>): Promise<void>
+  async withTransaction(callback: (database: this) => Promise<void>): Promise<void>
+  async withTransaction<T extends Keys<S>>(table: T, callback: (database: this) => Promise<void>): Promise<void>
   async withTransaction(arg: any, ...args: any[]) {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
     const [table, callback] = typeof arg === 'string' ? [arg, ...args] : [null, arg, ...args]

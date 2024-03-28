@@ -442,6 +442,14 @@ namespace SelectionTests {
       ).to.eventually.have.length(6)
     })
 
+    it('access from join', async () => {
+      const w = x => database.select('bar').evaluate(row => $.add($.count(row.id), -6, x))
+      await expect(database
+        .join(['foo', 'bar'] as const, (foo, bar) => $.gt(foo.id, w(bar.pid)))
+        .execute()
+      ).to.eventually.have.length(9)
+    })
+
     it('join selection', async () => {
       await expect(database
         .select(

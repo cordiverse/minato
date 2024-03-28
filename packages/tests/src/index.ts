@@ -1,4 +1,5 @@
 import { Database } from 'minato'
+import ModelOperations from './model'
 import QueryOperators from './query'
 import UpdateOperators from './update'
 import ObjectOperations from './object'
@@ -61,6 +62,7 @@ function createUnit<T>(target: T, root = false): Unit<T> {
 }
 
 namespace Tests {
+  export const model = ModelOperations
   export const query = QueryOperators
   export const update = UpdateOperators
   export const object = ObjectOperations

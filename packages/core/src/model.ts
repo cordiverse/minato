@@ -1,8 +1,9 @@
-import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
+import { isNullable, makeArray, MaybeArray } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Selection } from './selection.ts'
-import { Flatten, Keys } from './utils.ts'
+import { clone, Flatten, isUint8Array, Keys } from './utils.ts'
+import { Typed } from './typed.ts'
 
 export const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }
@@ -17,6 +18,7 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
+  typed?: Typed<T>
 }
 
 export namespace Field {
@@ -32,14 +34,25 @@ export namespace Field {
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
+    : T extends Uint8Array ? 'binary'
     : T extends unknown[] ? 'list' | 'json'
     : T extends object ? 'json'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
+  export type Transform<S = any, T = any> = {
+    type: Type<T>
+    dump: (value: S) => T | null
+    load: (value: T, initial?: S) => S | null
+    initial?: S
+  } & Omit<Field<T>, 'type' | 'initial'>
+
+  const NewType = Symbol('NewType')
+  export type NewType<S = any> = string & { [NewType]: S }
+
   type MapField<O = any> = {
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]>
+    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | Transform<O[K]> | NewType<O[K]>
   }
 
   export type Extension<O = any> = MapField<Flatten<O>>
@@ -52,7 +65,7 @@ export namespace Field {
 
   export function parse(source: string | Field): Field {
     if (typeof source === 'function') return { type: 'expr', expr: source }
-    if (typeof source !== 'string') return { initial: null, ...source }
+    if (typeof source !== 'string') return { initial: null, typed: Typed.fromField(source), ...source }
 
     // parse string definition
     const capture = regexp.exec(source)
@@ -76,6 +89,8 @@ export namespace Field {
     } else if (args[0]) {
       field.length = +args[0]
     }
+
+    field.typed = Typed.fromField(field)
 
     return field
   }
@@ -193,7 +208,7 @@ export class Model<S = any> {
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
           node[segments[0]] = this.resolveValue(key, value)
-        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || Object.keys(value).length === 0) {
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || isUint8Array(value) || Object.keys(value).length === 0) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {

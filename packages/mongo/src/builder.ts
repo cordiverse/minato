@@ -1,5 +1,5 @@
-import { Dict, isNullable, valueMap } from 'cosmokit'
-import { Eval, isComparable, Query, Selection } from 'minato'
+import { Dict, isNullable, mapValues, valueMap } from 'cosmokit'
+import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Typed } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -78,7 +78,7 @@ export type EvalOperators = {
 
 const aggrKeys = ['$sum', '$avg', '$min', '$max', '$count', '$length', '$array']
 
-export class Transformer {
+export class Builder {
   private counter = 0
   public table!: string
   public walkedKeys: string[] = []
@@ -91,7 +91,7 @@ export class Transformer {
 
   private evalOperators: EvalOperators
 
-  constructor(private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
+  constructor(private driver: Driver, private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
     this.walkedKeys = []
 
     this.evalOperators = {
@@ -109,8 +109,8 @@ export class Transformer {
         }
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
-      $array: (arg, group) => this.transformEvalExpr(arg),
-      $object: (arg, group) => this.transformEvalExpr(arg),
+
+      $object: (arg, group) => valueMap(arg as any, x => this.transformEvalExpr(x)),
 
       $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
 
@@ -124,6 +124,10 @@ export class Transformer {
       $power: (arg, group) => ({ $pow: arg.map(val => this.eval(val, group)) }),
       $random: (arg, group) => ({ $rand: {} }),
 
+      $literal: (arg, group) => {
+        const converter = this.driver.types[arg[1]!]
+        return converter ? converter.dump(arg[0]) : arg[0]
+      },
       $number: (arg, group) => {
         const value = this.eval(arg, group)
         return {
@@ -180,6 +184,7 @@ export class Transformer {
         return `$${name}`
       },
     }
+    this.evalOperators = Object.assign(Object.create(null), this.evalOperators)
   }
 
   public createKey() {
@@ -200,6 +205,14 @@ export class Transformer {
     for (const key in expr) {
       if (this.evalOperators[key]) {
         return this.evalOperators[key](expr[key], group)
+      } else if (key?.startsWith('$') && Eval[key.slice(1)]) {
+        return valueMap(expr, (value) => {
+          if (Array.isArray(value)) {
+            return value.map(val => this.eval(val, group))
+          } else {
+            return this.eval(value, group)
+          }
+        })
       }
     }
 
@@ -207,13 +220,7 @@ export class Transformer {
       return expr.map(val => this.eval(val, group))
     }
 
-    return valueMap(expr as any, (value) => {
-      if (Array.isArray(value)) {
-        return value.map(val => this.eval(val, group))
-      } else {
-        return this.eval(value, group)
-      }
-    })
+    return expr
   }
 
   private transformAggr(expr: any) {
@@ -364,7 +371,7 @@ export class Transformer {
   }
 
   protected createSubquery(sel: Selection.Immutable) {
-    const predecessor = new Transformer(Object.keys(sel.tables))
+    const predecessor = new Builder(this.driver, Object.keys(sel.tables))
     predecessor.refTables = [...this.refTables, ...this.tables]
     predecessor.refVirtualKeys = this.refVirtualKeys
     return predecessor.select(sel)
@@ -429,5 +436,45 @@ export class Transformer {
       this.evalKey = $
     }
     return this
+  }
+
+  dump(model: Model, obj: any): any {
+    const result = {}
+    for (const key in obj) {
+      const { type, typed } = model.fields[key] ?? {}
+      const converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
+      result[key] = converter ? converter.dump(obj[key]) : obj[key]
+    }
+    return result
+  }
+
+  load(model: Model, obj: any): any
+  load(typed: Typed | Eval.Expr, obj: any): any
+  load(model: Model | Typed | Eval.Expr, obj?: any) {
+    if (Typed.isTyped(model) || isEvalExpr(model)) {
+      const typed = Typed.isTyped(model) ? model : Typed.fromTerm(model)
+      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!]
+      let res = converter ? converter.load(obj) : obj
+
+      if (typed?.inner) {
+        if (typed.list) res = res.map((x: any) => this.load(typed.inner!, x))
+        else res = mapValues(res, (x: any, k) => this.load(typed.inner![k], x))
+      }
+      return res
+    }
+
+    obj = model.format(obj)
+    const result = {}
+    for (const key in obj) {
+      if (!(key in model.fields)) continue
+      const { type, initial, typed } = model.fields[key]!
+      const converter = typed?.type ? this.driver.types[typed.type] : this.driver.types[type]
+      result[key] = converter ? converter.load(obj[key], initial) : obj[key]
+      if (typed?.inner) {
+        if (typed.list) result[key] = result[key].map((x: any) => this.load(typed.inner!, x))
+        else result[key] = mapValues(result[key], (x: any, k) => this.load(typed.inner![k], x))
+      }
+    }
+    return model.parse(result)
   }
 }

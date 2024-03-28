@@ -1,8 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Dict, Time } from 'cosmokit'
-import { Field, isEvalExpr, Model, randomId, Selection } from 'minato'
-
-export const DEFAULT_DATE = new Date('1970-01-01')
+import { Dict, isNullable, Time } from 'cosmokit'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Typed, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -27,57 +25,72 @@ export class MySQLBuilder extends Builder {
 
   prequeries: string[] = []
 
-  constructor(tables?: Dict<Model>, private compat: Compat = {}) {
-    super(tables)
+  constructor(protected driver: Driver, tables?: Dict<Model>, private compat: Compat = {}) {
+    super(driver, tables)
 
     this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
     this.evalOperators.$min = (expr) => this.createAggr(expr, value => `min(${value})`, undefined, value => `minato_cfunc_min(${value})`)
     this.evalOperators.$max = (expr) => this.createAggr(expr, value => `max(${value})`, undefined, value => `minato_cfunc_max(${value})`)
 
-    this.define<string[], string>({
-      types: ['list'],
-      dump: value => value.join(','),
-      load: value => value ? value.split(',') : [],
-    })
+    this.transformers['boolean'] = {
+      encode: value => `if(${value}=b'1', 1, 0)`,
+      decode: value => `if(${value}=1, b'1', b'0')`,
+      load: value => isNullable(value) ? value : !!value,
+    }
 
-    this.define<object, string>({
-      types: ['json'],
-      dump: value => JSON.stringify(value),
-      load: value => typeof value === 'string' ? JSON.parse(value) : value,
-    })
+    this.transformers['binary'] = {
+      encode: value => `to_base64(${value})`,
+      decode: value => `from_base64(${value})`,
+      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
+    }
 
-    this.define<Date, any>({
-      types: ['time'],
-      dump: value => value,
-      load: (value) => {
-        if (!value || typeof value === 'object') return value
-        const time = new Date(DEFAULT_DATE)
-        const [h, m, s] = value.split(':')
-        time.setHours(parseInt(h))
-        time.setMinutes(parseInt(m))
-        time.setSeconds(parseInt(s))
-        return time
+    this.transformers['date'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as date)`,
+      load: value => {
+        if (isNullable(value) || typeof value === 'object') return value
+        const parsed = new Date(value), date = new Date()
+        date.setFullYear(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+        date.setHours(0, 0, 0, 0)
+        return date
       },
-    })
+    }
+
+    this.transformers['time'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as time)`,
+      load: value => this.driver.types['time'].load(value),
+    }
+
+    this.transformers['timestamp'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as datetime)`,
+      load: value => {
+        if (isNullable(value) || typeof value === 'object') return value
+        return new Date(value)
+      },
+    }
   }
 
-  escape(value: any, field?: Field) {
+  protected escapePrimitive(value: any) {
     if (value instanceof Date) {
-      value = Time.template('yyyy-MM-dd hh:mm:ss', value)
+      value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (!field && !!value && typeof value === 'object') {
+    } else if (isUint8Array(value)) {
+      return `X'${Uint8ArrayToHex(value)}'`
+    } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
-    return super.escape(value, field)
+    return super.escapePrimitive(value)
   }
 
-  protected jsonQuote(value: string, pure: boolean = false) {
-    if (pure) return this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`
-    const res = this.state.sqlType === 'raw' ? (this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`) : value
-    this.state.sqlType = 'json'
-    return res
+  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+    return this.asEncoded(encoded === this.isEncoded() && !pure ? value : encoded
+      ? (this.compat.maria ? `json_extract(json_object('v', ${this.transform(typed, value, 'encode')}), '$.v')`
+        : `cast(${this.transform(typed, value, 'encode')} as json)`)
+      : this.transform(typed, `json_unquote(${value})`, 'decode'), pure ? undefined : encoded)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
@@ -90,10 +103,9 @@ export class MySQLBuilder extends Builder {
 
   protected groupArray(value: string) {
     if (!this.compat.maria) return super.groupArray(value)
-    const res = this.state.sqlType === 'json' ? `concat('[', group_concat(${value}), ']')`
+    const res = this.isEncoded() ? `concat('[', group_concat(${value}), ']')`
       : `concat('[', group_concat(json_extract(json_object('v', ${value}), '$.v')), ']')`
-    this.state.sqlType = 'json'
-    return `ifnull(${res}, json_array())`
+    return this.asEncoded(`ifnull(${res}, json_array())`, true)
   }
 
   protected parseSelection(sel: Selection) {
@@ -108,17 +120,17 @@ export class MySQLBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      query = `(ifnull((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      query = `(ifnull((SELECT ${this.groupArray(this.transform(Typed.fromTerm(expr)?.inner, output, 'encode'))}
+        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
     if (Object.keys(refFields ?? {}).length) {
       const funcname = `minato_tfunc_${randomId()}`
       const decls = Object.values(refFields ?? {}).map(x => `${x} JSON`).join(',')
-      const args = Object.keys(refFields ?? {}).map(x => this.state.refFields?.[x] ?? x).map(x => this.jsonQuote(x, true)).join(',')
-      query = this.state.sqlType === 'json' ? `ifnull(${query}, json_array())` : this.jsonQuote(query)
+      const args = Object.keys(refFields ?? {}).map(x => this.state.refFields?.[x] ?? x).map(x => this.encode(x, true, true)).join(',')
+      query = this.isEncoded() ? `ifnull(${query}, json_array())` : this.encode(query, true)
       this.prequeries.push(`DROP FUNCTION IF EXISTS ${funcname}`)
       this.prequeries.push(`CREATE FUNCTION ${funcname} (${decls}) RETURNS JSON DETERMINISTIC RETURN ${query}`)
-      this.state.sqlType = 'json'
-      return `${funcname}(${args})`
+      return this.asEncoded(`${funcname}(${args})`, true)
     } else return query
   }
 
@@ -152,7 +164,7 @@ export class MySQLBuilder extends Builder {
     // json_set cannot create deeply nested property when non-exist
     // therefore we merge a layout to it
     if (Object.keys(jsonInit).length !== 0) {
-      value = `json_merge(${value}, ${this.quote(JSON.stringify(jsonInit))})`
+      value = `json_merge(${value}, ${this.escape(jsonInit, 'json')})`
     }
 
     for (const prop in item) {

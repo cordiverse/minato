@@ -1,5 +1,5 @@
-import { Dict, isNullable } from 'cosmokit'
-import { Eval, Field, isComparable, Model, Modifier, Query, randomId, Selection } from 'minato'
+import { Dict, isNullable, mapValues } from 'cosmokit'
+import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Typed } from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -7,6 +7,10 @@ export function escapeId(value: string) {
 
 export function isBracketed(value: string) {
   return value.startsWith('(') && value.endsWith(')')
+}
+
+export function isSqlJson(typed?: Typed) {
+  return typed ? (typed.type === 'json' || !!typed.inner) : false
 }
 
 export type QueryOperators = {
@@ -19,19 +23,27 @@ export type EvalOperators = {
   [K in keyof Eval.Static as `$${K}`]?: (expr: ExtractUnary<Parameters<Eval.Static[K]>>) => string
 } & { $: (expr: any) => string }
 
-export interface Transformer<S = any, T = any> {
-  types: Field.Type<S>[]
-  dump: (value: S) => T | null
-  load: (value: T, initial?: S) => S | null
+interface Transformer<S=any, T=any> {
+  encode(value: string): string
+  decode(value: string): string
+  load(value: S): T
 }
 
-type SQLType = 'raw' | 'json' | 'list' | 'date' | 'time' | 'timestamp'
-
 interface State {
-  sqlType?: SQLType
-  sqlTypes?: Dict<SQLType>
+  // current table ref in get()
+  table?: string
+
+  // encode format of last evaluation
+  encoded?: boolean
+  encodedMap?: Dict<boolean>
+
   group?: boolean
   tables?: Dict<Model>
+
+  // joined tables
+  innerTables?: Dict<Model>
+
+  // outter tables and fields within subquery
   refFields?: Dict<string>
   refTables?: Dict<Model>
   wrappedSubquery?: boolean
@@ -40,7 +52,6 @@ interface State {
 export class Builder {
   protected escapeMap = {}
   protected escapeRegExp?: RegExp
-  protected types: Dict<Transformer> = {}
   protected createEqualQuery = this.comparator('=')
   protected queryOperators: QueryOperators
   protected evalOperators: EvalOperators
@@ -48,10 +59,11 @@ export class Builder {
   protected $true = '1'
   protected $false = '0'
   protected modifiedTable?: string
+  protected transformers: Dict<Transformer> = Object.create(null)
 
-  private readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
+  protected readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
 
-  constructor(tables?: Dict<Model>) {
+  constructor(protected driver: Driver, tables?: Dict<Model>) {
     this.state.tables = tables
 
     this.queryOperators = {
@@ -97,7 +109,7 @@ export class Builder {
       },
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+        if (this.isJsonQuery(key)) {
           return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
           return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
@@ -146,17 +158,17 @@ export class Builder {
       $lte: this.binary('<='),
 
       // membership
-      $in: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ''),
-      $nin: ([key, value]) => this.createMemberQuery(this.parseEval(key), value, ' NOT'),
+      $in: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ''), false),
+      $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ' NOT'), false),
 
       // typecast
+      $literal: ([value, type]) => this.escape(value, type as any),
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const res = this.state.sqlType === 'raw' ? `(0+${value})`
-          : this.state.sqlType === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
-            : `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))`
-        this.state.sqlType = 'raw'
-        return `ifnull(${res}, 0)`
+        const typed = Typed.fromTerm(arg)
+        const res = typed.type === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
+          : ['timestamp', 'date'].includes(typed.type!) ? `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))` : `(0+${value})`
+        return this.asEncoded(`ifnull(${res}, 0)`, false)
       },
 
       // aggregation
@@ -165,18 +177,11 @@ export class Builder {
       $min: (expr) => this.createAggr(expr, value => `min(${value})`),
       $max: (expr) => this.createAggr(expr, value => `max(${value})`),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})`),
-      $length: (expr) => this.createAggr(expr, value => `count(${value})`, value => {
-        if (this.state.sqlType === 'json') {
-          this.state.sqlType = 'raw'
-          return `${this.jsonLength(value)}`
-        } else {
-          this.state.sqlType = 'raw'
-          return `if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`
-        }
-      }),
+      $length: (expr) => this.createAggr(expr, value => `count(${value})`, value => this.isEncoded() ? this.jsonLength(value)
+        : this.asEncoded(`if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false)),
 
       $object: (fields) => this.groupObject(fields),
-      $array: (expr) => this.groupArray(this.parseEval(expr, false)),
+      $array: (expr) => this.groupArray(this.transform(expr, this.parseEval(expr, false), 'encode')),
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
@@ -195,8 +200,7 @@ export class Builder {
       if (!value.length) return notStr ? this.$true : this.$false
       return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
     } else {
-      const res = this.jsonContains(this.parseEval(value, false), this.jsonQuote(key, true))
-      this.state.sqlType = 'raw'
+      const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
       return notStr ? this.logicalNot(res) : res
     }
   }
@@ -206,11 +210,15 @@ export class Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
-      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+    if (this.isJsonQuery(key)) {
+      return this.jsonContains(key, this.escape(value, 'json'))
     } else {
       return `find_in_set(${this.escape(value)}, ${key})`
     }
+  }
+
+  protected isJsonQuery(key: string) {
+    return isSqlJson(this.state.tables![this.state.table!].fields![this.unescapeId(key)]?.typed)
   }
 
   protected comparator(operator: string) {
@@ -250,34 +258,32 @@ export class Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(ifnull((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      return `(ifnull((SELECT ${this.groupArray(this.transform(Typed.fromTerm(expr)?.inner, output, 'encode'))}
+        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
   }
 
   protected jsonLength(value: string) {
-    return `json_length(${value})`
+    return this.asEncoded(`json_length(${value})`, false)
   }
 
   protected jsonContains(obj: string, value: string) {
-    return `json_contains(${obj}, ${value})`
+    return this.asEncoded(`json_contains(${obj}, ${value})`, false)
   }
 
-  protected jsonUnquote(value: string, pure: boolean = false) {
-    if (pure) return `json_unquote(${value})`
-    if (this.state.sqlType === 'json') {
-      this.state.sqlType = 'raw'
-      return `json_unquote(${value})`
-    }
+  protected asEncoded(value: string, encoded: boolean | undefined) {
+    if (encoded !== undefined) this.state.encoded = encoded
     return value
   }
 
-  protected jsonQuote(value: string, pure: boolean = false) {
-    if (pure) return `cast(${value} as json)`
-    if (this.state.sqlType !== 'json') {
-      this.state.sqlType = 'json'
-      return `cast(${value} as json)`
-    }
-    return value
+  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
+      : encoded ? `cast(${this.transform(typed, value, 'encode')} as json)`
+        : `json_unquote(${this.transform(typed, value, 'decode')})`, pure ? undefined : encoded)
+  }
+
+  protected isEncoded(key?: string) {
+    return key ? this.state.encodedMap?.[key] : this.state.encoded
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
@@ -296,19 +302,23 @@ export class Builder {
     }
   }
 
+  protected transform(expr: any, value: string, method: 'encode' | 'decode' | 'load', miss?: any) {
+    const typed = Typed.isTyped(expr) ? expr : Typed.fromTerm(expr)
+    const transformer = this.transformers[typed.type] ?? this.transformers[this.driver.database.types[typed.type]?.type]
+    return transformer ? transformer[method](value) : (miss ?? value)
+  }
+
   protected groupObject(fields: any) {
     const parse = (expr) => {
       const value = this.parseEval(expr, false)
-      return this.state.sqlType === 'json' ? `json_extract(${value}, '$')` : `${value}`
+      return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
     }
     const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
-    this.state.sqlType = 'json'
-    return res
+    return this.asEncoded(res, true)
   }
 
   protected groupArray(value: string) {
-    this.state.sqlType = 'json'
-    return `ifnull(json_arrayagg(${value}), json_array())`
+    return this.asEncoded(`ifnull(json_arrayagg(${value}), json_array())`, true)
   }
 
   protected parseFieldQuery(key: string, query: Query.FieldExpr) {
@@ -357,7 +367,7 @@ export class Builder {
   }
 
   protected parseEvalExpr(expr: any) {
-    this.state.sqlType = 'raw'
+    this.state.encoded = false
     for (const key in expr) {
       if (key in this.evalOperators) {
         return this.evalOperators[key](expr[key])
@@ -367,16 +377,12 @@ export class Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.state.sqlType = 'json'
-    return `json_extract(${obj}, '$${path}')`
+    return this.asEncoded(`json_extract(${obj}, '$${path}')`, true)
   }
 
-  protected transformKey(key: string, fields: {}, prefix: string, fullKey: string) {
+  protected transformKey(key: string, fields: Field.Config, prefix: string) {
     if (key in fields || !key.includes('.')) {
-      if (this.state.sqlTypes?.[key] || this.state.sqlTypes?.[fullKey]) {
-        this.state.sqlType = this.state.sqlTypes[key] || this.state.sqlTypes[fullKey]
-      }
-      return prefix + this.escapeId(key)
+      return this.asEncoded(prefix + this.escapeId(key), this.isEncoded(key) ?? isSqlJson(fields[key]?.typed))
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
@@ -404,36 +410,41 @@ export class Builder {
     // the only table must be the main table
     || (Object.keys(this.state.tables).length === 1 && table in this.state.tables) ? '' : `${this.escapeId(table)}.`)
 
+    if (!(table in (this.state.tables || {})) && (table in (this.state.innerTables || {}))) {
+      const fields = this.state.innerTables?.[table]?.fields || {}
+      const res = (fields[key]?.expr) ? this.parseEvalExpr(fields[key]?.expr)
+        : this.transformKey(key, fields, `${this.escapeId(table)}.`)
+      return res
+    }
+
     // field from outer selection
     if (!(table in (this.state.tables || {})) && (table in (this.state.refTables || {}))) {
       const fields = this.state.refTables?.[table]?.fields || {}
       const res = (fields[key]?.expr) ? this.parseEvalExpr(fields[key]?.expr)
-        : this.transformKey(key, fields, `${this.escapeId(table)}.`, `${table}.${key}`)
+        : this.transformKey(key, fields, `${this.escapeId(table)}.`)
       if (this.state.wrappedSubquery) {
         if (res in (this.state.refFields ?? {})) return this.state.refFields![res]
         const key = `minato_tvar_${randomId()}`
         ;(this.state.refFields ??= {})[res] = key
-        this.state.sqlType = 'json'
-        return this.escapeId(key)
+        return this.asEncoded(this.escapeId(key), true)
       } else return res
     }
-
-    return this.transformKey(key, fields, prefix, `${table}.${key}`)
+    return this.transformKey(key, fields, prefix)
   }
 
   parseEval(expr: any, unquote: boolean = true): string {
-    this.state.sqlType = 'raw'
+    this.state.encoded = false
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return unquote ? this.jsonUnquote(this.parseEvalExpr(expr)) : this.parseEvalExpr(expr)
+    return unquote ? this.encode(this.parseEvalExpr(expr), false, false, Typed.fromTerm(expr)) : this.parseEvalExpr(expr)
   }
 
   protected saveState(extra: Partial<State> = {}) {
     const thisState = this.state
     this.state = { refTables: { ...(this.state.refTables || {}), ...(this.state.tables || {}) }, ...extra }
     return () => {
-      thisState.sqlType = this.state.sqlType
+      thisState.encoded = this.state.encoded
       this.state = thisState
     }
   }
@@ -458,32 +469,24 @@ export class Builder {
 
   get(sel: Selection.Immutable, inline = false, group = false, addref = true) {
     const { args, table, query, ref, model } = sel
+    this.state.table = ref
+
     // get prefix
     let prefix: string | undefined
     if (typeof table === 'string') {
       prefix = this.escapeId(table)
-      this.state.sqlTypes = Object.fromEntries(Object.entries(model.fields).map(([key, field]) => {
-        let sqlType: SQLType = 'raw'
-        if (field!.type === 'json') sqlType = 'json'
-        else if (field!.type === 'list') sqlType = 'list'
-        else if (Field.date.includes(field!.type)) sqlType = field!.type as SQLType
-        return [key, sqlType]
-      }))
     } else if (table instanceof Selection) {
       prefix = this.get(table, true)
       if (!prefix) return
     } else {
-      const sqlTypes: Dict<SQLType> = {}
+      this.state.innerTables = Object.fromEntries(Object.values(table).map(t => [t.ref, t.model]))
       const joins: string[] = Object.entries(table).map(([key, table]) => {
-        const restore = this.saveState({ tables: table.tables })
-        const t = `${this.get(table, true, false, false)} AS ${this.escapeId(key)}`
-        for (const [fieldKey, fieldType] of Object.entries(this.state.sqlTypes!)) {
-          sqlTypes[`${key}.${fieldKey}`] = fieldType
-        }
+        const restore = this.saveState({ tables: { ...table.tables } })
+        const t = `${this.get(table, true, false, false)} AS ${this.escapeId(table.ref)}`
         restore()
         return t
       })
-      this.state.sqlTypes = sqlTypes
+
       // the leading space is to prevent from being parsed as bracketed and added ref
       prefix = ' ' + joins[0] + joins.slice(1, -1).map(join => ` JOIN ${join} ON ${this.$true}`).join(' ') + ` JOIN ` + joins.at(-1)
       const filter = this.parseEval(args[0].having)
@@ -494,20 +497,20 @@ export class Builder {
     if (filter === this.$false) return
 
     this.state.group = group || !!args[0].group
-    const sqlTypes: Dict<SQLType> = {}
+    const encodedMap: Dict<boolean> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
-      .map(([key]) => [key, { $: [ref, key] }]))
+      .map(([key, field]) => [key, field!.expr ? field!.expr : Eval('', [ref, key], Typed.fromField(field!))]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
-      sqlTypes[key] = this.state.sqlType!
+      encodedMap![key] = this.state.encoded!
       return this.escapeId(key) === value ? this.escapeId(key) : `${value} AS ${this.escapeId(key)}`
     }).join(', ')
 
     // get suffix
     let suffix = this.suffix(args[0])
-    this.state.sqlTypes = sqlTypes
+    this.state.encodedMap = encodedMap
 
     if (filter !== this.$true) {
       suffix = ` WHERE ${filter}` + suffix
@@ -525,39 +528,63 @@ export class Builder {
     return inline ? `(${result})` : result
   }
 
-  define<S, T>(converter: Transformer<S, T>) {
-    converter.types.forEach(type => this.types[type] = converter)
-  }
-
   dump(model: Model, obj: any): any {
     obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      result[key] = this.stringify(obj[key], model.fields[key])
+      const { type, typed } = model.fields[key] ?? {}
+      const converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
+      result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     return result
   }
 
-  load(obj: any): any
   load(model: Model, obj: any): any
-  load(model: any, obj?: any) {
-    if (!obj) {
-      const converter = this.types[this.state.sqlType!]
-      return converter ? converter.load(model) : model
+  load(typed: Typed | Eval.Expr, obj: any, root?: boolean): any
+  load(model: Model | Typed | Eval.Expr, obj?: any) {
+    if (Typed.isTyped(model) || isEvalExpr(model)) {
+      const typed = Typed.isTyped(model) ? model : Typed.fromTerm(model)
+      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!] ?? this.driver.types[typed?.type!]
+
+      let res = this.transform(typed, obj, 'load')
+      res = converter ? converter.load(res) : res
+
+      if (typed?.inner) {
+        if (typed.list) {
+          res = res.map(x => this.load(typed.inner!, x, false))
+        } else {
+          res = mapValues(res, (x, k) => this.load(typed.inner![k], x, false))
+        }
+      }
+      return res
     }
 
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial } = model.fields[key]!
-      const converter = (this.state.sqlTypes?.[key] ?? 'raw') === 'raw' ? this.types[type] : this.types[this.state.sqlTypes![key]]
-      result[key] = converter ? converter.load(obj[key], initial) : obj[key]
+      const { type, initial, typed } = model.fields[key]!
+      result[key] = obj[key]
+
+      if (this.isEncoded(key)) {
+        result[key] = this.driver.types['json'].load(result[key], initial)
+      }
+      result[key] = this.load(typed ?? Typed.fromField(type as any), result[key])
     }
     return model.parse(result)
   }
 
-  escape(value: any, field?: Field) {
-    value = this.stringify(value, field)
+  escape(value: any, field?: Field | Field.Type) {
+    let converter: Driver.Transformer | undefined
+    if (typeof field === 'string') converter = this.driver.types[field]
+    else {
+      const { type, typed } = field ?? {}
+      converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
+    }
+
+    return this.escapePrimitive(converter ? converter.dump(value) : value)
+  }
+
+  protected escapePrimitive(value: any) {
     if (isNullable(value)) return 'NULL'
 
     switch (typeof value) {
@@ -577,11 +604,6 @@ export class Builder {
 
   escapeKey(value: string) {
     return `"${value}"`
-  }
-
-  stringify(value: any, field?: Field) {
-    const converter = this.types[field!?.type]
-    return converter ? converter.dump(value) : value
   }
 
   quote(value: string) {

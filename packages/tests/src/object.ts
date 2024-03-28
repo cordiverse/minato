@@ -58,6 +58,11 @@ namespace ObjectOperations {
         { meta: { a: '666', embed: { c: 'world' } } },
       ])
     })
+
+    it('selection', async () => {
+      await setup(database)
+      await expect(database.select('object', '0').project({ x: row => row.meta.embed.c }).execute()).to.eventually.deep.equal([{ x: 'hello' }])
+    })
   }
 
   export const upsert = function Upsert(database: Database<Tables>) {
