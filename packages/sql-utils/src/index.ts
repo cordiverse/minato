@@ -181,7 +181,7 @@ export class Builder {
         : this.asEncoded(`if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false)),
 
       $object: (fields) => this.groupObject(fields),
-      $array: (expr) => this.groupArray(this.parseEval(expr, false)),
+      $array: (expr) => this.groupArray(this.transform(expr, this.parseEval(expr, false), 'encode')),
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
@@ -258,7 +258,8 @@ export class Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(ifnull((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      return `(ifnull((SELECT ${this.groupArray(this.transform(Typed.fromTerm(expr)?.inner, output, 'encode'))}
+        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
   }
 
@@ -276,10 +277,9 @@ export class Builder {
   }
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
-    const transformer = this.getTransformer(typed)
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
-      : encoded ? `cast(${transformer ? transformer.encode(value) : value} as json)`
-        : `json_unquote(${transformer ? transformer.decode(value) : value})`, pure ? undefined : encoded)
+      : encoded ? `cast(${this.transform(typed, value, 'encode')} as json)`
+        : `json_unquote(${this.transform(typed, value, 'decode')})`, pure ? undefined : encoded)
   }
 
   protected isEncoded(key?: string) {
@@ -302,17 +302,16 @@ export class Builder {
     }
   }
 
-  protected getTransformer(expr: any) {
+  protected transform(expr: any, value: string, method: 'encode' | 'decode' | 'load', miss?: any) {
     const typed = Typed.isTyped(expr) ? expr : Typed.fromTerm(expr)
-    return this.transformers[typed.type] ?? this.transformers[this.driver.database.types[typed.type]?.type]
+    const transformer = this.transformers[typed.type] ?? this.transformers[this.driver.database.types[typed.type]?.type]
+    return transformer ? transformer[method](value) : (miss ?? value)
   }
 
   protected groupObject(fields: any) {
     const parse = (expr) => {
       const value = this.parseEval(expr, false)
-      const transformer = this.getTransformer(expr)
-      return this.isEncoded() ? `json_extract(${value}, '$')`
-        : transformer ? transformer.encode(value) : `${value}`
+      return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
     }
     const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
     return this.asEncoded(res, true)
@@ -549,8 +548,7 @@ export class Builder {
       const converter = root ? this.driver.types[typed?.inner ? 'json' : typed?.type!]
         : typed?.type !== 'json' ? this.driver.types[typed?.type!] : undefined
 
-      let res = this.getTransformer(typed) ? this.getTransformer(typed).load(obj)
-        : converter ? converter.load(obj) : obj
+      let res = this.transform(typed, obj, 'load', converter ? converter.load(obj) : obj)
 
       if (typed?.inner) {
         if (typed.list) {
@@ -574,23 +572,6 @@ export class Builder {
       } else {
         result[key] = this.load(typed ?? Typed.fromField(type as any), result[key], root)
       }
-
-      // result[key] = this.load(typed ?? Typed.fromField(type as any), result[key])
-
-      // if (this.getTransformer(typed)) result[key] = this.getTransformer(typed).load(result[key])
-
-      // const converter = subroot ? (typed?.inner ? this.driver.types['json']
-      //   : typed?.type ? this.driver.types[typed.type] : this.driver.types[type])
-      //   : typed?.type !== 'json' ? this.driver.types[typed?.type!] : undefined
-
-      // result[key] = converter ? converter.load(result[key], initial) : result[key]
-      // if (typed?.inner) {
-      //   if (typed.list) {
-      //     result[key] = result[key].map((x: any) => this.load(typed.inner!, x, false))
-      //   } else {
-      //     result[key] = mapValues(result[key], (x, k) => this.load(typed.inner![k], x, false))
-      //   }
-      // }
     }
     return model.parse(result)
   }

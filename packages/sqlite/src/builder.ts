@@ -30,33 +30,6 @@ export class SQLiteBuilder extends Builder {
       decode: value => `unhex(${value})`,
       load: value => isNullable(value) ? value : Uint8ArrayFromHex(value),
     }
-
-    this.transformers['date'] = {
-      encode: value => value,
-      decode: value => `cast(${value} as date)`,
-      load: value => {
-        if (!value || typeof value === 'object') return value
-        const parsed = new Date(value), date = new Date()
-        date.setFullYear(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
-        date.setHours(0, 0, 0, 0)
-        return date
-      },
-    }
-
-    this.transformers['time'] = {
-      encode: value => value,
-      decode: value => `cast(${value} as time)`,
-      load: value => this.driver.types['time'].load(value),
-    }
-
-    this.transformers['timestamp'] = {
-      encode: value => value,
-      decode: value => `cast(${value} as datetime)`,
-      load: value => {
-        if (!value || typeof value === 'object') return value
-        return new Date(value)
-      },
-    }
   }
 
   protected escapePrimitive(value: any) {

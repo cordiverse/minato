@@ -138,7 +138,6 @@ namespace ModelOperations {
       expect(Typed.fromTerm($.literal(Buffer.from('hello'))).type).to.equal('binary')
       expect(Typed.fromTerm($.literal([1, 2, 3])).type).to.equal('json')
       expect(Typed.fromTerm($.literal({ a: 1 })).type).to.equal('json')
-      // expect(Typed.fromTerm($.literal({ a: 1 })).inner?.a.type).to.equal(Typed.Number.type)
     })
 
     cast && it('cast newtype', async () => {
@@ -147,13 +146,12 @@ namespace ModelOperations {
       await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), database.bigint)))).to.eventually.have.length(1)
     })
 
-
-    it('$.object encoding all types', async () => {
+    it('$.object encoding', async () => {
       const table = await setup(database, 'dtypes', barTable)
       await expect(database.eval('dtypes', row => $.array($.object(row)))).to.eventually.have.shape(table)
     })
 
-    it('$.object decoding all types ', async () => {
+    it('$.object decoding ', async () => {
       const table = await setup(database, 'dtypes', barTable)
       await expect(database.select('dtypes')
         .project({
@@ -176,6 +174,21 @@ namespace ModelOperations {
         })
         .execute()
       ).to.eventually.have.shape(table)
+    })
+
+    it('$.array encoding', async () => {
+      const table = await setup(database, 'dtypes', barTable)
+      await expect(database.eval('dtypes', row => $.array(row.binary))).to.eventually.have.shape(table.map(x => x.binary))
+    })
+
+    it('subquery encoding', async () => {
+      const table = await setup(database, 'dtypes', barTable)
+      await expect(database.select('dtypes', 1)
+        .project({
+          x: row => database.select('dtypes').evaluate('binary')
+        })
+        .execute()
+      ).to.eventually.have.shape([{ x: table.map(x => x.binary) }])
     })
   }
 }

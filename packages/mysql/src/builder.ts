@@ -49,7 +49,7 @@ export class MySQLBuilder extends Builder {
       encode: value => value,
       decode: value => `cast(${value} as date)`,
       load: value => {
-        if (!value || typeof value === 'object') return value
+        if (isNullable(value) || typeof value === 'object') return value
         const parsed = new Date(value), date = new Date()
         date.setFullYear(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
         date.setHours(0, 0, 0, 0)
@@ -67,7 +67,7 @@ export class MySQLBuilder extends Builder {
       encode: value => value,
       decode: value => `cast(${value} as datetime)`,
       load: value => {
-        if (!value || typeof value === 'object') return value
+        if (isNullable(value) || typeof value === 'object') return value
         return new Date(value)
       },
     }
@@ -87,11 +87,10 @@ export class MySQLBuilder extends Builder {
   }
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
-    const transformer = this.getTransformer(typed)
     return this.asEncoded(encoded === this.isEncoded() && !pure ? value : encoded
-      ? (this.compat.maria ? `json_extract(json_object('v', ${transformer ? transformer.encode(value) : value}), '$.v')`
-        : `cast(${transformer ? transformer.encode(value) : value} as json)`)
-      : transformer ? transformer.decode(`json_unquote(${value})`) : `json_unquote(${value})`, pure ? undefined : encoded)
+      ? (this.compat.maria ? `json_extract(json_object('v', ${this.transform(typed, value, 'encode')}), '$.v')`
+        : `cast(${this.transform(typed, value, 'encode')} as json)`)
+      : this.transform(typed, `json_unquote(${value})`, 'decode'), pure ? undefined : encoded)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
@@ -121,7 +120,8 @@ export class MySQLBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      query = `(ifnull((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      query = `(ifnull((SELECT ${this.groupArray(this.transform(Typed.fromTerm(expr)?.inner, output, 'encode'))}
+        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
     if (Object.keys(refFields ?? {}).length) {
       const funcname = `minato_tfunc_${randomId()}`
