@@ -1,3 +1,4 @@
+import { valueMap } from 'cosmokit'
 import { $, Database, Typed } from 'minato'
 import { expect } from 'chai'
 
@@ -21,6 +22,7 @@ interface Bar {
   time?: Date
   binary?: Buffer
   bigint?: bigint
+  bnum?: number
 }
 
 interface Tables {
@@ -83,6 +85,12 @@ function ModelOperations(database: Database<Tables>) {
       initial: Buffer.from('initial buffer')
     },
     bigint: database.bigint,
+    bnum: {
+      type: 'binary',
+      dump: value => Buffer.from(String(value)),
+      load: value => value ? +value : value,
+      initial: 0,
+    }
   }, {
     autoInc: true,
   })
@@ -103,6 +111,7 @@ namespace ModelOperations {
     { id: 9, binary: Buffer.from('hello') },
     { id: 10, bigint: BigInt(1e63) },
     { id: 11, decimal: 2.432 },
+    { id: 12, bnum: 114514 },
   ]
 
   async function setup<K extends keyof Tables>(database: Database<Tables>, name: K, table: Tables[K][]) {
@@ -151,44 +160,36 @@ namespace ModelOperations {
       await expect(database.eval('dtypes', row => $.array($.object(row)))).to.eventually.have.shape(table)
     })
 
-    it('$.object decoding ', async () => {
+    it('$.object decoding', async () => {
       const table = await setup(database, 'dtypes', barTable)
       await expect(database.select('dtypes')
         .project({
           obj: row => $.object(row)
         })
-        .project({
-          id: row => row.obj.id,
-          text: row => row.obj.text,
-          num: row => row.obj.num,
-          double: row => row.obj.double,
-          decimal: row => row.obj.decimal,
-          bool: row => row.obj.bool,
-          list: row => row.obj.list,
-          array: row => row.obj.array,
-          timestamp: row => row.obj.timestamp,
-          date: row => row.obj.date,
-          time: row => row.obj.time,
-          binary: row => row.obj.binary,
-          bigint: row => row.obj.bigint,
-        })
+        .project(valueMap(database.tables['dtypes'].fields as any, (field, key) => row => row.obj[key]))
         .execute()
       ).to.eventually.have.shape(table)
     })
 
     it('$.array encoding', async () => {
       const table = await setup(database, 'dtypes', barTable)
-      await expect(database.eval('dtypes', row => $.array(row.binary))).to.eventually.have.shape(table.map(x => x.binary))
+      await expect(database.eval('dtypes', row => $.array(row.array))).to.eventually.have.shape(table.map(x => x.array))
+
+      await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
+        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => x[key]))
+      ))
     })
 
     it('subquery encoding', async () => {
       const table = await setup(database, 'dtypes', barTable)
-      await expect(database.select('dtypes', 1)
-        .project({
-          x: row => database.select('dtypes').evaluate('binary')
-        })
-        .execute()
-      ).to.eventually.have.shape([{ x: table.map(x => x.binary) }])
+      await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
+        key => expect(database.select('dtypes', 1)
+          .project({
+            x: row => database.select('dtypes').evaluate(key as any)
+          })
+          .execute()
+        ).to.eventually.have.shape([{ x: table.map(x => x[key]) }])
+      ))
     })
   }
 }

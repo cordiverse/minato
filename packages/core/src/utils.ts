@@ -76,7 +76,7 @@ export function Uint8ArrayToHex(source: Uint8Array) {
     : Array.from(toLocalUint8Array(source), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-export function Uint8ArrayFromHex(source: string): Uint8Array {
+export function Uint8ArrayFromHex(source: string) {
   if (hasGlobalBuffer) return Buffer.from(source, 'hex')
   const hex = source.length % 2 === 0 ? source : source.slice(0, source.length - 1)
   const buffer: number[] = []

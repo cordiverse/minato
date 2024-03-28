@@ -122,6 +122,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
         fields[key] = this.types[field]
       } else if (typeof field === 'object' && field.load && field.dump) {
         field.typed = Typed.fromField(`_newtype_${name}_$unnamed_${key}` as any)
+        this.define(field)
       }
     })
     model.extend(fields, config)
@@ -130,13 +131,13 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
   }
 
   define<S>(field: Field.Transform<S>): Field.NewType<S> {
-    let name: string
-    while (!this.types[name = '_define_' + randomId()]) {
-      this[Context.current].effect(() => {
-        this.types[name] = field
-        return () => delete this.types[name]
-      })
-    }
+    let name: string | undefined = field.typed?.type
+    if (!name) while (this.types[name = '_define_' + randomId()]);
+    this[Context.current].effect(() => {
+      this.types[name] = field
+      return () => delete this.types[name]
+    })
+
     return name as any
   }
 
@@ -219,8 +220,8 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     return await sel._action('upsert', upsert, keys).execute()
   }
 
-  async withTransaction(callback: (database: Database<S>) => Promise<void>): Promise<void>
-  async withTransaction<T extends Keys<S>>(table: T, callback: (database: Database<S>) => Promise<void>): Promise<void>
+  async withTransaction(callback: (database: this) => Promise<void>): Promise<void>
+  async withTransaction<T extends Keys<S>>(table: T, callback: (database: this) => Promise<void>): Promise<void>
   async withTransaction(arg: any, ...args: any[]) {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
     const [table, callback] = typeof arg === 'string' ? [arg, ...args] : [null, arg, ...args]

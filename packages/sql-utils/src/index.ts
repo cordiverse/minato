@@ -541,14 +541,13 @@ export class Builder {
 
   load(model: Model, obj: any): any
   load(typed: Typed | Eval.Expr, obj: any, root?: boolean): any
-  load(model: Model | Typed | Eval.Expr, obj?: any, root: boolean = true) {
+  load(model: Model | Typed | Eval.Expr, obj?: any) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
       const typed = Typed.isTyped(model) ? model : Typed.fromTerm(model)
+      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!] ?? this.driver.types[typed?.type!]
 
-      const converter = root ? this.driver.types[typed?.inner ? 'json' : typed?.type!]
-        : typed?.type !== 'json' ? this.driver.types[typed?.type!] : undefined
-
-      let res = this.transform(typed, obj, 'load', converter ? converter.load(obj) : obj)
+      let res = this.transform(typed, obj, 'load')
+      res = converter ? converter.load(res) : res
 
       if (typed?.inner) {
         if (typed.list) {
@@ -566,12 +565,10 @@ export class Builder {
       const { type, initial, typed } = model.fields[key]!
       result[key] = obj[key]
 
-      if (root && this.isEncoded(key)) {
+      if (this.isEncoded(key)) {
         result[key] = this.driver.types['json'].load(result[key], initial)
-        result[key] = this.load(typed ?? Typed.fromField(type as any), result[key], false)
-      } else {
-        result[key] = this.load(typed ?? Typed.fromField(type as any), result[key], root)
       }
+      result[key] = this.load(typed ?? Typed.fromField(type as any), result[key])
     }
     return model.parse(result)
   }
