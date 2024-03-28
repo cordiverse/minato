@@ -150,7 +150,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     this.define<object, string>({
       types: ['json'],
       dump: value => JSON.stringify(value),
-      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+      load: value => value as any,
     })
 
     this.define<Date, string>({

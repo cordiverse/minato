@@ -43,8 +43,22 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
     if (key === '$prefix') return prefix
     if (key === '$model') return model
     if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
-    const typed = model?.fields[prefix + key as string] ? Typed.fromField(model?.fields[prefix + key as string]!)
-      : Typed.Object(Object.fromEntries(Object.entries(model?.fields!).map(([k, field]) => [k.slice(prefix.length + key.length + 1), Typed.fromField(field!)])))
+
+    let typed: Typed
+    const field = model?.fields[prefix + key as string]
+    if (expr?.[Typed.kTyped]?.inner?.[key]) {
+      // typed may conatins object layout, while type is simply 'expr'
+      typed = expr?.[Typed.kTyped]?.inner?.[key]
+    } else if (field) {
+      typed = Typed.fromField(field)
+    } else if (Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {
+      typed = Typed.Object(Object.fromEntries(Object.entries(model?.fields!)
+        .filter(([k]) => k.startsWith(`${prefix}${key}`))
+        .map(([k, field]) => [k.slice(prefix.length + key.length + 1), Typed.fromField(field!)])))
+    } else {
+      // unknown field inside json
+      typed = Typed.fromField('expr')
+    }
     return createRow(ref, Eval('', [ref, `${prefix}${key}`], typed), `${prefix}${key}.`, model)
   },
 })
@@ -222,7 +236,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     const selection = new Selection(this.driver, this)
     if (!callback) callback = (row) => Eval.array(Eval.object(row))
     const expr = this.resolveField(callback)
-    if (expr['$']) defineProperty(expr, Typed.kTyped, Typed.List(Typed.transform(expr)))
+    if (expr['$']) defineProperty(expr, Typed.kTyped, Typed.Array(Typed.fromTerm(expr)))
     return Eval.exec(selection._action('eval', expr))
   }
 

@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Dict, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Uint8ArrayToHex } from 'minato'
+import { Dict, isNullable, Time } from 'cosmokit'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Typed, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -32,6 +32,45 @@ export class MySQLBuilder extends Builder {
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
     this.evalOperators.$min = (expr) => this.createAggr(expr, value => `min(${value})`, undefined, value => `minato_cfunc_min(${value})`)
     this.evalOperators.$max = (expr) => this.createAggr(expr, value => `max(${value})`, undefined, value => `minato_cfunc_max(${value})`)
+
+    this.transformers['boolean'] = {
+      encode: value => `if(${value}=b'1', 1, 0)`,
+      decode: value => `if(${value}=1, b'1', b'0')`,
+      load: value => isNullable(value) ? value : !!value,
+    }
+
+    this.transformers['binary'] = {
+      encode: value => `to_base64(${value})`,
+      decode: value => `from_base64(${value})`,
+      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
+    }
+
+    this.transformers['date'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as date)`,
+      load: value => {
+        if (!value || typeof value === 'object') return value
+        const parsed = new Date(value), date = new Date()
+        date.setFullYear(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+        date.setHours(0, 0, 0, 0)
+        return date
+      },
+    }
+
+    this.transformers['time'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as time)`,
+      load: value => this.driver.types['time'].load(value),
+    }
+
+    this.transformers['timestamp'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as datetime)`,
+      load: value => {
+        if (!value || typeof value === 'object') return value
+        return new Date(value)
+      },
+    }
   }
 
   protected escapePrimitive(value: any) {
@@ -47,10 +86,12 @@ export class MySQLBuilder extends Builder {
     return super.escapePrimitive(value)
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false) {
+  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+    const transformer = this.getTransformer(typed)
     return this.asEncoded(encoded === this.isEncoded() && !pure ? value : encoded
-      ? (this.compat.maria ? `json_extract(json_object('v', ${value}), '$.v')` : `cast(${value} as json)`)
-      : `json_unquote(${value})`, pure ? undefined : encoded)
+      ? (this.compat.maria ? `json_extract(json_object('v', ${transformer ? transformer.encode(value) : value}), '$.v')`
+        : `cast(${transformer ? transformer.encode(value) : value} as json)`)
+      : transformer ? transformer.decode(`json_unquote(${value})`) : `json_unquote(${value})`, pure ? undefined : encoded)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {

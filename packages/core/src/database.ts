@@ -54,10 +54,10 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
 
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
+  public types: Dict<Field.Transform> = Object.create(null)
   public migrating = false
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   private migrateTasks: Dict<Promise<void>> = Object.create(null)
-  private types: Dict<Field.Transform> = Object.create(null)
 
   private stashed = new Set<string>()
 

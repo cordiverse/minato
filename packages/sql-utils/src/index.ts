@@ -1,4 +1,4 @@
-import { Dict, isNullable } from 'cosmokit'
+import { Dict, isNullable, mapValues } from 'cosmokit'
 import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Typed } from 'minato'
 
 export function escapeId(value: string) {
@@ -22,6 +22,12 @@ export type ExtractUnary<T> = T extends [infer U] ? U : T
 export type EvalOperators = {
   [K in keyof Eval.Static as `$${K}`]?: (expr: ExtractUnary<Parameters<Eval.Static[K]>>) => string
 } & { $: (expr: any) => string }
+
+interface Transformer<S=any, T=any> {
+  encode(value: string): string
+  decode(value: string): string
+  load(value: S): T
+}
 
 interface State {
   // current table ref in get()
@@ -53,8 +59,9 @@ export class Builder {
   protected $true = '1'
   protected $false = '0'
   protected modifiedTable?: string
+  protected transformers: Dict<Transformer> = Object.create(null)
 
-  private readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
+  protected readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
 
   constructor(protected driver: Driver, tables?: Dict<Model>) {
     this.state.tables = tables
@@ -158,7 +165,7 @@ export class Builder {
       $literal: ([value, type]) => this.escape(value, type as any),
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const typed = Typed.transform(arg)
+        const typed = Typed.fromTerm(arg)
         const res = typed.type === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
           : ['timestamp', 'date'].includes(typed.type!) ? `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))` : `(0+${value})`
         return this.asEncoded(`ifnull(${res}, 0)`, false)
@@ -268,9 +275,11 @@ export class Builder {
     return value
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false) {
-    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value : encoded
-      ? `cast(${value} as json)` : `json_unquote(${value})`, pure ? undefined : encoded)
+  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+    const transformer = this.getTransformer(typed)
+    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
+      : encoded ? `cast(${transformer ? transformer.encode(value) : value} as json)`
+        : `json_unquote(${transformer ? transformer.decode(value) : value})`, pure ? undefined : encoded)
   }
 
   protected isEncoded(key?: string) {
@@ -293,10 +302,17 @@ export class Builder {
     }
   }
 
+  protected getTransformer(expr: any) {
+    const typed = Typed.isTyped(expr) ? expr : Typed.fromTerm(expr)
+    return this.transformers[typed.type] ?? this.transformers[this.driver.database.types[typed.type]?.type]
+  }
+
   protected groupObject(fields: any) {
     const parse = (expr) => {
       const value = this.parseEval(expr, false)
-      return this.isEncoded() ? `json_extract(${value}, '$')` : `${value}`
+      const transformer = this.getTransformer(expr)
+      return this.isEncoded() ? `json_extract(${value}, '$')`
+        : transformer ? transformer.encode(value) : `${value}`
     }
     const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
     return this.asEncoded(res, true)
@@ -422,7 +438,7 @@ export class Builder {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return unquote ? this.encode(this.parseEvalExpr(expr), false) : this.parseEvalExpr(expr)
+    return unquote ? this.encode(this.parseEvalExpr(expr), false, false, Typed.fromTerm(expr)) : this.parseEvalExpr(expr)
   }
 
   protected saveState(extra: Partial<State> = {}) {
@@ -525,21 +541,56 @@ export class Builder {
   }
 
   load(model: Model, obj: any): any
-  load(typed: Typed | Eval.Expr, obj: any): any
-  load(model: Model | Typed | Eval.Expr, obj?: any) {
+  load(typed: Typed | Eval.Expr, obj: any, root?: boolean): any
+  load(model: Model | Typed | Eval.Expr, obj?: any, root: boolean = true) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
-      const typed = Typed.transform(model)
-      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!]
-      return converter ? converter.load(obj) : obj
+      const typed = Typed.isTyped(model) ? model : Typed.fromTerm(model)
+
+      const converter = root ? this.driver.types[typed?.inner ? 'json' : typed?.type!]
+        : typed?.type !== 'json' ? this.driver.types[typed?.type!] : undefined
+
+      let res = this.getTransformer(typed) ? this.getTransformer(typed).load(obj)
+        : converter ? converter.load(obj) : obj
+
+      if (typed?.inner) {
+        if (typed.list) {
+          res = res.map(x => this.load(typed.inner!, x, false))
+        } else {
+          res = mapValues(res, (x, k) => this.load(typed.inner![k], x, false))
+        }
+      }
+      return res
     }
 
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
       const { type, initial, typed } = model.fields[key]!
-      const converter = (this.isEncoded(key) || typed?.inner) ? this.driver.types['json']
-        : typed?.type ? this.driver.types[typed.type] : this.driver.types[type]
-      result[key] = converter ? converter.load(obj[key], initial) : obj[key]
+      result[key] = obj[key]
+
+      if (root && this.isEncoded(key)) {
+        result[key] = this.driver.types['json'].load(result[key], initial)
+        result[key] = this.load(typed ?? Typed.fromField(type as any), result[key], false)
+      } else {
+        result[key] = this.load(typed ?? Typed.fromField(type as any), result[key], root)
+      }
+
+      // result[key] = this.load(typed ?? Typed.fromField(type as any), result[key])
+
+      // if (this.getTransformer(typed)) result[key] = this.getTransformer(typed).load(result[key])
+
+      // const converter = subroot ? (typed?.inner ? this.driver.types['json']
+      //   : typed?.type ? this.driver.types[typed.type] : this.driver.types[type])
+      //   : typed?.type !== 'json' ? this.driver.types[typed?.type!] : undefined
+
+      // result[key] = converter ? converter.load(result[key], initial) : result[key]
+      // if (typed?.inner) {
+      //   if (typed.list) {
+      //     result[key] = result[key].map((x: any) => this.load(typed.inner!, x, false))
+      //   } else {
+      //     result[key] = mapValues(result[key], (x, k) => this.load(typed.inner![k], x, false))
+      //   }
+      // }
     }
     return model.parse(result)
   }

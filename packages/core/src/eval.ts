@@ -156,7 +156,7 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
   return (...args: any) => Eval(key, args, Typed.Boolean) as any
 }
 
-Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault }, Typed.transform(branches[0]))
+Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault }, Typed.fromTerm(branches[0]))
 operators.$switch = (args, data) => {
   for (const branch of args.branches) {
     if (executeEval(data, branch.case)) return executeEval(data, branch.then)
@@ -166,8 +166,8 @@ operators.$switch = (args, data) => {
 
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)
-  : executeEval(data, vElse), (cond, vThen, vElse) => Typed.transform(vThen))
-Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback), (value) => Typed.transform(value))
+  : executeEval(data, vElse), (cond, vThen, vElse) => Typed.fromTerm(vThen))
+Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback), (value) => Typed.fromTerm(value))
 
 // arithmetic
 Eval.add = multary('add', (args, data) => args.reduce<number>((prev, curr) => prev + executeEval(data, curr), 0), Typed.Number)
@@ -212,11 +212,17 @@ Eval.not = unary('not', (value, data) => !executeEval(data, value), Typed.Boolea
 Eval.literal = multary('literal', ([value, type]) => {
   if (type) throw new TypeError('literal cast is not supported')
   else return value
-}, (value, type) => type ? Typed.fromField(type) : Typed.transform(value))
+}, (value, type) => type ? Typed.fromField(type) : Typed.fromTerm(value))
 Eval.number = unary('number', (arg, data) => {
   const value = executeEval(data, arg)
   return value instanceof Date ? Math.floor(value.valueOf() / 1000) : Number(value)
 }, Typed.Number)
+
+const unwrapAggr = (expr: any) => {
+  const typed = Typed.fromTerm(expr)
+  if (typed.inner && typed.list) return typed.inner!
+  else return typed
+}
 
 // aggregation
 Eval.sum = unary('sum', (expr, table) => Array.isArray(table)
@@ -231,10 +237,10 @@ Eval.avg = unary('avg', (expr, table) => {
 }, Typed.Number)
 Eval.max = unary('max', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x > y ? x : y, -Infinity)
-  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity), (expr) => Typed.transform(expr))
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity), (expr) => unwrapAggr(expr))
 Eval.min = unary('min', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x < y ? x : y, Infinity)
-  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity), (expr) => Typed.transform(expr))
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity), (expr) => unwrapAggr(expr))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size, Typed.Number)
 defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).length
@@ -248,16 +254,16 @@ Eval.object = (fields) => {
     fields = Object.fromEntries(modelFields
       .filter(([path]) => path.startsWith(prefix))
       .map(([k]) => [k.slice(prefix.length), fields[k.slice(prefix.length)]]))
-    const typed = Typed.Object(fields)
+    const typed = Typed.Object(valueMap(fields, (value) => Typed.fromTerm(value)))
     return Eval('object', fields, typed)
   }
-  return Eval('object', fields, Typed.Object(fields)) as any
+  return Eval('object', fields, Typed.Object(valueMap(fields, (value) => Typed.fromTerm(value)))) as any
 }
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data))
-  : Array.from(executeEval(table, expr)), (expr) => Typed.List(Typed.transform(expr)))
+  : Array.from(executeEval(table, expr)), (expr) => Typed.Array(Typed.fromTerm(expr)))
 
-Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Typed.transform(expr.args[0]))
+Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Typed.fromTerm(expr.args[0]))
 
 export { Eval as $ }
 

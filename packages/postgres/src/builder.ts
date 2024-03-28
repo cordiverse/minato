@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Typed, Uint8ArrayToHex } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Typed, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -82,7 +82,7 @@ export class PostgresBuilder extends Builder {
 
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const typed = Typed.transform(arg)
+        const typed = Typed.fromTerm(arg)
         const res = Field.date.includes(typed.type!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
         return this.asEncoded(`coalesce(${res}, 0)`, false)
       },
@@ -97,6 +97,51 @@ export class PostgresBuilder extends Builder {
       ),
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg, 'text')).join('||')}`,
+    }
+
+    this.transformers['boolean'] = {
+      encode: value => value,
+      decode: value => `(${value})::boolean`,
+      load: value => value,
+    }
+
+    this.transformers['decimal'] = {
+      encode: value => value,
+      decode: value => `(${value})::double precision`,
+      load: value => isNullable(value) ? value : +value,
+    }
+
+    this.transformers['binary'] = {
+      encode: value => `encode(${value}, 'base64')`,
+      decode: value => `decode(${value}, 'base64')`,
+      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
+    }
+
+    this.transformers['date'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as date)`,
+      load: value => {
+        if (!value || typeof value === 'object') return value
+        const parsed = new Date(value), date = new Date()
+        date.setFullYear(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+        date.setHours(0, 0, 0, 0)
+        return date
+      },
+    }
+
+    this.transformers['time'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as time)`,
+      load: value => this.driver.types['time'].load(value),
+    }
+
+    this.transformers['timestamp'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as datetime)`,
+      load: value => {
+        if (!value || typeof value === 'object') return value
+        return new Date(value)
+      },
     }
   }
 
@@ -117,12 +162,13 @@ export class PostgresBuilder extends Builder {
     else if (typeof expr === 'string') return 'boolean'
   }
 
-  parseEval(expr: any, outtype: boolean | string = false): string {
+  parseEval(expr: any, outtype: boolean | string = true): string {
     this.state.encoded = false
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return outtype ? this.encode(this.parseEvalExpr(expr), false, false, typeof outtype === 'string' ? outtype : undefined) : this.parseEvalExpr(expr)
+    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Typed.fromTerm(expr))})${typeof outtype === 'string' ? `::${outtype}` : ''}`
+      : this.parseEvalExpr(expr)
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
@@ -140,7 +186,8 @@ export class PostgresBuilder extends Builder {
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, eltype?: string) {
     if (!this.state.group && !nonaggr) {
       const value = this.parseEval(expr, false)
-      return `(select ${aggr(this.encode(this.escapeId('value'), false, true, eltype))} from jsonb_array_elements(${value}) ${randomId()})`
+      return `(select ${aggr(`(${this.encode(this.escapeId('value'), false, true, undefined)})${eltype ? `::${eltype}` : ''}`)}`
+        + ` from jsonb_array_elements(${value}) ${randomId()})`
     } else {
       return super.createAggr(expr, aggr, nonaggr)
     }
@@ -158,15 +205,21 @@ export class PostgresBuilder extends Builder {
     return this.asEncoded(`(${obj} @> ${value})`, false)
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: string) {
-    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value : encoded
-      ? `to_jsonb(${value})` : `(jsonb_build_object('v', ${value})->>'v')::${type}`, pure ? undefined : encoded)
+  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+    const transformer = this.getTransformer(typed)
+    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
+      : encoded ? `to_jsonb(${transformer ? transformer.encode(value) : value})`
+        : transformer ? transformer.decode(`(jsonb_build_object('v', ${value})->>'v')`)
+          : `(jsonb_build_object('v', ${value})->>'v')`
+    , pure ? undefined : encoded)
   }
 
   protected groupObject(fields: any) {
     const parse = (expr) => {
       const value = this.parseEval(expr, false)
-      return this.encode(`to_jsonb(${value})`, true)
+      const transformer = this.getTransformer(expr)
+      return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : transformer ? transformer.encode(value)
+        : `${value}`
     }
     const res = `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
     return this.asEncoded(res, true)

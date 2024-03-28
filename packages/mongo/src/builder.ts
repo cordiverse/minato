@@ -1,4 +1,4 @@
-import { Dict, isNullable, valueMap } from 'cosmokit'
+import { Dict, isNullable, mapValues, valueMap } from 'cosmokit'
 import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Typed } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
@@ -452,9 +452,15 @@ export class Builder {
   load(typed: Typed | Eval.Expr, obj: any): any
   load(model: Model | Typed | Eval.Expr, obj?: any) {
     if (Typed.isTyped(model) || isEvalExpr(model)) {
-      const typed = Typed.transform(model)
+      const typed = Typed.isTyped(model) ? model : Typed.fromTerm(model)
       const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!]
-      return converter ? converter.load(obj) : obj
+      let res = converter ? converter.load(obj) : obj
+
+      if (typed?.inner) {
+        if (typed.list) res = res.map((x: any) => this.load(typed.inner!, x))
+        else res = mapValues(res, (x: any, k) => this.load(typed.inner![k], x))
+      }
+      return res
     }
 
     obj = model.format(obj)
@@ -464,6 +470,10 @@ export class Builder {
       const { type, initial, typed } = model.fields[key]!
       const converter = typed?.type ? this.driver.types[typed.type] : this.driver.types[type]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
+      if (typed?.inner) {
+        if (typed.list) result[key] = result[key].map((x: any) => this.load(typed.inner!, x))
+        else result[key] = mapValues(result[key], (x: any, k) => this.load(typed.inner![k], x))
+      }
     }
     return model.parse(result)
   }

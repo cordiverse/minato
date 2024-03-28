@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { Dict, isNullable } from 'cosmokit'
-import { Driver, Field, isUint8Array, Model, randomId, Typed, Uint8ArrayToHex } from 'minato'
+import { Driver, Field, isUint8Array, Model, randomId, Typed, Uint8ArrayFromHex, Uint8ArrayToHex } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -19,10 +19,43 @@ export class SQLiteBuilder extends Builder {
     this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => this.isEncoded() ? this.jsonLength(value)
       : this.asEncoded(`iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false))
     this.evalOperators.$number = (arg) => {
-      const typed = Typed.transform(arg)
+      const typed = Typed.fromTerm(arg)
       const value = this.parseEval(arg)
       const res = Field.date.includes(typed.type!) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
+    }
+
+    this.transformers['binary'] = {
+      encode: value => `hex(${value})`,
+      decode: value => `unhex(${value})`,
+      load: value => isNullable(value) ? value : Uint8ArrayFromHex(value),
+    }
+
+    this.transformers['date'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as date)`,
+      load: value => {
+        if (!value || typeof value === 'object') return value
+        const parsed = new Date(value), date = new Date()
+        date.setFullYear(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+        date.setHours(0, 0, 0, 0)
+        return date
+      },
+    }
+
+    this.transformers['time'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as time)`,
+      load: value => this.driver.types['time'].load(value),
+    }
+
+    this.transformers['timestamp'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as datetime)`,
+      load: value => {
+        if (!value || typeof value === 'object') return value
+        return new Date(value)
+      },
     }
   }
 
@@ -49,8 +82,8 @@ export class SQLiteBuilder extends Builder {
     return this.asEncoded(`json_array_contains(${obj}, ${value})`, false)
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false) {
-    return encoded ? super.encode(value, encoded, pure) : value
+  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+    return encoded ? super.encode(value, encoded, pure, typed) : value
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {

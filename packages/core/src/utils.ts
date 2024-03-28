@@ -76,6 +76,20 @@ export function Uint8ArrayToHex(source: Uint8Array) {
     : Array.from(toLocalUint8Array(source), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
+export function Uint8ArrayFromHex(source: string): Uint8Array {
+  if (hasGlobalBuffer) return Buffer.from(source, 'hex')
+  const hex = source.length % 2 === 0 ? source : source.slice(0, source.length - 1)
+  const buffer: number[] = []
+  for (let i = 0; i < hex.length; i += 2) {
+    buffer.push(Number.parseInt(`${hex[i]}${hex[i + 1]}`, 16))
+  }
+  return Uint8Array.from(buffer)
+}
+
+export function Uint8ArrayFromBase64(source: string) {
+  return (hasGlobalBuffer) ? Buffer.from(source, 'base64') : Uint8Array.from(atob(source), c => c.charCodeAt(0))
+}
+
 export function toLocalUint8Array(source: Uint8Array) {
   if (hasGlobalBuffer) {
     return Buffer.isBuffer(source) ? Buffer.from(source)

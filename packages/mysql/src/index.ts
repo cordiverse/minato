@@ -40,7 +40,7 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'char': return `char(${length || 255})`
     case 'string': return (length || 255) > 65536 ? 'longtext' : `varchar(${length || 255})`
     case 'text': return (length || 255) > 65536 ? 'longtext' : `text(${length || 65535})`
-    case 'binary': return 'blob'
+    case 'binary': return (length || 65537) > 65536 ? 'longblob' : `blob`
     case 'list': return `text(${length || 65535})`
     case 'json': return `text(${length || 65535})`
     default: throw new Error(`unsupported type: ${type}`)
@@ -138,7 +138,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     this.define<string[], string>({
       types: ['list'],
-      dump: value => value.join(','),
+      dump: value => Array.isArray(value) ? value.join(',') : value,
       load: value => value ? value.split(',') : [],
     })
 
@@ -205,7 +205,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
           def += (nullable ? ' ' : ' not ') + 'null'
         }
         // blob, text, geometry or json columns cannot have default values
-        if (initial && !typedef.startsWith('text') && !typedef.startsWith('blob')) {
+        if (initial && !typedef.startsWith('text') && !typedef.endsWith('blob')) {
           def += ' default ' + this.sql.escape(initial, fields[key])
         }
       }

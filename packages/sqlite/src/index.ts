@@ -190,13 +190,13 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     this.define<string[], string>({
       types: ['list'],
       dump: value => Array.isArray(value) ? value.join(',') : value,
-      load: (value) => value ? value.split(',') : [],
+      load: value => value ? value.split(',') : [],
     })
 
     this.define<Date, number>({
       types: ['date', 'time', 'timestamp'],
       dump: value => isNullable(value) ? value as any : +new Date(value),
-      load: (value) => isNullable(value) ? value : new Date(value),
+      load: value => isNullable(value) ? value : new Date(value),
     })
 
     this.define<Uint8Array, Uint8Array>({
