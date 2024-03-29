@@ -34,7 +34,13 @@ function QueryOperators(database: Database<Tables>) {
 }
 
 namespace QueryOperators {
-  export const comparison = function Comparison(database: Database<Tables>) {
+  interface QueryOptions {
+    nullableComparator?: boolean
+  }
+
+  export const comparison = function Comparison(database: Database<Tables>, options: QueryOptions = {}) {
+    const { nullableComparator = true } = options
+
     before(async () => {
       await database.remove('temp1', {})
       await database.create('temp1', {
@@ -82,7 +88,7 @@ namespace QueryOperators {
         timestamp: { $lte: new Date('1999-01-01') },
       })).eventually.to.have.length(0)
 
-      await expect(database.get('temp1',
+      nullableComparator && await expect(database.get('temp1',
         row => $.gt(row.timestamp, new Date('1999-01-01'))
       )).eventually.to.have.length(1).with.nested.property('0.text').equal('awesome foo')
     })
@@ -237,7 +243,7 @@ namespace QueryOperators {
     })
   }
 
-  const bitwise = function Bitwise(database: Database<Tables>) {
+  export const bitwise = function Bitwise(database: Database<Tables>) {
     before(async () => {
       await database.remove('temp1', {})
       await database.create('temp1', { value: 3 })

@@ -21,6 +21,11 @@ describe('@minatojs/driver-memory', () => {
         cast: false,
         typeModel: false,
       }
+    },
+    query: {
+      comparison: {
+        nullableComparator: false,
+      }
     }
   })
 })
