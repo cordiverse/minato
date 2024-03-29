@@ -131,7 +131,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     if (!found) {
       const doc = await this.db.collection(table).findOne()
       if (doc) {
-        virtual = typeof doc._id !== 'object' || (typeof primary === 'string' && modelFields[primary]?.type === 'primary')
+        virtual = typeof doc._id !== 'object' || (typeof primary === 'string' && modelFields[primary]?.deftype === 'primary')
       } else {
         // Empty collection, just set meta and return
         fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
@@ -261,14 +261,14 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   public getVirtualKey(table: string) {
     const { primary, fields } = this.model(table)
-    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.deftype === 'primary')) {
       return primary
     }
   }
 
   private patchVirtual(table: string, row: any) {
     const { primary, fields } = this.model(table)
-    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.deftype === 'primary')) {
       row[primary] = row['_id']
       delete row['_id']
     }
@@ -277,7 +277,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   private unpatchVirtual(table: string, row: any) {
     const { primary, fields } = this.model(table)
-    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.deftype === 'primary')) {
       row['_id'] = row[primary]
       delete row[primary]
     }
@@ -343,19 +343,19 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   private shouldEnsurePrimary(table: string) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    return typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary'
+    return typeof primary === 'string' && autoInc && model.fields[primary]?.deftype !== 'primary'
   }
 
   private shouldFillPrimary(table: string) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    return typeof primary === 'string' && autoInc && model.fields[primary]?.type === 'primary'
+    return typeof primary === 'string' && autoInc && model.fields[primary]?.deftype === 'primary'
   }
 
   private async ensurePrimary(table: string, data: any[]) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    if (typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary') {
+    if (typeof primary === 'string' && autoInc && model.fields[primary]?.deftype !== 'primary') {
       const missing = data.filter(item => !(primary in item))
       if (!missing.length) return
       const doc = await this.db.collection('_fields').findOneAndUpdate(

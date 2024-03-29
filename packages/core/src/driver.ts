@@ -4,7 +4,7 @@ import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
 import { Field, Model } from './model.ts'
 import { Database } from './database.ts'
-import { Typed } from './typed.ts'
+import { Type } from './type.ts'
 
 export namespace Driver {
   export interface Stats {
@@ -96,8 +96,7 @@ export abstract class Driver<T = any> {
       if (!table.args[0].fields) return table.model
       const model = new Model('temp')
       model.fields = valueMap(table.args[0].fields, (expr, key) => ({
-        type: 'expr',
-        typed: Typed.fromTerm(expr),
+        type: Type.fromTerm(expr),
       }))
       return model
     }
@@ -108,9 +107,8 @@ export abstract class Driver<T = any> {
       for (const field in submodel.fields) {
         if (submodel.fields[field]!.deprecated) continue
         model.fields[`${key}.${field}`] = {
-          type: 'expr',
-          expr: Eval('', [table[key].ref, field], Typed.fromField(submodel.fields[field]!)),
-          typed: Typed.fromField(submodel.fields[field]!), // can omit
+          expr: Eval('', [table[key].ref, field], Type.fromField(submodel.fields[field]!)),
+          type: Type.fromField(submodel.fields[field]!), // can omit
         }
       }
     }

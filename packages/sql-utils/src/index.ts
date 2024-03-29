@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Typed } from 'minato'
+import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type } from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -9,8 +9,8 @@ export function isBracketed(value: string) {
   return value.startsWith('(') && value.endsWith(')')
 }
 
-export function isSqlJson(typed?: Typed) {
-  return typed ? (typed.type === 'json' || !!typed.inner) : false
+export function isSqlJson(type?: Type) {
+  return type ? (type.type === 'json' || !!type.inner) : false
 }
 
 export type QueryOperators = {
@@ -165,9 +165,9 @@ export class Builder {
       $literal: ([value, type]) => this.escape(value, type as any),
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const typed = Typed.fromTerm(arg)
-        const res = typed.type === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
-          : ['timestamp', 'date'].includes(typed.type!) ? `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))` : `(0+${value})`
+        const type = Type.fromTerm(arg)
+        const res = type.type === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
+          : ['timestamp', 'date'].includes(type.type!) ? `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))` : `(0+${value})`
         return this.asEncoded(`ifnull(${res}, 0)`, false)
       },
 
@@ -218,7 +218,7 @@ export class Builder {
   }
 
   protected isJsonQuery(key: string) {
-    return isSqlJson(this.state.tables![this.state.table!].fields![this.unescapeId(key)]?.typed)
+    return isSqlJson(this.state.tables![this.state.table!].fields![this.unescapeId(key)]?.type)
   }
 
   protected comparator(operator: string) {
@@ -258,7 +258,7 @@ export class Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(ifnull((SELECT ${this.groupArray(this.transform(Typed.fromTerm(expr)?.inner, output, 'encode'))}
+      return `(ifnull((SELECT ${this.groupArray(this.transform(Type.fromTerm(expr)?.inner, output, 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
   }
@@ -276,10 +276,10 @@ export class Builder {
     return value
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
-      : encoded ? `cast(${this.transform(typed, value, 'encode')} as json)`
-        : `json_unquote(${this.transform(typed, value, 'decode')})`, pure ? undefined : encoded)
+      : encoded ? `cast(${this.transform(type, value, 'encode')} as json)`
+        : `json_unquote(${this.transform(type, value, 'decode')})`, pure ? undefined : encoded)
   }
 
   protected isEncoded(key?: string) {
@@ -303,8 +303,8 @@ export class Builder {
   }
 
   protected transform(expr: any, value: string, method: 'encode' | 'decode' | 'load', miss?: any) {
-    const typed = Typed.isTyped(expr) ? expr : Typed.fromTerm(expr)
-    const transformer = this.transformers[typed.type] ?? this.transformers[this.driver.database.types[typed.type]?.type]
+    const type = Type.isType(expr) ? expr : Type.fromTerm(expr)
+    const transformer = this.transformers[type.type] ?? this.transformers[this.driver.database.types[type.type]?.deftype!]
     return transformer ? transformer[method](value) : (miss ?? value)
   }
 
@@ -382,7 +382,7 @@ export class Builder {
 
   protected transformKey(key: string, fields: Field.Config, prefix: string) {
     if (key in fields || !key.includes('.')) {
-      return this.asEncoded(prefix + this.escapeId(key), this.isEncoded(key) ?? isSqlJson(fields[key]?.typed))
+      return this.asEncoded(prefix + this.escapeId(key), this.isEncoded(key) ?? isSqlJson(fields[key]?.type))
     }
     const field = Object.keys(fields).find(k => key.startsWith(k + '.')) || key.split('.')[0]
     const rest = key.slice(field.length + 1).split('.')
@@ -437,7 +437,7 @@ export class Builder {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return unquote ? this.encode(this.parseEvalExpr(expr), false, false, Typed.fromTerm(expr)) : this.parseEvalExpr(expr)
+    return unquote ? this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr)) : this.parseEvalExpr(expr)
   }
 
   protected saveState(extra: Partial<State> = {}) {
@@ -501,7 +501,7 @@ export class Builder {
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
       .filter(([, field]) => !field!.deprecated)
-      .map(([key, field]) => [key, field!.expr ? field!.expr : Eval('', [ref, key], Typed.fromField(field!))]))
+      .map(([key, field]) => [key, field!.expr ? field!.expr : Eval('', [ref, key], Type.fromField(field!))]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
       encodedMap![key] = this.state.encoded!
@@ -532,28 +532,27 @@ export class Builder {
     obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      const { type, typed } = model.fields[key] ?? {}
-      const converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
+      const { type } = model.fields[key] ?? {}
+      const converter = this.driver.types[type?.type!]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     return result
   }
 
   load(model: Model, obj: any): any
-  load(typed: Typed | Eval.Expr, obj: any, root?: boolean): any
-  load(model: Model | Typed | Eval.Expr, obj?: any) {
-    if (Typed.isTyped(model) || isEvalExpr(model)) {
-      const typed = Typed.isTyped(model) ? model : Typed.fromTerm(model)
-      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!] ?? this.driver.types[typed?.type!]
-
-      let res = this.transform(typed, obj, 'load')
+  load(type: Type | Eval.Expr, obj: any, root?: boolean): any
+  load(model: Model | Type | Eval.Expr, obj?: any) {
+    if (Type.isType(model) || isEvalExpr(model)) {
+      const type = Type.isType(model) ? model : Type.fromTerm(model)
+      const converter = this.driver.types[type?.inner ? 'json' : type?.type!] ?? this.driver.types[type?.type!]
+      let res = this.transform(type, obj, 'load')
       res = converter ? converter.load(res) : res
 
-      if (typed?.inner) {
-        if (typed.list) {
-          res = res.map(x => this.load(typed.inner!, x, false))
+      if (type?.inner) {
+        if (type.list) {
+          res = res.map(x => this.load(type.inner!, x, false))
         } else {
-          res = mapValues(res, (x, k) => this.load(typed.inner![k], x, false))
+          res = mapValues(res, (x, k) => this.load(type.inner![k], x, false))
         }
       }
       return res
@@ -562,13 +561,13 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial, typed } = model.fields[key]!
+      const { type, initial } = model.fields[key]!
       result[key] = obj[key]
 
       if (this.isEncoded(key)) {
         result[key] = this.driver.types['json'].load(result[key], initial)
       }
-      result[key] = this.load(typed ?? Typed.fromField(type as any), result[key])
+      result[key] = this.load(type, result[key])
     }
     return model.parse(result)
   }
@@ -577,8 +576,8 @@ export class Builder {
     let converter: Driver.Transformer | undefined
     if (typeof field === 'string') converter = this.driver.types[field]
     else {
-      const { type, typed } = field ?? {}
-      converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
+      const { type } = field ?? {}
+      converter = this.driver.types[type?.type!]
     }
 
     return this.escapePrimitive(converter ? converter.dump(value) : value)

@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues, valueMap } from 'cosmokit'
-import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Typed } from 'minato'
+import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Type } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -441,24 +441,24 @@ export class Builder {
   dump(model: Model, obj: any): any {
     const result = {}
     for (const key in obj) {
-      const { type, typed } = model.fields[key] ?? {}
-      const converter = typed?.type ? this.driver.types[typed.type] : type && this.driver.types[type]
+      const { type } = model.fields[key] ?? {}
+      const converter = this.driver.types[type?.type!]
       result[key] = converter ? converter.dump(obj[key]) : obj[key]
     }
     return result
   }
 
   load(model: Model, obj: any): any
-  load(typed: Typed | Eval.Expr, obj: any): any
-  load(model: Model | Typed | Eval.Expr, obj?: any) {
-    if (Typed.isTyped(model) || isEvalExpr(model)) {
-      const typed = Typed.isTyped(model) ? model : Typed.fromTerm(model)
-      const converter = this.driver.types[typed?.inner ? 'json' : typed?.type!]
+  load(type: Type | Eval.Expr, obj: any): any
+  load(model: Model | Type | Eval.Expr, obj?: any) {
+    if (Type.isType(model) || isEvalExpr(model)) {
+      const type = Type.isType(model) ? model : Type.fromTerm(model)
+      const converter = this.driver.types[type?.inner ? 'json' : type?.type!]
       let res = converter ? converter.load(obj) : obj
 
-      if (typed?.inner) {
-        if (typed.list) res = res.map((x: any) => this.load(typed.inner!, x))
-        else res = mapValues(res, (x: any, k) => this.load(typed.inner![k], x))
+      if (type?.inner) {
+        if (type.list) res = res.map((x: any) => this.load(type.inner!, x))
+        else res = mapValues(res, (x: any, k) => this.load(type.inner![k], x))
       }
       return res
     }
@@ -467,12 +467,12 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial, typed } = model.fields[key]!
-      const converter = typed?.type ? this.driver.types[typed.type] : this.driver.types[type]
+      const { type, initial } = model.fields[key]!
+      const converter = this.driver.types[type?.type!]
       result[key] = converter ? converter.load(obj[key], initial) : obj[key]
-      if (typed?.inner) {
-        if (typed.list) result[key] = result[key].map((x: any) => this.load(typed.inner!, x))
-        else result[key] = mapValues(result[key], (x: any, k) => this.load(typed.inner![k], x))
+      if (type?.inner) {
+        if (type.list) result[key] = result[key].map((x: any) => this.load(type.inner!, x))
+        else result[key] = mapValues(result[key], (x: any, k) => this.load(type.inner![k], x))
       }
     }
     return model.parse(result)

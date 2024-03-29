@@ -10,7 +10,7 @@ import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
 import { pathToFileURL } from 'node:url'
 
-function getTypeDef({ type }: Field) {
+function getTypeDef({ deftype: type }: Field) {
   switch (type) {
     case 'primary':
     case 'boolean':

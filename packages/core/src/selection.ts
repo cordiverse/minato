@@ -4,7 +4,7 @@ import { Eval, executeEval } from './eval.ts'
 import { Model } from './model.ts'
 import { Query } from './query.ts'
 import { Keys, randomId, Row } from './utils.ts'
-import { Typed } from './typed.ts'
+import { Type } from './type.ts'
 
 declare module './eval.ts' {
   export namespace Eval {
@@ -44,22 +44,22 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
     if (key === '$model') return model
     if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
 
-    let typed: Typed
+    let type: Type
     const field = model?.fields[prefix + key as string]
-    if (expr?.[Typed.kTyped]?.inner?.[key]) {
-      // typed may conatins object layout, while type is simply 'expr'
-      typed = expr?.[Typed.kTyped]?.inner?.[key]
+    if (expr?.[Type.kType]?.inner?.[key]) {
+      // type may conatins object layout
+      type = expr?.[Type.kType]?.inner?.[key]
     } else if (field) {
-      typed = Typed.fromField(field)
+      type = Type.fromField(field)
     } else if (Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {
-      typed = Typed.Object(Object.fromEntries(Object.entries(model?.fields!)
+      type = Type.Object(Object.fromEntries(Object.entries(model?.fields!)
         .filter(([k]) => k.startsWith(`${prefix}${key}`))
-        .map(([k, field]) => [k.slice(prefix.length + key.length + 1), Typed.fromField(field!)])))
+        .map(([k, field]) => [k.slice(prefix.length + key.length + 1), Type.fromField(field!)])))
     } else {
       // unknown field inside json
-      typed = Typed.fromField('expr')
+      type = Type.fromField('expr')
     }
-    return createRow(ref, Eval('', [ref, `${prefix}${key}`], typed), `${prefix}${key}.`, model)
+    return createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
   },
 })
 
@@ -236,7 +236,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     const selection = new Selection(this.driver, this)
     if (!callback) callback = (row) => Eval.array(Eval.object(row))
     const expr = this.resolveField(callback)
-    if (expr['$']) defineProperty(expr, Typed.kTyped, Typed.Array(Typed.fromTerm(expr)))
+    if (expr['$']) defineProperty(expr, Type.kType, Type.Array(Type.fromTerm(expr)))
     return Eval.exec(selection._action('eval', expr))
   }
 

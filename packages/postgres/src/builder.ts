@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Typed, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -82,8 +82,8 @@ export class PostgresBuilder extends Builder {
 
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const typed = Typed.fromTerm(arg)
-        const res = Field.date.includes(typed.type!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
+        const type = Type.fromTerm(arg)
+        const res = Field.date.includes(type.type!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
         return this.asEncoded(`coalesce(${res}, 0)`, false)
       },
 
@@ -167,7 +167,7 @@ export class PostgresBuilder extends Builder {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Typed.fromTerm(expr))})${typeof outtype === 'string' ? `::${outtype}` : ''}`
+    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr))})${typeof outtype === 'string' ? `::${outtype}` : ''}`
       : this.parseEvalExpr(expr)
   }
 
@@ -205,10 +205,10 @@ export class PostgresBuilder extends Builder {
     return this.asEncoded(`(${obj} @> ${value})`, false)
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
-      : encoded ? `to_jsonb(${this.transform(typed, value, 'encode')})`
-        : this.transform(typed, `(jsonb_build_object('v', ${value})->>'v')`, 'decode')
+      : encoded ? `to_jsonb(${this.transform(type, value, 'encode')})`
+        : this.transform(type, `(jsonb_build_object('v', ${value})->>'v')`, 'decode')
     , pure ? undefined : encoded)
   }
 
@@ -234,7 +234,7 @@ export class PostgresBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(coalesce((SELECT ${this.groupArray(this.transform(Typed.fromTerm(expr)?.inner, output, 'encode'))}
+      return `(coalesce((SELECT ${this.groupArray(this.transform(Type.fromTerm(expr)?.inner, output, 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
     }
   }

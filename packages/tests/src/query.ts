@@ -233,7 +233,7 @@ namespace QueryOperators {
     })
   }
 
-  export const bitwise = function Bitwise(database: Database<Tables>) {
+  const bitwise = function Bitwise(database: Database<Tables>) {
     before(async () => {
       await database.remove('temp1', {})
       await database.create('temp1', { value: 3 })
@@ -430,7 +430,7 @@ namespace QueryOperators {
     }
   }
 
-  export const logical = Logical
+  const logical = Logical
 }
 
 export default QueryOperators

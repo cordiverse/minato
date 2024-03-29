@@ -6,7 +6,6 @@ import { Field, Model } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
-import { Typed } from './typed.ts'
 
 type TableLike<S> = Keys<S> | Selection
 
@@ -97,10 +96,10 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     if (!driver) return
 
     const { fields } = driver.model(name)
-    Object.entries(fields).forEach(([key, field]: [string, Field.Transform]) => {
+    Object.entries(fields).forEach(([key, field]: [string, Field & Field.Transform]) => {
       if (field.dump && field.load) {
         driver.define({
-          types: [field.typed!.type!],
+          types: [field.type.type!],
           dump: field.dump,
           load: field.load,
         })
@@ -118,11 +117,11 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     }
     Object.entries(fields).forEach(([key, field]: [string, any]) => {
       if (typeof field === 'string' && this.types[field]) {
-        this.types[field].typed = Typed.fromField(field as any)
         fields[key] = this.types[field]
       } else if (typeof field === 'object' && field.load && field.dump) {
-        field.typed = Typed.fromField(`_newtype_${name}_$unnamed_${key}` as any)
-        this.define(field.typed.type, field)
+        field.deftype = field.type
+        field.type = `_newtype_${name}_$unnamed_${key}`
+        this.define(field.type, field)
       }
     })
     model.extend(fields, config)
@@ -131,7 +130,7 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
   }
 
   define<K extends Exclude<Keys<N>, Field.Type>>(name: K, field: Field.Transform<N[K]>): K
-  define<S>(field: Field.Transform<S>): Keys<N>
+  define<S>(field: Field.Transform<S>): Field.NewType<S>
   define(name: any, field?: any) {
     if (typeof name === 'object') {
       field = name
@@ -139,7 +138,7 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     }
     if (!name) while (this.types[name = '_define_' + randomId()]);
     this[Context.current].effect(() => {
-      this.types[name] = field
+      this.types[name] = { deftype: field.type, ...field, type: name }
       return () => delete this.types[name]
     })
 

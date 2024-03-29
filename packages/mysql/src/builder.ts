@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Typed, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -86,11 +86,11 @@ export class MySQLBuilder extends Builder {
     return super.escapePrimitive(value)
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false, typed?: Typed) {
+  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded(encoded === this.isEncoded() && !pure ? value : encoded
-      ? (this.compat.maria ? `json_extract(json_object('v', ${this.transform(typed, value, 'encode')}), '$.v')`
-        : `cast(${this.transform(typed, value, 'encode')} as json)`)
-      : this.transform(typed, `json_unquote(${value})`, 'decode'), pure ? undefined : encoded)
+      ? (this.compat.maria ? `json_extract(json_object('v', ${this.transform(type, value, 'encode')}), '$.v')`
+        : `cast(${this.transform(type, value, 'encode')} as json)`)
+      : this.transform(type, `json_unquote(${value})`, 'decode'), pure ? undefined : encoded)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
@@ -120,7 +120,7 @@ export class MySQLBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      query = `(ifnull((SELECT ${this.groupArray(this.transform(Typed.fromTerm(expr)?.inner, output, 'encode'))}
+      query = `(ifnull((SELECT ${this.groupArray(this.transform(Type.fromTerm(expr)?.inner, output, 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
     if (Object.keys(refFields ?? {}).length) {

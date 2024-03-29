@@ -1,5 +1,5 @@
 import { valueMap } from 'cosmokit'
-import { $, Database, Typed } from 'minato'
+import { $, Database, Type } from 'minato'
 import { expect } from 'chai'
 
 interface Bar {
@@ -11,12 +11,17 @@ interface Bar {
   bool?: boolean
   list?: string[]
   array?: number[]
+  object?: {
+    text?: string
+    num?: number
+  }
   timestamp?: Date
   date?: Date
   time?: Date
   binary?: Buffer
   bigint?: bigint
   bnum?: number
+  bnum2?: number
 }
 
 interface Tables {
@@ -33,6 +38,13 @@ function ModelOperations(database: Database<Tables, Types>) {
     dump: value => value ? value.toString() : value as any,
     load: value => value ? BigInt(value) : value as any,
     initial: 123n
+  })
+
+  const bnum = database.define({
+    type: 'binary',
+    dump: value => Buffer.from(String(value)),
+    load: value => value ? +value : value,
+    initial: 0,
   })
 
   database.extend('dtypes', {
@@ -66,6 +78,13 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: 'json',
       initial: [1, 2, 3],
     },
+    object: {
+      type: 'json',
+      initial: {
+        num: 1,
+        text: '2',
+      }
+    },
     timestamp: {
       type: 'timestamp',
       initial: new Date('1970-01-01 00:00:00'),
@@ -83,7 +102,8 @@ function ModelOperations(database: Database<Tables, Types>) {
       initial: Buffer.from('initial buffer')
     },
     bigint: 'bigint',
-    bnum: {
+    bnum,
+    bnum2: {
       type: 'binary',
       dump: value => Buffer.from(String(value)),
       load: value => value ? +value : value,
@@ -102,14 +122,14 @@ namespace ModelOperations {
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
     { id: 4, list: ['1', '1', '4'] },
-    { id: 5, array: [1, 1, 4] },
+    { id: 5, array: [1, 1, 4], object: { num: 10, text: 'ab' } },
     { id: 6, timestamp: magicBorn },
     { id: 7, date: magicBorn },
     { id: 8, time: new Date('1999-10-01 15:40:00') },
     { id: 9, binary: Buffer.from('hello') },
     { id: 10, bigint: BigInt(1e63) },
     { id: 11, decimal: 2.432 },
-    { id: 12, bnum: 114514 },
+    { id: 12, bnum: 114514, bnum2: 12345 },
   ]
 
   async function setup<K extends keyof Tables>(database: Database<Tables>, name: K, table: Tables[K][]) {
@@ -138,13 +158,13 @@ namespace ModelOperations {
     })
 
     it('primitive', async () => {
-      expect(Typed.fromTerm($.literal(123)).type).to.equal(Typed.Number.type)
-      expect(Typed.fromTerm($.literal('abc')).type).to.equal(Typed.String.type)
-      expect(Typed.fromTerm($.literal(true)).type).to.equal(Typed.Boolean.type)
-      expect(Typed.fromTerm($.literal(new Date('1970-01-01'))).type).to.equal('timestamp')
-      expect(Typed.fromTerm($.literal(Buffer.from('hello'))).type).to.equal('binary')
-      expect(Typed.fromTerm($.literal([1, 2, 3])).type).to.equal('json')
-      expect(Typed.fromTerm($.literal({ a: 1 })).type).to.equal('json')
+      expect(Type.fromTerm($.literal(123)).type).to.equal(Type.Number.type)
+      expect(Type.fromTerm($.literal('abc')).type).to.equal(Type.String.type)
+      expect(Type.fromTerm($.literal(true)).type).to.equal(Type.Boolean.type)
+      expect(Type.fromTerm($.literal(new Date('1970-01-01'))).type).to.equal('timestamp')
+      expect(Type.fromTerm($.literal(Buffer.from('hello'))).type).to.equal('binary')
+      expect(Type.fromTerm($.literal([1, 2, 3])).type).to.equal('json')
+      expect(Type.fromTerm($.literal({ a: 1 })).type).to.equal('json')
     })
 
     cast && it('cast newtype', async () => {

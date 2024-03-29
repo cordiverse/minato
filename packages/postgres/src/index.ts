@@ -58,7 +58,7 @@ interface QueryTask {
 const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
 function getTypeDef(field: Field & { autoInc?: boolean }) {
-  let { type, length, precision, scale, autoInc } = field
+  let { deftype: type, length, precision, scale, autoInc } = field
   switch (type) {
     case 'primary':
     case 'unsigned':
@@ -91,16 +91,16 @@ function getTypeDef(field: Field & { autoInc?: boolean }) {
 function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, def: string) {
   const typename = def.split(/[ (]/)[0]
   if (field.autoInc) return false
-  if (['unsigned', 'integer'].includes(field.type)) {
+  if (['unsigned', 'integer'].includes(field.deftype!)) {
     if (column.data_type !== typename) return true
   } else if (typename === 'text[]') {
     if (column.data_type !== 'ARRAY') return true
-  } else if (Field.date.includes(field.type)) {
+  } else if (Field.date.includes(field.deftype!)) {
     if (column.data_type !== def) return true
   } else if (typename === 'varchar') {
     if (column.data_type !== 'character varying') return true
   } else if (typename !== column.data_type) return true
-  switch (field.type) {
+  switch (field.deftype) {
     case 'integer':
     case 'unsigned':
     case 'char':

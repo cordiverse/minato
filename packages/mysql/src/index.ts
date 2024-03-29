@@ -21,7 +21,7 @@ function getIntegerType(length = 4) {
   return 'bigint'
 }
 
-function getTypeDef({ type, length, precision, scale }: Field) {
+function getTypeDef({ deftype: type, length, precision, scale }: Field) {
   switch (type) {
     case 'float':
     case 'double':
@@ -51,7 +51,7 @@ function isDefUpdated(field: Field, column: ColumnInfo, def: string) {
   const typename = def.split(/[ (]/)[0]
   if (typename === 'text') return !column.DATA_TYPE.endsWith('text')
   if (typename !== column.DATA_TYPE) return true
-  switch (field.type) {
+  switch (field.deftype) {
     case 'integer':
     case 'unsigned':
     case 'char':

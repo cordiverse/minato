@@ -3,13 +3,14 @@ import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Selection } from './selection.ts'
 import { clone, Flatten, isUint8Array, Keys } from './utils.ts'
-import { Typed } from './typed.ts'
+import { Type } from './type.ts'
 
 export const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }
 
 export interface Field<T = any> {
-  type: Field.Type<T>
+  type: Type<T>
+  deftype?: Field.Type<T>
   length?: number
   nullable?: boolean
   initial?: T
@@ -18,7 +19,6 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
-  typed?: Typed<T>
 }
 
 export namespace Field {
@@ -41,6 +41,10 @@ export namespace Field {
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
+  export type Definition<T = any> = {
+    type: Type<T>
+  } & Omit<Field<T>, 'type'>
+
   export type Transform<S = any, T = any> = {
     type: Type<T>
     dump: (value: S) => T | null
@@ -49,10 +53,13 @@ export namespace Field {
   } & Omit<Field<T>, 'type' | 'initial'>
 
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | Transform<O[K]> | Keys<N, O[K]>
+    [K in keyof O]?: Definition<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | Transform<O[K]> | Keys<N, O[K]> | NewType<O[K]>
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
+
+  const NewType = Symbol('newtype')
+  export type NewType<T> = { [NewType]?: T }
 
   export type Config<O = any> = {
     [K in keyof O]?: Field<O[K]>
@@ -60,23 +67,23 @@ export namespace Field {
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
-  export function parse(source: string | Field): Field {
-    if (typeof source === 'function') return { type: 'expr', expr: source }
-    if (typeof source !== 'string') return { initial: null, typed: Typed.fromField(source), ...source }
+  export function parse(source: string | Definition): Field {
+    if (typeof source === 'function') throw new TypeError('view field is not supported')
+    if (typeof source !== 'string') return { initial: null, deftype: source.type, ...source, type: Type.fromField(source.type) }
 
     // parse string definition
     const capture = regexp.exec(source)
     if (!capture) throw new TypeError('invalid field definition')
     const type = capture[1] as Type
     const args = (capture[2] || '').split(',')
-    const field: Field = { type }
+    const field: Field = { deftype: type, type: Type.fromField(type) }
 
     // set default initial value
     if (field.initial === undefined) {
-      if (number.includes(field.type)) field.initial = 0
-      if (string.includes(field.type)) field.initial = ''
-      if (field.type === 'list') field.initial = []
-      if (field.type === 'json') field.initial = {}
+      if (number.includes(type)) field.initial = 0
+      if (string.includes(type)) field.initial = ''
+      if (type === 'list') field.initial = []
+      if (type === 'json') field.initial = {}
     }
 
     // set length information
@@ -86,8 +93,6 @@ export namespace Field {
     } else if (args[0]) {
       field.length = +args[0]
     }
-
-    field.typed = Typed.fromField(field)
 
     return field
   }
@@ -137,7 +142,7 @@ export class Model<S = any> {
       this.fields[key].deprecated = !!callback
     }
 
-    if (typeof this.primary === 'string' && this.fields[this.primary]?.type === 'primary') {
+    if (typeof this.primary === 'string' && this.fields[this.primary]?.deftype === 'primary') {
       this.autoInc = true
     }
 
@@ -156,11 +161,11 @@ export class Model<S = any> {
 
   resolveValue(key: string, value: any) {
     if (isNullable(value)) return value
-    if (this.fields[key]?.type === 'time') {
+    if (this.fields[key]?.deftype === 'time') {
       const date = new Date(0)
       date.setHours(value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds())
       return date
-    } else if (this.fields[key]?.type === 'date') {
+    } else if (this.fields[key]?.deftype === 'date') {
       const date = new Date(value)
       date.setHours(0, 0, 0, 0)
       return date
