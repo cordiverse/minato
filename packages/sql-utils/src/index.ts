@@ -315,7 +315,7 @@ export class Builder {
     const _groupObject = (fields: any, type?: Type, root: boolean = false) => {
       const parse = (expr, key) => {
         const value = (type?.inner && Type.getInner(type, key).inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
-        if (!root) return value
+        if (!root) return this.transform(expr, value, 'encode')
         return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
       }
       return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
