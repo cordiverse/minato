@@ -167,7 +167,7 @@ export class PostgresBuilder extends Builder {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr))})${typeof outtype === 'string' ? `::${outtype}` : ''}`
+    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)})`
       : this.parseEvalExpr(expr)
   }
 
@@ -205,10 +205,10 @@ export class PostgresBuilder extends Builder {
     return this.asEncoded(`(${obj} @> ${value})`, false)
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
+  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type, outtype?: string) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
       : encoded ? `to_jsonb(${this.transform(type, value, 'encode')})`
-        : this.transform(type, `(jsonb_build_object('v', ${value})->>'v')`, 'decode')
+        : this.transform(type, `(jsonb_build_object('v', ${value})->>'v')`, 'decode') + `${typeof outtype === 'string' ? `::${outtype}` : ''}`
     , pure ? undefined : encoded)
   }
 

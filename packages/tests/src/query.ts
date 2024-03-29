@@ -81,6 +81,10 @@ namespace QueryOperators {
       await expect(database.get('temp1', {
         timestamp: { $lte: new Date('1999-01-01') },
       })).eventually.to.have.length(0)
+
+      await expect(database.get('temp1',
+        row => $.gt(row.timestamp, new Date('1999-01-01'))
+      )).eventually.to.have.length(1).with.nested.property('0.text').equal('awesome foo')
     })
 
     it('date comparisons', async () => {
@@ -430,7 +434,7 @@ namespace QueryOperators {
     }
   }
 
-  const logical = Logical
+  export const logical = Logical
 }
 
 export default QueryOperators
