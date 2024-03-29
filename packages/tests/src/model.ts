@@ -2,12 +2,6 @@ import { valueMap } from 'cosmokit'
 import { $, Database, Typed } from 'minato'
 import { expect } from 'chai'
 
-declare module 'minato' {
-  interface Database {
-    bigint: Field.NewType<bigint>
-  }
-}
-
 interface Bar {
   id: number
   text?: string
@@ -29,8 +23,12 @@ interface Tables {
   dtypes: Bar
 }
 
-function ModelOperations(database: Database<Tables>) {
-  database.bigint = database.define({
+interface Types {
+  bigint: bigint
+}
+
+function ModelOperations(database: Database<Tables, Types>) {
+  database.define('bigint', {
     type: 'string',
     dump: value => value ? value.toString() : value as any,
     load: value => value ? BigInt(value) : value as any,
@@ -84,7 +82,7 @@ function ModelOperations(database: Database<Tables>) {
       type: 'binary',
       initial: Buffer.from('initial buffer')
     },
-    bigint: database.bigint,
+    bigint: 'bigint',
     bnum: {
       type: 'binary',
       dump: value => Buffer.from(String(value)),
@@ -127,7 +125,7 @@ namespace ModelOperations {
     cast?: boolean
   }
 
-  export const fields = function Fields(database: Database<Tables>, options: FieldsOptions = {}) {
+  export const fields = function Fields(database: Database<Tables, Types>, options: FieldsOptions = {}) {
     const { cast = true } = options
 
     it('basic', async () => {
@@ -151,8 +149,8 @@ namespace ModelOperations {
 
     cast && it('cast newtype', async () => {
       await setup(database, 'dtypes', barTable)
-      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(234n, database.bigint)))).to.eventually.have.length(0)
-      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), database.bigint)))).to.eventually.have.length(1)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(234n, 'bigint')))).to.eventually.have.length(0)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), 'bigint')))).to.eventually.have.length(1)
     })
 
     it('$.object encoding', async () => {

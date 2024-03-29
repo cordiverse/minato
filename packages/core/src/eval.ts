@@ -105,7 +105,7 @@ export namespace Eval {
     not: Unary<boolean, boolean>
 
     // typecast
-    literal<T>(value: T, type?: Field.Type<T> | Field.NewType<T>): Expr<T, false>
+    literal<T>(value: T, type?: Field.Type<T> | string): Expr<T, false>
     number: Unary<any, number>
 
     // aggregation / json

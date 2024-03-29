@@ -48,14 +48,11 @@ export namespace Field {
     initial?: S
   } & Omit<Field<T>, 'type' | 'initial'>
 
-  const NewType = Symbol('NewType')
-  export type NewType<S = any> = string & { [NewType]: S }
-
-  type MapField<O = any> = {
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | Transform<O[K]> | NewType<O[K]>
+  type MapField<O = any, N = any> = {
+    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | Transform<O[K]> | Keys<N, O[K]>
   }
 
-  export type Extension<O = any> = MapField<Flatten<O>>
+  export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
 
   export type Config<O = any> = {
     [K in keyof O]?: Field<O[K]>

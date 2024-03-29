@@ -48,7 +48,7 @@ export namespace Join2 {
 
 const kTransaction = Symbol('transaction')
 
-export class Database<S = any, C extends Context = Context> extends Service<undefined, C> {
+export class Database<S = any, N = any, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
 
@@ -110,7 +110,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     await driver.prepare(name)
   }
 
-  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Partial<Model.Config<S[K]>> = {}) {
+  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<S[K]>> = {}) {
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
@@ -122,7 +122,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
         fields[key] = this.types[field]
       } else if (typeof field === 'object' && field.load && field.dump) {
         field.typed = Typed.fromField(`_newtype_${name}_$unnamed_${key}` as any)
-        this.define(field)
+        this.define(field.typed.type, field)
       }
     })
     model.extend(fields, config)
@@ -130,8 +130,13 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     ;(this.ctx as Context).emit('model', name)
   }
 
-  define<S>(field: Field.Transform<S>): Field.NewType<S> {
-    let name: string | undefined = field.typed?.type
+  define<K extends Exclude<Keys<N>, Field.Type>>(name: K, field: Field.Transform<N[K]>): K
+  define<S>(field: Field.Transform<S>): Keys<N>
+  define(name: any, field?: any) {
+    if (typeof name === 'object') {
+      field = name
+      name = undefined
+    }
     if (!name) while (this.types[name = '_define_' + randomId()]);
     this[Context.current].effect(() => {
       this.types[name] = field
@@ -141,7 +146,7 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     return name as any
   }
 
-  migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {
+  migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, callback: Model.Migration) {
     this.extend(name, fields, { callback })
   }
 
