@@ -194,7 +194,7 @@ export class PostgresBuilder extends Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return this.asEncoded(`jsonb_extract_path(${obj}, ${path.slice(1).replace('.', ',')})`, true)
+    return this.asEncoded(`jsonb_extract_path(${obj}, ${path.slice(1).replaceAll('.', ',')})`, true)
   }
 
   protected jsonLength(value: string) {
@@ -219,11 +219,9 @@ export class PostgresBuilder extends Builder {
         if (!root) return value
         return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(expr, value, 'encode')
       }
-      const parsedFields = Model.parse(fields)
-      const res = `jsonb_build_object(` + Object.entries(parsedFields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
-      return res
+      return `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(_fields, this.state.type, true), true)
+    return this.asEncoded(_groupObject(Model.parse(_fields), this.state.type, true), true)
   }
 
   protected groupArray(value: string) {

@@ -18,6 +18,9 @@ interface Bar {
   object2?: {
     text?: string
     num?: number
+    embed?: {
+      bool?: boolean
+    }
   }
   timestamp?: Date
   date?: Date
@@ -97,6 +100,10 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: 'string',
       initial: '2'
     },
+    'object2.embed.bool': {
+      type: 'boolean',
+      initial: true,
+    },
     timestamp: {
       type: 'timestamp',
       initial: new Date('1970-01-01 00:00:00'),
@@ -143,7 +150,7 @@ namespace ModelOperations {
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
     { id: 4, list: ['1', '1', '4'] },
-    { id: 5, array: [1, 1, 4], object: { num: 10, text: 'ab' }, object2: { num: 10, text: 'ab' } },
+    { id: 5, array: [1, 1, 4], object: { num: 10, text: 'ab' }, object2: { num: 10, text: 'ab', embed: { bool: false } } },
     { id: 6, timestamp: magicBorn },
     { id: 7, date: magicBorn },
     { id: 8, time: new Date('1999-10-01 15:40:00') },

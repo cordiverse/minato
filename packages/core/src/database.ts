@@ -136,12 +136,13 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
       field = name
       name = undefined
     }
+
+    if (name && this.types[name]) throw new Error(`type "${name}" already defined`)
     if (!name) while (this.types[name = '_define_' + randomId()]);
     this[Context.current].effect(() => {
       this.types[name] = { deftype: field.type, ...field, type: name }
       return () => delete this.types[name]
     })
-
     return name as any
   }
 

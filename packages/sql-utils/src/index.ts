@@ -318,11 +318,9 @@ export class Builder {
         if (!root) return value
         return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
       }
-      const parsedFields = Model.parse(fields)
-      const res = `json_object(` + Object.entries(parsedFields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
-      return res
+      return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(_fields, this.state.type, true), true)
+    return this.asEncoded(_groupObject(Model.parse(_fields), this.state.type, true), true)
   }
 
   protected groupArray(value: string) {

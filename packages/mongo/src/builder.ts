@@ -125,7 +125,7 @@ export class Builder {
       $random: (arg, group) => ({ $rand: {} }),
 
       $literal: (arg, group) => {
-        const converter = this.driver.types[arg[1]!]
+        const converter = this.driver.types[arg[1] as any]
         return converter ? converter.dump(arg[0]) : arg[0]
       },
       $number: (arg, group) => {
