@@ -570,13 +570,12 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial } = model.fields[key]!
       result[key] = obj[key]
 
       if (this.isEncoded(key)) {
-        result[key] = this.driver.types['json'].load(result[key], initial)
+        result[key] = this.driver.types['json'].load(result[key])
       }
-      result[key] = this.load(type, result[key])
+      result[key] = this.load(model.fields[key]!.type, result[key])
     }
     return model.parse(result)
   }

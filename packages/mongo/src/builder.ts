@@ -110,10 +110,7 @@ export class Builder {
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
-      $object: (arg, group) => {
-        console.log('$object', arg, valueMap(arg as any, x => this.transformEvalExpr(x)))
-        return valueMap(arg as any, x => this.transformEvalExpr(x))
-      },
+      $object: (arg, group) => valueMap(arg as any, x => this.transformEvalExpr(x)),
 
       $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
 
@@ -472,13 +469,7 @@ export class Builder {
     const result = {}
     for (const key in obj) {
       if (!(key in model.fields)) continue
-      const { type, initial } = model.fields[key]!
-      const converter = this.driver.types[type?.type!]
-      result[key] = converter ? converter.load(obj[key], initial) : obj[key]
-      if (type?.inner) {
-        if (type.list) result[key] = result[key].map((x: any) => this.load(type.inner!, x))
-        else result[key] = mapValues(result[key], (x: any, k) => this.load(type.inner![k], x))
-      }
+      result[key] = this.load(model.fields[key]!.type, obj[key])
     }
     return model.parse(result)
   }
