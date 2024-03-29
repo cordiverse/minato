@@ -1,4 +1,4 @@
-import { defineProperty, Dict, isNullable, valueMap } from 'cosmokit'
+import { defineProperty, isNullable, valueMap } from 'cosmokit'
 import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils.ts'
 import { Type } from './type.ts'
 import { Field } from './model.ts'
@@ -118,8 +118,8 @@ export namespace Eval {
     size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
     length<A extends boolean>(value: any[] | Expr<any[], A>): Expr<number, A>
 
-    object<T extends Dict<Expr>>(fields: T): Expr<T, false>
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
+    object<T extends any>(row: Row<T>): Expr<T, false>
     array<T>(value: Expr<T, false>): Expr<T[], true>
   }
 }
