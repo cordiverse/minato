@@ -52,6 +52,20 @@ export function makeRegExp(source: string | RegExp) {
   return source instanceof RegExp ? source : new RegExp(source)
 }
 
+export function unravel(source: object) {
+  const result = {}
+  for (const key in source) {
+    let node = result
+    const segments = key.split('.').reverse()
+    for (let index = segments.length - 1; index > 0; index--) {
+      const segment = segments[index]
+      node = node[segment] ??= {}
+    }
+    node[segments[0]] = source[key]
+  }
+  return result
+}
+
 export function clone<T>(source: T): T
 export function clone(source: any) {
   if (!source || typeof source !== 'object') return source

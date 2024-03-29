@@ -108,7 +108,7 @@ export abstract class Driver<T = any> {
         if (submodel.fields[field]!.deprecated) continue
         model.fields[`${key}.${field}`] = {
           expr: Eval('', [table[key].ref, field], Type.fromField(submodel.fields[field]!)),
-          type: Type.fromField(submodel.fields[field]!), // can omit
+          type: Type.fromField(submodel.fields[field]!),
         }
       }
     }

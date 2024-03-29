@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues, valueMap } from 'cosmokit'
-import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Type } from 'minato'
+import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -234,7 +234,7 @@ export class Builder {
     }
 
     expr = this.transformEvalExpr(expr)
-    return typeof expr === 'object' ? Model.parse(expr) : expr
+    return typeof expr === 'object' ? unravel(expr) : expr
   }
 
   public flushLookups() {

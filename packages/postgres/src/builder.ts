@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToHex, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -221,7 +221,7 @@ export class PostgresBuilder extends Builder {
       }
       return `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(Model.parse(_fields), this.state.type, true), true)
+    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, true), true)
   }
 
   protected groupArray(value: string) {

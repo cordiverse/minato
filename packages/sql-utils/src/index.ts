@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type } from 'minato'
+import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -320,7 +320,7 @@ export class Builder {
       }
       return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(Model.parse(_fields), this.state.type, true), true)
+    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, true), true)
   }
 
   protected groupArray(value: string) {
@@ -562,7 +562,7 @@ export class Builder {
           res = mapValues(res, (x, k) => this.load(Type.getInner(type, k), x))
         }
       }
-      return (type?.inner && !type.list) ? Model.parse(res) : res
+      return (type?.inner && !type.list) ? unravel(res) : res
     }
 
     const result = {}
