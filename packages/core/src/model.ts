@@ -224,6 +224,10 @@ export class Model<S = any> {
     return result
   }
 
+  static parse(source: object) {
+    return new Model('parse').parse(source, false)
+  }
+
   create(data?: {}) {
     const result = {} as S
     const keys = makeArray(this.primary)

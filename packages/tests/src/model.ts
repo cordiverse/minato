@@ -15,6 +15,10 @@ interface Bar {
     text?: string
     num?: number
   }
+  object2?: {
+    text?: string
+    num?: number
+  }
   timestamp?: Date
   date?: Date
   time?: Date
@@ -85,6 +89,14 @@ function ModelOperations(database: Database<Tables, Types>) {
         text: '2',
       }
     },
+    'object2.num': {
+      type: 'unsigned',
+      initial: 1,
+    },
+    'object2.text': {
+      type: 'string',
+      initial: '2'
+    },
     timestamp: {
       type: 'timestamp',
       initial: new Date('1970-01-01 00:00:00'),
@@ -114,6 +126,15 @@ function ModelOperations(database: Database<Tables, Types>) {
   })
 }
 
+function getValue(obj: any, path: string) {
+  if (path.includes('.')) {
+    const index = path.indexOf('.')
+    return getValue(obj[path.slice(0, index)] ??= {}, path.slice(index + 1))
+  } else {
+    return obj[path]
+  }
+}
+
 namespace ModelOperations {
   const magicBorn = new Date('1970/08/17')
 
@@ -122,7 +143,7 @@ namespace ModelOperations {
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
     { id: 4, list: ['1', '1', '4'] },
-    { id: 5, array: [1, 1, 4], object: { num: 10, text: 'ab' } },
+    { id: 5, array: [1, 1, 4], object: { num: 10, text: 'ab' }, object2: { num: 10, text: 'ab' } },
     { id: 6, timestamp: magicBorn },
     { id: 7, date: magicBorn },
     { id: 8, time: new Date('1999-10-01 15:40:00') },
@@ -143,10 +164,11 @@ namespace ModelOperations {
 
   interface FieldsOptions {
     cast?: boolean
+    typeModel?: boolean
   }
 
   export const fields = function Fields(database: Database<Tables, Types>, options: FieldsOptions = {}) {
-    const { cast = true } = options
+    const { cast = true, typeModel = true } = options
 
     it('basic', async () => {
       const table = await setup(database, 'dtypes', barTable)
@@ -173,7 +195,7 @@ namespace ModelOperations {
       await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), 'bigint')))).to.eventually.have.length(1)
     })
 
-    it('$.object encoding', async () => {
+    typeModel && it('$.object encoding', async () => {
       const table = await setup(database, 'dtypes', barTable)
       await expect(database.eval('dtypes', row => $.array($.object(row)))).to.eventually.have.shape(table)
     })
@@ -189,12 +211,16 @@ namespace ModelOperations {
       ).to.eventually.have.shape(table)
     })
 
+    it('$.array encoding on cell', async () => {
+      const table = await setup(database, 'dtypes', barTable)
+      await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.shape(table.map(x => x.object))
+      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.shape(table.map(x => x.object))
+    })
+
     it('$.array encoding', async () => {
       const table = await setup(database, 'dtypes', barTable)
-      await expect(database.eval('dtypes', row => $.array(row.array))).to.eventually.have.shape(table.map(x => x.array))
-
       await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
-        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => x[key]))
+        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => getValue(x, key)))
       ))
     })
 
@@ -206,7 +232,7 @@ namespace ModelOperations {
             x: row => database.select('dtypes').evaluate(key as any)
           })
           .execute()
-        ).to.eventually.have.shape([{ x: table.map(x => x[key]) }])
+        ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
       ))
     })
   }

@@ -110,7 +110,10 @@ export class Builder {
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
-      $object: (arg, group) => valueMap(arg as any, x => this.transformEvalExpr(x)),
+      $object: (arg, group) => {
+        console.log('$object', arg, valueMap(arg as any, x => this.transformEvalExpr(x)))
+        return valueMap(arg as any, x => this.transformEvalExpr(x))
+      },
 
       $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
 
@@ -233,7 +236,8 @@ export class Builder {
       return this.recursivePrefix + expr
     }
 
-    return this.transformEvalExpr(expr)
+    expr = this.transformEvalExpr(expr)
+    return typeof expr === 'object' ? Model.parse(expr) : expr
   }
 
   public flushLookups() {
@@ -454,11 +458,12 @@ export class Builder {
     if (Type.isType(model) || isEvalExpr(model)) {
       const type = Type.isType(model) ? model : Type.fromTerm(model)
       const converter = this.driver.types[type?.inner ? 'json' : type?.type!]
+
       let res = converter ? converter.load(obj) : obj
 
       if (type?.inner) {
-        if (type.list) res = res.map((x: any) => this.load(type.inner!, x))
-        else res = mapValues(res, (x: any, k) => this.load(type.inner![k], x))
+        if (type.list) res = res.map((x: any) => this.load(Type.getInner(type), x))
+        else res = mapValues(res, (x: any, k) => this.load(Type.getInner(type, k), x))
       }
       return res
     }

@@ -212,13 +212,18 @@ export class PostgresBuilder extends Builder {
     , pure ? undefined : encoded)
   }
 
-  protected groupObject(fields: any) {
-    const parse = (expr) => {
-      const value = this.parseEval(expr, false)
-      return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(expr, value, 'encode')
+  protected groupObject(_fields: any) {
+    const _groupObject = (fields: any, type?: Type, root: boolean = false) => {
+      const parse = (expr, key) => {
+        const value = (type?.inner && Type.getInner(type, key).inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
+        if (!root) return value
+        return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(expr, value, 'encode')
+      }
+      const parsedFields = Model.parse(fields)
+      const res = `jsonb_build_object(` + Object.entries(parsedFields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
+      return res
     }
-    const res = `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
-    return this.asEncoded(res, true)
+    return this.asEncoded(_groupObject(_fields, this.state.type, true), true)
   }
 
   protected groupArray(value: string) {

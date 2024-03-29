@@ -18,7 +18,8 @@ describe('@minatojs/driver-memory', () => {
     migration: false,
     model: {
       fields: {
-        cast: false
+        cast: false,
+        typeModel: false,
       }
     }
   })

@@ -37,6 +37,9 @@ interface State {
   encoded?: boolean
   encodedMap?: Dict<boolean>
 
+  // current eval expr type
+  type?: Type
+
   group?: boolean
   tables?: Dict<Model>
 
@@ -308,13 +311,18 @@ export class Builder {
     return transformer ? transformer[method](value) : (miss ?? value)
   }
 
-  protected groupObject(fields: any) {
-    const parse = (expr) => {
-      const value = this.parseEval(expr, false)
-      return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
+  protected groupObject(_fields: any) {
+    const _groupObject = (fields: any, type?: Type, root: boolean = false) => {
+      const parse = (expr, key) => {
+        const value = (type?.inner && Type.getInner(type, key).inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
+        if (!root) return value
+        return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
+      }
+      const parsedFields = Model.parse(fields)
+      const res = `json_object(` + Object.entries(parsedFields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
+      return res
     }
-    const res = `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
-    return this.asEncoded(res, true)
+    return this.asEncoded(_groupObject(_fields, this.state.type, true), true)
   }
 
   protected groupArray(value: string) {
@@ -370,6 +378,7 @@ export class Builder {
     this.state.encoded = false
     for (const key in expr) {
       if (key in this.evalOperators) {
+        this.state.type = Type.fromTerm(expr)
         return this.evalOperators[key](expr[key])
       }
     }
@@ -540,7 +549,7 @@ export class Builder {
   }
 
   load(model: Model, obj: any): any
-  load(type: Type | Eval.Expr, obj: any, root?: boolean): any
+  load(type: Type | Eval.Expr, obj: any): any
   load(model: Model | Type | Eval.Expr, obj?: any) {
     if (Type.isType(model) || isEvalExpr(model)) {
       const type = Type.isType(model) ? model : Type.fromTerm(model)
@@ -550,12 +559,12 @@ export class Builder {
 
       if (type?.inner) {
         if (type.list) {
-          res = res.map(x => this.load(type.inner!, x, false))
+          res = res.map(x => this.load(Type.getInner(type), x))
         } else {
-          res = mapValues(res, (x, k) => this.load(type.inner![k], x, false))
+          res = mapValues(res, (x, k) => this.load(Type.getInner(type, k), x))
         }
       }
-      return res
+      return (type?.inner && !type.list) ? Model.parse(res) : res
     }
 
     const result = {}

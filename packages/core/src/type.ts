@@ -57,4 +57,13 @@ export namespace Type {
   export function isType(value: any): value is Type {
     return value?.[kType] === true
   }
+
+  export function getInner(type: Type<any>, key?: string): Type {
+    if (!type?.inner) throw new TypeError(`invalid type: ${type}`)
+    if (!key) return type.inner
+    if (type.inner[key]) return type.inner[key]
+    return Object(globalThis.Object.fromEntries(
+      globalThis.Object.entries(type.inner).filter(([k, v]) => k.startsWith(`${key}.`)).map(([k, v]) => [k.slice(key.length + 1), v]),
+    ))
+  }
 }
