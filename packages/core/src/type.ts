@@ -1,12 +1,11 @@
-import { defineProperty, isNullable, mapValues } from 'cosmokit'
+import { defineProperty, Dict, isNullable, mapValues } from 'cosmokit'
 import { Field } from './model.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 
 export interface Type<T = any> {
   [Type.kType]?: true
   type: Field.Type<T>
-  inner?: T extends (infer I)[] ? Type<I> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key]> } : never
-  list?: T extends any[] ? true : false
+  inner?: T extends (infer I)[] ? [Type<I>] : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key]> } : never
 }
 
 export namespace Type {
@@ -16,8 +15,12 @@ export namespace Type {
   export const Number: Type<number> = defineProperty({ type: 'double' }, kType, true)
   export const String: Type<string> = defineProperty({ type: 'string' }, kType, true)
 
+  type TypeMap<T extends Dict<any>> = {
+    [K in keyof T]: Type<T[K]>
+  }
+
   export type Object<T = any> = Type<T>
-  export const Object = <T extends object>(obj?: T): Object<T> => defineProperty({
+  export const Object = <T extends Dict<any>>(obj?: T): Object<TypeMap<T>> => defineProperty({
     type: 'json' as any,
     inner: globalThis.Object.keys(obj ?? {}).length ? mapValues(obj!, (value) => isType(value) ? value : fromField(value)) as any : undefined,
   }, kType, true)
@@ -25,8 +28,7 @@ export namespace Type {
   export type Array<T = any> = Type<T[]>
   export const Array = <T>(type?: Type<T>): Type.Array<T> => defineProperty({
     type: 'json',
-    inner: type,
-    list: true,
+    inner: type ? [type] : undefined,
   }, kType, true)
 
   export function fromPrimitive<T>(value: T): Type<T> {
@@ -58,9 +60,10 @@ export namespace Type {
     return value?.[kType] === true
   }
 
-  export function getInner(type: Type<any>, key?: string): Type {
-    if (!type?.inner) throw new TypeError(`invalid type: ${type}`)
-    if (!key) return type.inner
+  export function getInner(type: Type<any>, key?: string): Type | undefined {
+    if (!type?.inner) return
+    if (globalThis.Array.isArray(type.inner) && isNullable(key)) return type.inner[0]
+    if (isNullable(key)) return
     if (type.inner[key]) return type.inner[key]
     return Object(globalThis.Object.fromEntries(globalThis.Object.entries(type.inner)
       .filter(([k]) => k.startsWith(`${key}.`))

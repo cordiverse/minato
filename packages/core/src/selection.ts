@@ -46,9 +46,9 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
 
     let type: Type
     const field = model?.fields[prefix + key as string]
-    if (expr?.[Type.kType]?.inner && Type.getInner(expr?.[Type.kType], key)) {
+    if (Type.getInner(expr?.[Type.kType], key)) {
       // type may conatins object layout
-      type = Type.getInner(expr?.[Type.kType], key)
+      type = Type.getInner(expr?.[Type.kType], key)!
     } else if (field) {
       type = Type.fromField(field)
     } else if (Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {

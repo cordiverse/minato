@@ -69,7 +69,14 @@ export namespace Field {
 
   export function parse(source: string | Definition): Field {
     if (typeof source === 'function') throw new TypeError('view field is not supported')
-    if (typeof source !== 'string') return { initial: null, deftype: source.type, ...source, type: Type.fromField(source.type) }
+    if (typeof source !== 'string') {
+      return {
+        initial: null,
+        deftype: source.type as any,
+        ...source,
+        type: Type.fromField(source.type),
+      }
+    }
 
     // parse string definition
     const capture = regexp.exec(source)

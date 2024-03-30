@@ -220,8 +220,7 @@ Eval.number = unary('number', (arg, data) => {
 
 const unwrapAggr = (expr: any) => {
   const type = Type.fromTerm(expr)
-  if (type.inner && type.list) return type.inner!
-  else return type
+  return Type.getInner(type) ?? type
 }
 
 // aggregation

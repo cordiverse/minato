@@ -20,17 +20,8 @@ export function formatTime(time: Date) {
 }
 
 export class PostgresBuilder extends Builder {
-  // eslint-disable-next-line no-control-regex
-  protected escapeRegExp = /[\0\b\t\n\r\x1a'\\]/g
   protected escapeMap = {
-    '\0': '\\0',
-    '\b': '\\b',
-    '\t': '\\t',
-    '\n': '\\n',
-    '\r': '\\r',
-    '\x1a': '\\Z',
-    '\'': '\'\'',
-    '\\': '\\\\',
+    "'": "''",
   }
 
   protected $true = 'TRUE'
@@ -215,7 +206,7 @@ export class PostgresBuilder extends Builder {
   protected groupObject(_fields: any) {
     const _groupObject = (fields: any, type?: Type, root: boolean = false) => {
       const parse = (expr, key) => {
-        const value = (type?.inner && Type.getInner(type, key).inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
+        const value = (type && Type.getInner(type, key)?.inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
         if (!root) return this.transform(expr, value, 'encode')
         return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(expr, value, 'encode')
       }
@@ -237,7 +228,7 @@ export class PostgresBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(coalesce((SELECT ${this.groupArray(this.transform(Type.fromTerm(expr)?.inner, output, 'encode'))}
+      return `(coalesce((SELECT ${this.groupArray(this.transform(Type.getInner(Type.fromTerm(expr)), output, 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
     }
   }

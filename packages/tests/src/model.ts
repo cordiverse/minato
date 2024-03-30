@@ -20,6 +20,7 @@ interface Bar {
     num?: number
     embed?: {
       bool?: boolean
+      bigint?: bigint
     }
   }
   timestamp?: Date
@@ -104,6 +105,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: 'boolean',
       initial: true,
     },
+    'object2.embed.bigint': 'bigint',
     timestamp: {
       type: 'timestamp',
       initial: new Date('1970-01-01 00:00:00'),
@@ -149,15 +151,16 @@ namespace ModelOperations {
     { id: 1, bool: false },
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
-    { id: 4, list: ['1', '1', '4'] },
-    { id: 5, array: [1, 1, 4], object: { num: 10, text: 'ab' }, object2: { num: 10, text: 'ab', embed: { bool: false } } },
-    { id: 6, timestamp: magicBorn },
-    { id: 7, date: magicBorn },
-    { id: 8, time: new Date('1999-10-01 15:40:00') },
-    { id: 9, binary: Buffer.from('hello') },
-    { id: 10, bigint: BigInt(1e63) },
-    { id: 11, decimal: 2.432 },
-    { id: 12, bnum: 114514, bnum2: 12345 },
+    { id: 4, list: ['1', '1', '4'], array: [1, 1, 4] },
+    { id: 5, object: { num: 10, text: 'ab' } },
+    { id: 6, object2: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n } } },
+    { id: 7, timestamp: magicBorn },
+    { id: 8, date: magicBorn },
+    { id: 9, time: new Date('1999-10-01 15:40:00') },
+    { id: 10, binary: Buffer.from('hello') },
+    { id: 11, bigint: BigInt(1e63) },
+    { id: 12, decimal: 2.432 },
+    { id: 13, bnum: 114514, bnum2: 12345 },
   ]
 
   async function setup<K extends keyof Tables>(database: Database<Tables>, name: K, table: Tables[K][]) {
@@ -218,10 +221,10 @@ namespace ModelOperations {
       ).to.eventually.have.shape(table)
     })
 
-    it('$.array encoding on cell', async () => {
+    typeModel && it('$.array encoding on cell', async () => {
       const table = await setup(database, 'dtypes', barTable)
       await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.shape(table.map(x => x.object))
-      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.shape(table.map(x => x.object))
+      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.shape(table.map(x => x.object2))
     })
 
     it('$.array encoding', async () => {

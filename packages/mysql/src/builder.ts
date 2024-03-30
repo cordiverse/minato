@@ -120,7 +120,7 @@ export class MySQLBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      query = `(ifnull((SELECT ${this.groupArray(this.transform(Type.fromTerm(expr)?.inner, output, 'encode'))}
+      query = `(ifnull((SELECT ${this.groupArray(this.transform(Type.getInner(Type.fromTerm(expr)), output, 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
     if (Object.keys(refFields ?? {}).length) {

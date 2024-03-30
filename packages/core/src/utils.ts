@@ -85,11 +85,6 @@ export function isUint8Array(value: any): value is Uint8Array {
     || ['ArrayBuffer', 'SharedArrayBuffer', '[object ArrayBuffer]', '[object SharedArrayBuffer]'].includes(stringTag)
 }
 
-export function Uint8ArrayToHex(source: Uint8Array) {
-  return (hasGlobalBuffer) ? toLocalUint8Array(source).toString('hex')
-    : Array.from(toLocalUint8Array(source), byte => byte.toString(16).padStart(2, '0')).join('')
-}
-
 export function Uint8ArrayFromHex(source: string) {
   if (hasGlobalBuffer) return Buffer.from(source, 'hex')
   const hex = source.length % 2 === 0 ? source : source.slice(0, source.length - 1)
@@ -100,8 +95,17 @@ export function Uint8ArrayFromHex(source: string) {
   return Uint8Array.from(buffer)
 }
 
+export function Uint8ArrayToHex(source: Uint8Array) {
+  return (hasGlobalBuffer) ? toLocalUint8Array(source).toString('hex')
+    : Array.from(toLocalUint8Array(source), byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
 export function Uint8ArrayFromBase64(source: string) {
   return (hasGlobalBuffer) ? Buffer.from(source, 'base64') : Uint8Array.from(atob(source), c => c.charCodeAt(0))
+}
+
+export function Uint8ArrayToBase64(source: Uint8Array) {
+  return (hasGlobalBuffer) ? (source as Buffer).toString('base64') : btoa(Array.from(Uint16Array.from(source), b => String.fromCharCode(b)).join(''))
 }
 
 export function toLocalUint8Array(source: Uint8Array) {

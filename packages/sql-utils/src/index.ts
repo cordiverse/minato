@@ -261,7 +261,7 @@ export class Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(ifnull((SELECT ${this.groupArray(this.transform(Type.fromTerm(expr)?.inner, output, 'encode'))}
+      return `(ifnull((SELECT ${this.groupArray(this.transform(Type.getInner(Type.fromTerm(expr)), output, 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
   }
@@ -314,7 +314,7 @@ export class Builder {
   protected groupObject(_fields: any) {
     const _groupObject = (fields: any, type?: Type, root: boolean = false) => {
       const parse = (expr, key) => {
-        const value = (type?.inner && Type.getInner(type, key).inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
+        const value = (type && Type.getInner(type, key)?.inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
         if (!root) return this.transform(expr, value, 'encode')
         return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
       }
@@ -556,13 +556,13 @@ export class Builder {
       res = converter ? converter.load(res) : res
 
       if (type?.inner) {
-        if (type.list) {
-          res = res.map(x => this.load(Type.getInner(type), x))
+        if (Array.isArray(type.inner)) {
+          res = res.map(x => this.load(Type.getInner(type)!, x))
         } else {
-          res = mapValues(res, (x, k) => this.load(Type.getInner(type, k), x))
+          res = mapValues(res, (x, k) => this.load(Type.getInner(type, k)!, x))
         }
       }
-      return (type?.inner && !type.list) ? unravel(res) : res
+      return (type?.inner && !Array.isArray(type.inner)) ? unravel(res) : res
     }
 
     const result = {}
@@ -579,13 +579,7 @@ export class Builder {
   }
 
   escape(value: any, field?: Field | Field.Type) {
-    let converter: Driver.Transformer | undefined
-    if (typeof field === 'string') converter = this.driver.types[field]
-    else {
-      const { type } = field ?? {}
-      converter = this.driver.types[type?.type!]
-    }
-
+    const converter = field && this.driver.types[Type.fromField(field)?.type!]
     return this.escapePrimitive(converter ? converter.dump(value) : value)
   }
 

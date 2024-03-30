@@ -459,8 +459,11 @@ export class Builder {
       let res = converter ? converter.load(obj) : obj
 
       if (type?.inner) {
-        if (type.list) res = res.map((x: any) => this.load(Type.getInner(type), x))
-        else res = mapValues(res, (x: any, k) => this.load(Type.getInner(type, k), x))
+        if (Array.isArray(type.inner)) {
+          res = res.map(x => this.load(Type.getInner(type)!, x))
+        } else {
+          res = mapValues(res, (x, k) => this.load(Type.getInner(type, k)!, x))
+        }
       }
       return res
     }
