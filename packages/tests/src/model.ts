@@ -189,6 +189,17 @@ namespace ModelOperations {
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
     })
 
+    it('modifier', async () => {
+      const table = await setup(database, 'dtypes', barTable)
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+
+      await database.remove('dtypes', {})
+      await database.upsert('dtypes', barTable.map(({ id }) => ({ id })))
+
+      await Promise.all(table.map(({ id, ...x }) => database.set('dtypes', id, x)))
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+    })
+
     it('primitive', async () => {
       expect(Type.fromTerm($.literal(123)).type).to.equal(Type.Number.type)
       expect(Type.fromTerm($.literal('abc')).type).to.equal(Type.String.type)
