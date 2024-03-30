@@ -109,34 +109,16 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
       // model.driver = config.driver
     }
     Object.entries(fields).forEach(([key, field]: [string, any]) => {
-      if (typeof field === 'string' && this.types[field]) {
-        field = fields[key] = this.types[field]
-        field.transformers = [{
-          types: [field.type],
-          load: field.load,
-          dump: field.dump,
-        }]
-      } else if (typeof field === 'object' && field.load && field.dump) {
-        field = fields[key] = { ...field, deftype: field.type, type: `_newtype_${name}_$unnamed_${key}` }
-        field.transformers = [{
-          types: [field.type],
-          load: field.load,
-          dump: field.dump,
-        }]
-        this.define(field.type, field)
-      } else if (typeof field === 'object' && typeof field.type === 'object') {
-        field = fields[key] = { ...field, transformers: [], deftype: 'json' }
-        let initial
-        field.type = this.parseType(field.type, field.transformers, value => initial = value)
-        if (field.initial === undefined) field.initial = initial
-      }
+      const transformer = []
+      this.parseField(field, transformer, undefined, value => field = fields[key] = value)
+      if (typeof field === 'object') field.transformers = transformer
     })
     model.extend(fields, config)
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
   }
 
-  private parseField<T>(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => any): Type<T> {
+  private parseField<T>(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type<T> {
     if (typeof field === 'string' && this.types[field]) {
       transformers.push({
         types: [this.types[field].type],
@@ -144,6 +126,7 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
         dump: this.types[field].dump,
       })
       setInitial?.(this.types[field].initial)
+      setField?.(this.types[field])
       return Type.fromField(field as any)
     } else if (typeof field === 'object' && field.load && field.dump) {
       const name = this.define(field as any)
@@ -152,18 +135,24 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
         load: field.load,
         dump: field.dump,
       } as any)
-      setInitial?.(Field.getInitial(field.type, field.initial))
+      // for transform type, intentionally assign a null initial on default
+      // setInitial?.(Field.getInitial(field.type, field.initial))
+      setInitial?.(field.initial)
+      setField?.({ ...field, deftype: field.type, type: name })
       return Type.fromField(name as any)
     } else if (typeof field === 'object' && typeof field.type === 'object') {
       let initial
       const res = this.parseType(field.type as any, transformers, value => initial = value)
       setInitial?.(Field.getInitial(field.type, initial))
+      setField?.({ ...field, deftype: 'json', type: res, initial: Field.getInitial(field.type, initial) })
       return res
     } else if (typeof field === 'object') {
       setInitial?.(Field.getInitial(field.type.split('(')[0], field.initial))
+      setField?.(field)
       return Type.fromField(field.type.split('(')[0])
     } else {
       setInitial?.(Field.getInitial(field.split('(')[0]))
+      setField?.(field)
       return Type.fromField(field.split('(')[0])
     }
   }

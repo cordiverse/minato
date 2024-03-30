@@ -1,6 +1,9 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex, unravel } from 'minato'
+import {
+  Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type,
+  Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex, unravel,
+} from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'

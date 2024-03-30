@@ -248,85 +248,84 @@ namespace ModelOperations {
     typeModel?: boolean
   }
 
-  export
-    const fields = function Fields(database: Database<Tables, Types>, options: FieldsOptions = {}) {
-      const { cast = true, typeModel = true } = options
+  export const fields = function Fields(database: Database<Tables, Types>, options: FieldsOptions = {}) {
+    const { cast = true, typeModel = true } = options
 
-      it('basic', async () => {
-        const table = await setup(database, 'dtypes', dtypeTable)
-        await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+    it('basic', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
 
-        await database.remove('dtypes', {})
-        await database.upsert('dtypes', dtypeTable)
-        await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
-      })
+      await database.remove('dtypes', {})
+      await database.upsert('dtypes', dtypeTable)
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+    })
 
-      it('modifier', async () => {
-        const table = await setup(database, 'dtypes', dtypeTable)
-        await database.remove('dtypes', {})
-        await database.upsert('dtypes', dtypeTable.map(({ id }) => ({ id })))
+    it('modifier', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await database.remove('dtypes', {})
+      await database.upsert('dtypes', dtypeTable.map(({ id }) => ({ id })))
 
-        await Promise.all(table.map(({ id, ...x }) => database.set('dtypes', id, x)))
-        await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
-      })
+      await Promise.all(table.map(({ id, ...x }) => database.set('dtypes', id, x)))
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+    })
 
-      it('primitive', async () => {
-        expect(Type.fromTerm($.literal(123)).type).to.equal(Type.Number.type)
-        expect(Type.fromTerm($.literal('abc')).type).to.equal(Type.String.type)
-        expect(Type.fromTerm($.literal(true)).type).to.equal(Type.Boolean.type)
-        expect(Type.fromTerm($.literal(new Date('1970-01-01'))).type).to.equal('timestamp')
-        expect(Type.fromTerm($.literal(Buffer.from('hello'))).type).to.equal('binary')
-        expect(Type.fromTerm($.literal([1, 2, 3])).type).to.equal('json')
-        expect(Type.fromTerm($.literal({ a: 1 })).type).to.equal('json')
-      })
+    it('primitive', async () => {
+      expect(Type.fromTerm($.literal(123)).type).to.equal(Type.Number.type)
+      expect(Type.fromTerm($.literal('abc')).type).to.equal(Type.String.type)
+      expect(Type.fromTerm($.literal(true)).type).to.equal(Type.Boolean.type)
+      expect(Type.fromTerm($.literal(new Date('1970-01-01'))).type).to.equal('timestamp')
+      expect(Type.fromTerm($.literal(Buffer.from('hello'))).type).to.equal('binary')
+      expect(Type.fromTerm($.literal([1, 2, 3])).type).to.equal('json')
+      expect(Type.fromTerm($.literal({ a: 1 })).type).to.equal('json')
+    })
 
-      cast && it('cast newtype', async () => {
-        await setup(database, 'dtypes', dtypeTable)
-        await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(234n, 'bigint')))).to.eventually.have.length(0)
-        await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), 'bigint')))).to.eventually.have.length(1)
-      })
+    cast && it('cast newtype', async () => {
+      await setup(database, 'dtypes', dtypeTable)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(234n, 'bigint')))).to.eventually.have.length(0)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), 'bigint')))).to.eventually.have.length(1)
+    })
 
-      typeModel && it('$.object encoding', async () => {
-        const table = await setup(database, 'dtypes', dtypeTable)
-        await expect(database.eval('dtypes', row => $.array($.object(row)))).to.eventually.have.shape(table)
-      })
+    typeModel && it('$.object encoding', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await expect(database.eval('dtypes', row => $.array($.object(row)))).to.eventually.have.shape(table)
+    })
 
-      typeModel && it('$.object decoding', async () => {
-        const table = await setup(database, 'dtypes', dtypeTable)
-        await expect(database.select('dtypes')
+    typeModel && it('$.object decoding', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await expect(database.select('dtypes')
+        .project({
+          obj: row => $.object(row)
+        })
+        .project(valueMap(database.tables['dtypes'].fields as any, (field, key) => row => row.obj[key]))
+        .execute()
+      ).to.eventually.have.shape(table)
+    })
+
+    typeModel && it('$.array encoding on cell', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.shape(table.map(x => x.object))
+      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.shape(table.map(x => x.object2))
+    })
+
+    it('$.array encoding', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
+        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => getValue(x, key)))
+      ))
+    })
+
+    it('subquery encoding', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
+        key => expect(database.select('dtypes', 1)
           .project({
-            obj: row => $.object(row)
+            x: row => database.select('dtypes').evaluate(key as any)
           })
-          .project(valueMap(database.tables['dtypes'].fields as any, (field, key) => row => row.obj[key]))
           .execute()
-        ).to.eventually.have.shape(table)
-      })
-
-      typeModel && it('$.array encoding on cell', async () => {
-        const table = await setup(database, 'dtypes', dtypeTable)
-        await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.shape(table.map(x => x.object))
-        await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.shape(table.map(x => x.object2))
-      })
-
-      it('$.array encoding', async () => {
-        const table = await setup(database, 'dtypes', dtypeTable)
-        await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
-          key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => getValue(x, key)))
-        ))
-      })
-
-      it('subquery encoding', async () => {
-        const table = await setup(database, 'dtypes', dtypeTable)
-        await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
-          key => expect(database.select('dtypes', 1)
-            .project({
-              x: row => database.select('dtypes').evaluate(key as any)
-            })
-            .execute()
-          ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
-        ))
-      })
-    }
+        ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
+      ))
+    })
+  }
 
   export const object = function ObjectFields(database: Database<Tables, Types>, options: FieldsOptions = {}) {
     const { typeModel = true } = options
