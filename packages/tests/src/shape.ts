@@ -1,3 +1,4 @@
+import { isNullable } from 'cosmokit'
 import { inspect } from 'util'
 
 function flag(obj, key, value?) {
@@ -44,6 +45,8 @@ export = (({ Assertion }) => {
     function formatError(expect, actual) {
       return `expected to have ${expect} but got ${actual} at path ${path}`
     }
+
+    if (isNullable(expect) && isNullable(actual)) return
 
     if (!expect || ['string', 'number', 'boolean', 'bigint'].includes(typeof expect)) {
       return formatError(inspect(expect), inspect(actual))

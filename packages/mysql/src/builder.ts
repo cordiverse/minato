@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToHex } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -37,12 +37,14 @@ export class MySQLBuilder extends Builder {
       encode: value => `if(${value}=b'1', 1, 0)`,
       decode: value => `if(${value}=1, b'1', b'0')`,
       load: value => isNullable(value) ? value : !!value,
+      dump: value => isNullable(value) ? value : value ? 1 : 0,
     }
 
     this.transformers['binary'] = {
       encode: value => `to_base64(${value})`,
       decode: value => `from_base64(${value})`,
       load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
+      dump: value => isNullable(value) ? value : Uint8ArrayToBase64(value),
     }
 
     this.transformers['date'] = {
@@ -55,12 +57,20 @@ export class MySQLBuilder extends Builder {
         date.setHours(0, 0, 0, 0)
         return date
       },
+      dump: value => {
+        if (isNullable(value)) return value
+        const date = new Date(0)
+        date.setFullYear(value.getFullYear(), value.getMonth(), value.getDate())
+        date.setHours(0, 0, 0, 0)
+        return Time.template('yyyy-MM-dd hh:mm:ss.SSS', date)
+      },
     }
 
     this.transformers['time'] = {
       encode: value => value,
       decode: value => `cast(${value} as time)`,
       load: value => this.driver.types['time'].load(value),
+      dump: value => isNullable(value) ? value : Time.template('yyyy-MM-dd hh:mm:ss.SSS', value),
     }
 
     this.transformers['timestamp'] = {
@@ -70,6 +80,7 @@ export class MySQLBuilder extends Builder {
         if (isNullable(value) || typeof value === 'object') return value
         return new Date(value)
       },
+      dump: value => isNullable(value) ? value : Time.template('yyyy-MM-dd hh:mm:ss.SSS', value),
     }
   }
 

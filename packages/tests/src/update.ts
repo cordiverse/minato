@@ -75,6 +75,7 @@ namespace OrmOperations {
     { id: 7, time: new Date('1970-01-01 12:00:00') },
     { id: 8, binary: Buffer.from('hello') },
     { id: 9, bigint: BigInt(1e63) },
+    { id: 10, text: 'a\b\t\f\n\r\x1a\'\"\\\`b', list: ['a\b\t\f\n\r\x1a\'\"\\\`b'] },
   ]
 
   const bazTable: Baz[] = [

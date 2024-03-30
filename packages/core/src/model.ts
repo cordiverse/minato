@@ -1,9 +1,9 @@
-import { isNullable, makeArray, MaybeArray } from 'cosmokit'
+import { isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
-import { Selection } from './selection.ts'
 import { clone, Flatten, isUint8Array, Keys } from './utils.ts'
 import { Type } from './type.ts'
+import { Driver } from './driver.ts'
 
 export const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }
@@ -19,6 +19,7 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
+  transformers?: Driver.Transformer[]
 }
 
 export namespace Field {
@@ -41,19 +42,23 @@ export namespace Field {
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
-  export type Definition<T = any> = {
-    type: Type<T>
+  export type Definition<T = any, N = any> = {
+    type: Type<T> | (T extends (infer I)[] ? [Definition<I, N> | Shorthand<Type<I>> | Transform<I> | Keys<N, I> | NewType<I>] : never) | Extension<T, N>
   } & Omit<Field<T>, 'type'>
 
   export type Transform<S = any, T = any> = {
     type: Type<T>
     dump: (value: S) => T | null
-    load: (value: T, initial?: S) => S | null
+    load: ((value: T, initial?: S) => S | null)
     initial?: S
   } & Omit<Field<T>, 'type' | 'initial'>
 
+  type Parsed<T = any> = {
+    type: Type<T> | Field<T>['type']
+  } & Omit<Field<T>, 'type'>
+
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: Definition<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]> | Transform<O[K]> | Keys<N, O[K]> | NewType<O[K]>
+    [K in keyof O]?: Definition<O[K], N> | Shorthand<Type<O[K]>> | Transform<O[K]> | Keys<N, O[K]> | NewType<O[K]>
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
@@ -67,14 +72,14 @@ export namespace Field {
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
-  export function parse(source: string | Definition): Field {
+  export function parse(source: string | Parsed): Field {
     if (typeof source === 'function') throw new TypeError('view field is not supported')
     if (typeof source !== 'string') {
       return {
         initial: null,
         deftype: source.type as any,
         ...source,
-        type: Type.fromField(source.type),
+        type: Type.isType(source.type) ? source.type : Type.fromField(source.type),
       }
     }
 
@@ -86,12 +91,7 @@ export namespace Field {
     const field: Field = { deftype: type, type: Type.fromField(type) }
 
     // set default initial value
-    if (field.initial === undefined) {
-      if (number.includes(type)) field.initial = 0
-      if (string.includes(type)) field.initial = ''
-      if (type === 'list') field.initial = []
-      if (type === 'json') field.initial = {}
-    }
+    if (field.initial === undefined) field.initial = getInitial(type)
 
     // set length information
     if (type === 'decimal') {
@@ -102,6 +102,16 @@ export namespace Field {
     }
 
     return field
+  }
+
+  export function getInitial(type: Field.Type, initial?: any) {
+    if (initial === undefined) {
+      if (Field.number.includes(type)) return 0
+      if (Field.string.includes(type)) return ''
+      if (type === 'list') return []
+      if (type === 'json') return {}
+    }
+    return initial
   }
 }
 
@@ -166,16 +176,21 @@ export class Model<S = any> {
     }
   }
 
-  resolveValue(key: string, value: any) {
+  resolveValue(field: string | Field | Type, value: any) {
     if (isNullable(value)) return value
-    if (this.fields[key]?.deftype === 'time') {
+    if (typeof field === 'string') field = this.fields[field] as Field
+    if (field && !Type.isType(field)) field = Type.fromField(field)
+    if (field?.type === 'time') {
       const date = new Date(0)
       date.setHours(value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds())
       return date
-    } else if (this.fields[key]?.deftype === 'date') {
+    } else if (field?.type === 'date') {
       const date = new Date(value)
       date.setHours(0, 0, 0, 0)
       return date
+    } else if (field?.inner) {
+      if (Array.isArray(field.inner)) return value.map((item: any) => this.resolveValue(Type.getInner(field)!, item))
+      else return valueMap(field.inner, (type, key) => this.resolveValue(Type.getInner(field, key)!, value[key]))
     }
     return value
   }

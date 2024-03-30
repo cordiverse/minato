@@ -29,6 +29,7 @@ export class SQLiteBuilder extends Builder {
       encode: value => `hex(${value})`,
       decode: value => `unhex(${value})`,
       load: value => isNullable(value) ? value : Uint8ArrayFromHex(value),
+      dump: value => isNullable(value) ? value : Uint8ArrayToHex(value),
     }
   }
 

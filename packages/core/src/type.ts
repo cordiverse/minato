@@ -44,7 +44,7 @@ export namespace Type {
   }
 
   export function fromField<T>(field: Field<T> | Field.Type<T>): Type<T> {
-    if (isType(field)) throw new TypeError(`invalid field: ${field}`)
+    if (isType(field)) throw new TypeError(`invalid field: ${JSON.stringify(field)}`)
     if (typeof field === 'string') return defineProperty({ type: field }, kType, true)
     else if (field.type) return field.type
     else if (field.expr?.[kType]) return field.expr[kType]

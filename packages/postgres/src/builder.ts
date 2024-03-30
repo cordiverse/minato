@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToHex, unravel } from 'minato'
+import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -94,18 +94,21 @@ export class PostgresBuilder extends Builder {
       encode: value => value,
       decode: value => `(${value})::boolean`,
       load: value => value,
+      dump: value => value,
     }
 
     this.transformers['decimal'] = {
       encode: value => value,
       decode: value => `(${value})::double precision`,
       load: value => isNullable(value) ? value : +value,
+      dump: value => value,
     }
 
     this.transformers['binary'] = {
       encode: value => `encode(${value}, 'base64')`,
       decode: value => `decode(${value}, 'base64')`,
       load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
+      dump: value => isNullable(value) ? value : Uint8ArrayToBase64(value),
     }
 
     this.transformers['date'] = {
@@ -118,12 +121,14 @@ export class PostgresBuilder extends Builder {
         date.setHours(0, 0, 0, 0)
         return date
       },
+      dump: value => Time.template('yyyy-MM-dd', value),
     }
 
     this.transformers['time'] = {
       encode: value => value,
       decode: value => `cast(${value} as time)`,
       load: value => this.driver.types['time'].load(value),
+      dump: value => this.driver.types['time'].dump(value),
     }
 
     this.transformers['timestamp'] = {
@@ -133,6 +138,7 @@ export class PostgresBuilder extends Builder {
         if (isNullable(value) || typeof value === 'object') return value
         return new Date(value)
       },
+      dump: value => Time.template('yyyy-MM-dd hh:mm:ss', value),
     }
   }
 
@@ -204,15 +210,17 @@ export class PostgresBuilder extends Builder {
   }
 
   protected groupObject(_fields: any) {
-    const _groupObject = (fields: any, type?: Type, root: boolean = false) => {
+    const _groupObject = (fields: any, type?: Type, prefix: string = '', root: boolean = false) => {
       const parse = (expr, key) => {
-        const value = (type && Type.getInner(type, key)?.inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
+        const value = (!_fields[`${prefix}${key}`] && type && Type.getInner(type, key)?.inner)
+          ? _groupObject(expr, Type.getInner(type, key), `${prefix}${key}.`)
+          : this.parseEval(expr, false)
         if (!root) return this.transform(expr, value, 'encode')
         return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(expr, value, 'encode')
       }
       return `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, true), true)
+    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, '', true), true)
   }
 
   protected groupArray(value: string) {

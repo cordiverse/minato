@@ -27,6 +27,7 @@ interface Transformer<S=any, T=any> {
   encode(value: string): string
   decode(value: string): string
   load(value: S): T
+  dump(value: T): S
 }
 
 interface State {
@@ -305,22 +306,24 @@ export class Builder {
     }
   }
 
-  protected transform(expr: any, value: string, method: 'encode' | 'decode' | 'load', miss?: any) {
+  protected transform(expr: any, value: string, method: 'encode' | 'decode' | 'load' | 'dump', miss?: any) {
     const type = Type.isType(expr) ? expr : Type.fromTerm(expr)
     const transformer = this.transformers[type.type] ?? this.transformers[this.driver.database.types[type.type]?.deftype!]
     return transformer ? transformer[method](value) : (miss ?? value)
   }
 
   protected groupObject(_fields: any) {
-    const _groupObject = (fields: any, type?: Type, root: boolean = false) => {
+    const _groupObject = (fields: any, type?: Type, prefix: string = '', root: boolean = false) => {
       const parse = (expr, key) => {
-        const value = (type && Type.getInner(type, key)?.inner) ? _groupObject(expr, Type.getInner(type, key)) : this.parseEval(expr, false)
+        const value = (!_fields[`${prefix}${key}`] && type && Type.getInner(type, key)?.inner)
+          ? _groupObject(expr, Type.getInner(type, key), `${prefix}${key}.`)
+          : this.parseEval(expr, false)
         if (!root) return this.transform(expr, value, 'encode')
         return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
       }
       return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, true), true)
+    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, '', true), true)
   }
 
   protected groupArray(value: string) {
@@ -535,13 +538,30 @@ export class Builder {
     return inline ? `(${result})` : result
   }
 
-  dump(model: Model, obj: any): any {
+  dump(model: Model | Eval.Expr | Type, obj: any, root: boolean = true): any {
+    if (Type.isType(model) || isEvalExpr(model)) {
+      const type = Type.isType(model) ? model : Type.fromTerm(model)
+      const converter = (type?.inner || type?.type === 'json') ? (root ? this.driver.types['json'] : undefined) : this.driver.types[type?.type!]
+      if (type?.inner || type?.type === 'json') root = false
+      let res = obj
+
+      if (!isNullable(res) && type?.inner) {
+        if (Array.isArray(type.inner)) {
+          res = res.map(x => this.dump(Type.getInner(type)!, x, root))
+        } else {
+          res = mapValues(res, (x, k) => this.dump(Type.getInner(type, k)!, x, root))
+        }
+      }
+      res = converter ? converter.dump(res) : res
+      if (!root) res = this.transform(type, res, 'dump')
+      return res
+    }
+
     obj = model.format(obj)
     const result = {}
     for (const key in obj) {
-      const { type } = model.fields[key] ?? {}
-      const converter = this.driver.types[type?.type!]
-      result[key] = converter ? converter.dump(obj[key]) : obj[key]
+      const { type } = model.fields[key]!
+      result[key] = this.dump(type, obj[key])
     }
     return result
   }
@@ -555,7 +575,7 @@ export class Builder {
       let res = this.transform(type, obj, 'load')
       res = converter ? converter.load(res) : res
 
-      if (type?.inner) {
+      if (!isNullable(res) && type?.inner) {
         if (Array.isArray(type.inner)) {
           res = res.map(x => this.load(Type.getInner(type)!, x))
         } else {
@@ -579,8 +599,7 @@ export class Builder {
   }
 
   escape(value: any, field?: Field | Field.Type) {
-    const converter = field && this.driver.types[Type.fromField(field)?.type!]
-    return this.escapePrimitive(converter ? converter.dump(value) : value)
+    return this.escapePrimitive(field ? this.dump(Type.fromField(field), value) : value)
   }
 
   protected escapePrimitive(value: any) {

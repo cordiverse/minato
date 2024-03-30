@@ -439,12 +439,37 @@ export class Builder {
     return this
   }
 
-  dump(model: Model, obj: any): any {
+  dump(model: Model | Eval.Expr | Type, obj: any, prefix: string = ''): any {
+    if (Type.isType(model) || isEvalExpr(model)) {
+      const type = Type.isType(model) ? model : Type.fromTerm(model)
+      const converter = this.driver.types[type?.type]
+      let res = obj
+
+      if (!isNullable(res) && type?.inner) {
+        if (Array.isArray(type.inner)) {
+          res = res.map(x => this.dump(Type.getInner(type)!, x))
+        } else {
+          res = mapValues(res, (x, k) => this.dump(Type.getInner(type, k)!, x))
+        }
+      }
+      res = converter ? converter.dump(res) : res
+      return res
+    }
+
     const result = {}
     for (const key in obj) {
-      const { type } = model.fields[key] ?? {}
-      const converter = this.driver.types[type?.type!]
-      result[key] = converter ? converter.dump(obj[key]) : obj[key]
+      const { type } = model.fields[`${prefix}${key}`] ?? {}
+      if (type) {
+        result[key] = this.dump(type, obj[key])
+      } else {
+        if (Object.keys(model.fields).some(k => k.startsWith(`${prefix}${key}.`))) {
+          // dot defined fields
+          result[key] = this.dump(model, obj[key], `${prefix}${key}.`)
+        } else {
+          // unknown fields in json
+          result[key] = obj[key]
+        }
+      }
     }
     return result
   }
@@ -458,7 +483,7 @@ export class Builder {
 
       let res = converter ? converter.load(obj) : obj
 
-      if (type?.inner) {
+      if (!isNullable(res) && type?.inner) {
         if (Array.isArray(type.inner)) {
           res = res.map(x => this.load(Type.getInner(type)!, x))
         } else {

@@ -1,11 +1,12 @@
-import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Dict, Intersect, makeArray, mapValues, MaybeArray, valueMap } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { Flatten, Indexable, Keys, randomId, Row } from './utils.ts'
+import { Flatten, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
+import { Type } from './type.ts'
 
 type TableLike<S> = Keys<S> | Selection
 
@@ -96,15 +97,7 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     if (!driver) return
 
     const { fields } = driver.model(name)
-    Object.entries(fields).forEach(([key, field]: [string, Field & Field.Transform]) => {
-      if (field.dump && field.load) {
-        driver.define({
-          types: [field.type.type!],
-          dump: field.dump,
-          load: field.load,
-        })
-      }
-    })
+    Object.values(fields).forEach(field => field?.transformers?.forEach(x => driver.define(x)))
 
     await driver.prepare(name)
   }
@@ -117,16 +110,75 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     }
     Object.entries(fields).forEach(([key, field]: [string, any]) => {
       if (typeof field === 'string' && this.types[field]) {
-        fields[key] = this.types[field]
+        field = fields[key] = this.types[field]
+        field.transformers = [{
+          types: [field.type],
+          load: field.load,
+          dump: field.dump,
+        }]
       } else if (typeof field === 'object' && field.load && field.dump) {
-        field.deftype = field.type
-        field.type = `_newtype_${name}_$unnamed_${key}`
+        field = fields[key] = { ...field, deftype: field.type, type: `_newtype_${name}_$unnamed_${key}` }
+        field.transformers = [{
+          types: [field.type],
+          load: field.load,
+          dump: field.dump,
+        }]
         this.define(field.type, field)
+      } else if (typeof field === 'object' && typeof field.type === 'object') {
+        field = fields[key] = { ...field, transformers: [], deftype: 'json' }
+        let initial
+        field.type = this.parseType(field.type, field.transformers, value => initial = value)
+        if (field.initial === undefined) field.initial = initial
       }
     })
     model.extend(fields, config)
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
+  }
+
+  private parseField<T>(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => any): Type<T> {
+    if (typeof field === 'string' && this.types[field]) {
+      transformers.push({
+        types: [this.types[field].type],
+        load: this.types[field].load,
+        dump: this.types[field].dump,
+      })
+      setInitial?.(this.types[field].initial)
+      return Type.fromField(field as any)
+    } else if (typeof field === 'object' && field.load && field.dump) {
+      const name = this.define(field as any)
+      transformers.push({
+        types: [name],
+        load: field.load,
+        dump: field.dump,
+      } as any)
+      setInitial?.(Field.getInitial(field.type, field.initial))
+      return Type.fromField(name as any)
+    } else if (typeof field === 'object' && typeof field.type === 'object') {
+      let initial
+      const res = this.parseType(field.type as any, transformers, value => initial = value)
+      setInitial?.(Field.getInitial(field.type, initial))
+      return res
+    } else if (typeof field === 'object') {
+      setInitial?.(Field.getInitial(field.type.split('(')[0], field.initial))
+      return Type.fromField(field.type.split('(')[0])
+    } else {
+      setInitial?.(Field.getInitial(field.split('(')[0]))
+      return Type.fromField(field.split('(')[0])
+    }
+  }
+
+  private parseType(type: [any] | Dict, transformers: Driver.Transformer[] = [], setInitial?: (value) => any): Type {
+    if (Array.isArray(type)) {
+      setInitial?.([])
+      return Type.Array(this.parseField(type[0], transformers))
+    } else {
+      type = unravel(type, value => value.type ??= {})
+      const initial = {}
+      const res = Type.Object(mapValues(type, (x, k) => this.parseField(x, transformers, value => initial[k] = value)))
+      setInitial?.(initial)
+      return res
+    }
   }
 
   define<K extends Exclude<Keys<N>, Field.Type>>(name: K, field: Field.Transform<N[K]>): K

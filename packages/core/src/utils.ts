@@ -52,7 +52,7 @@ export function makeRegExp(source: string | RegExp) {
   return source instanceof RegExp ? source : new RegExp(source)
 }
 
-export function unravel(source: object) {
+export function unravel(source: object, init?: (value) => any) {
   const result = {}
   for (const key in source) {
     let node = result
@@ -60,6 +60,7 @@ export function unravel(source: object) {
     for (let index = segments.length - 1; index > 0; index--) {
       const segment = segments[index]
       node = node[segment] ??= {}
+      if (init) node = init(node)
     }
     node[segments[0]] = source[key]
   }

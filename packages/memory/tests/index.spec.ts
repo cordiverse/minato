@@ -20,6 +20,9 @@ describe('@minatojs/driver-memory', () => {
       fields: {
         cast: false,
         typeModel: false,
+      },
+      object: {
+        typeModel: false,
       }
     },
     query: {

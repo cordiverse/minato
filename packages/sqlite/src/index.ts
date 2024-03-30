@@ -180,8 +180,8 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     this.define<boolean, number>({
       types: ['boolean'],
-      dump: value => +value,
-      load: (value) => !!value,
+      dump: value => isNullable(value) ? value : +value,
+      load: (value) => isNullable(value) ? value : !!value,
     })
 
     this.define<object, string>({
