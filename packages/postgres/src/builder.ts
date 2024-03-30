@@ -124,7 +124,7 @@ export class PostgresBuilder extends Builder {
         date.setHours(0, 0, 0, 0)
         return date
       },
-      dump: value => Time.template('yyyy-MM-dd', value),
+      dump: value => isNullable(value) ? value : formatTime(value),
     }
 
     this.transformers['time'] = {
@@ -141,7 +141,7 @@ export class PostgresBuilder extends Builder {
         if (isNullable(value) || typeof value === 'object') return value
         return new Date(value)
       },
-      dump: value => Time.template('yyyy-MM-dd hh:mm:ss', value),
+      dump: value => isNullable(value) ? value : formatTime(value),
     }
   }
 
@@ -300,7 +300,14 @@ export class PostgresBuilder extends Builder {
     for (const prop in item) {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')
-      value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${this.encode(this.parseEval(item[prop]), true, true)}, true)`
+      const type = Type.getInner(field?.type, prop.slice(key.length + 1))
+      let escaped: string
+      const v = isEvalExpr(item[prop]) ? this.encode(this.parseEval(item[prop]), true, true)
+        : (escaped = this.escape(item[prop], type),
+        escaped.endsWith('::jsonb') ? escaped
+          : escaped.startsWith(`'`) ? this.encode(`(${escaped})::text`, true, true)
+            : this.encode(escaped, true, true))
+      value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${v}, true)`
     }
 
     if (value === valueInit) {

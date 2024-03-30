@@ -258,4 +258,8 @@ export class Model<S = any> {
     }
     return this.parse({ ...result, ...data })
   }
+
+  getType(): Type {
+    return Type.Object(valueMap(this.fields!, field => Type.fromField(field!)))
+  }
 }

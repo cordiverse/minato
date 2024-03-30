@@ -13,7 +13,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   public db!: Db
   public mongo = this
 
-  private builder = new Builder(this, [])
+  private builder: Builder = new Builder(this, [])
   private session?: ClientSession
   private _createTasks: Dict<Promise<void>> = {}
 
@@ -316,8 +316,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const coll = this.db.collection(table)
 
     const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-    const $set = mapValues(this.builder.dump(model, update),
-      (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
+    const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(model, update),
+      (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
     const $unset = Object.entries($set)
       .filter(([_, value]) => typeof value === 'object')
       .map(([key, _]) => key)
@@ -433,8 +433,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
         const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-        const $set = mapValues(this.builder.dump(model, update),
-          (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value))
+        const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(model, update),
+          (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)

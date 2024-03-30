@@ -14,9 +14,14 @@ interface DType {
   object?: {
     text?: string
     num?: number
+    json?: {
+      text?: string
+      num?: number
+    },
     embed?: {
       bool?: boolean
       bigint?: bigint
+      custom?: Custom
     }
   }
   object2?: {
@@ -49,6 +54,11 @@ interface DObject {
   }[]
 }
 
+interface Custom {
+  a: string
+  b: number
+}
+
 interface Tables {
   dtypes: DType
   dobjects: DObject
@@ -56,6 +66,7 @@ interface Tables {
 
 interface Types {
   bigint: bigint
+  custom: Custom
 }
 
 function flatten<T, N, P extends string>(type: Field.Definition<T, N>, prefix: P): Field.Extension<{ [K in P]: T }, N> {
@@ -73,9 +84,15 @@ function flatten<T, N, P extends string>(type: Field.Definition<T, N>, prefix: P
 function ModelOperations(database: Database<Tables, Types>) {
   database.define('bigint', {
     type: 'string',
-    dump: value => value ? value.toString() : value as any,
-    load: value => value ? BigInt(value) : value as any,
+    dump: value => value ? value.toString() : value,
+    load: value => value ? BigInt(value) : value,
     initial: 123n
+  })
+
+  database.define('custom', {
+    type: 'string',
+    dump: value => value ? `${value.a}|${value.b}` : value,
+    load: value => value ? { a: value.split('|')[0], b: +value.split('|')[1] } : value
   })
 
   const bnum = database.define({
@@ -102,7 +119,7 @@ function ModelOperations(database: Database<Tables, Types>) {
     decimal: {
       type: 'decimal',
       scale: 3,
-      initial: 12413
+      initial: 12413,
     },
     bool: {
       type: 'boolean',
@@ -120,6 +137,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: {
         num: 'unsigned',
         text: 'string',
+        json: 'json',
         embed: {
           type: {
             bool: {
@@ -127,17 +145,22 @@ function ModelOperations(database: Database<Tables, Types>) {
               initial: false,
             },
             bigint: 'bigint',
-          }
-        }
+            custom: 'custom',
+          },
+        },
       },
       initial: {
         num: 1,
         text: '2',
+        json: {
+          text: '3',
+          num: 4,
+        },
         embed: {
           bool: true,
           bigint: 123n,
-        }
-      }
+        },
+      },
     },
     // dot defined object
     'object2.num': {
@@ -146,7 +169,7 @@ function ModelOperations(database: Database<Tables, Types>) {
     },
     'object2.text': {
       type: 'string',
-      initial: '2'
+      initial: '2',
     },
     'object2.embed.bool': {
       type: 'boolean',
@@ -176,7 +199,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       dump: value => value === undefined ? value : Buffer.from(String(value)),
       load: value => value ? +value : value,
       initial: 0,
-    }
+    },
   }
 
   const baseObject = {
@@ -222,6 +245,7 @@ namespace ModelOperations {
     { id: 11, bigint: BigInt(1e63) },
     { id: 12, decimal: 2.432 },
     { id: 13, bnum: 114514, bnum2: 12345 },
+    { id: 14, object: { embed: { custom: { a: 'abc', b: 123 } } } },
   ]
 
   const dobjectTable: DObject[] = [
@@ -243,12 +267,13 @@ namespace ModelOperations {
     return result
   }
 
-  interface FieldsOptions {
+  interface ModelOptions {
     cast?: boolean
     typeModel?: boolean
+    aggregateNull?: boolean
   }
 
-  export const fields = function Fields(database: Database<Tables, Types>, options: FieldsOptions = {}) {
+  export const fields = function Fields(database: Database<Tables, Types>, options: ModelOptions = {}) {
     const { cast = true, typeModel = true } = options
 
     it('basic', async () => {
@@ -266,6 +291,40 @@ namespace ModelOperations {
       await database.upsert('dtypes', dtypeTable.map(({ id }) => ({ id })))
 
       await Promise.all(table.map(({ id, ...x }) => database.set('dtypes', id, x)))
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+    })
+
+    it('dot notation in modifier', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      table[0].object = {}
+
+      await database.set('dtypes', table[0].id, row => ({
+        object: $.literal({})
+      }))
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+
+      table[0].object = {
+        num: 123,
+        json: {
+          num: 456,
+        },
+        embed: {
+          bool: true,
+          bigint: 123n,
+          custom: {
+            a: 'a',
+            b: 1,
+          }
+        }
+      }
+
+      await database.set('dtypes', table[0].id, row => ({
+        'object.num': 123,
+        'object.json.num': 456,
+        'object.embed.bool': true,
+        'object.embed.bigint': 123n,
+        'object.embed.custom': { a: 'a', b: 1 },
+      }))
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
     })
 
@@ -327,8 +386,8 @@ namespace ModelOperations {
     })
   }
 
-  export const object = function ObjectFields(database: Database<Tables, Types>, options: FieldsOptions = {}) {
-    const { typeModel = true } = options
+  export const object = function ObjectFields(database: Database<Tables, Types>, options: ModelOptions = {}) {
+    const { aggregateNull = true, typeModel = true } = options
 
     it('basic', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
@@ -370,7 +429,7 @@ namespace ModelOperations {
       ).to.eventually.have.shape(table)
     })
 
-    it('$.array encoding', async () => {
+    aggregateNull && it('$.array encoding', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
         key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => getValue(x, key)))

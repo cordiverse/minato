@@ -598,8 +598,8 @@ export class Builder {
     return model.parse(result)
   }
 
-  escape(value: any, field?: Field | Field.Type) {
-    return this.escapePrimitive(field ? this.dump(Type.fromField(field), value) : value)
+  escape(value: any, field?: Field | Field.Type | Type) {
+    return this.escapePrimitive(field ? this.dump(Type.isType(field) ? field : Type.fromField(field), value) : value)
   }
 
   protected escapePrimitive(value: any) {

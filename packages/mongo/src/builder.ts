@@ -439,39 +439,25 @@ export class Builder {
     return this
   }
 
-  dump(model: Model | Eval.Expr | Type, obj: any, prefix: string = ''): any {
-    if (Type.isType(model) || isEvalExpr(model)) {
-      const type = Type.isType(model) ? model : Type.fromTerm(model)
-      const converter = this.driver.types[type?.type]
-      let res = obj
+  dump(model: Model | Eval.Expr | Type | undefined, obj: any, prefix: string = ''): any {
+    if (!model) return obj
+    if (isEvalExpr(model)) model = Type.fromTerm(model)
+    if (!Type.isType(model)) model = model.getType()
 
-      if (!isNullable(res) && type?.inner) {
-        if (Array.isArray(type.inner)) {
-          res = res.map(x => this.dump(Type.getInner(type)!, x))
-        } else {
-          res = mapValues(res, (x, k) => this.dump(Type.getInner(type, k)!, x))
-        }
-      }
-      res = converter ? converter.dump(res) : res
-      return res
-    }
+    const type = Type.isType(model) ? model : Type.fromTerm(model)
+    const converter = this.driver.types[type?.type]
+    let res = obj
 
-    const result = {}
-    for (const key in obj) {
-      const { type } = model.fields[`${prefix}${key}`] ?? {}
-      if (type) {
-        result[key] = this.dump(type, obj[key])
+    if (!isNullable(res) && type?.inner) {
+      if (Array.isArray(type.inner)) {
+        res = res.map(x => this.dump(Type.getInner(type)!, x))
       } else {
-        if (Object.keys(model.fields).some(k => k.startsWith(`${prefix}${key}.`))) {
-          // dot defined fields
-          result[key] = this.dump(model, obj[key], `${prefix}${key}.`)
-        } else {
-          // unknown fields in json
-          result[key] = obj[key]
-        }
+        res = mapValues(res, (x, k) => this.dump(Type.getInner(type, k)!, x))
       }
     }
-    return result
+
+    res = converter ? converter.dump(res) : res
+    return res
   }
 
   load(model: Model, obj: any): any
@@ -500,5 +486,18 @@ export class Builder {
       result[key] = this.load(model.fields[key]!.type, obj[key])
     }
     return model.parse(result)
+  }
+
+  formatUpdateAggr(model: Type, obj: any) {
+    const result = {}
+    for (const key in obj) {
+      const type = Type.getInner(model, key)
+      if (!type || type.type !== 'json' || isNullable(obj[key]) || obj[key].$literal) result[key] = obj[key]
+      else if (Array.isArray(type.inner) && Array.isArray(obj[key])) result[key] = obj[key].map(x => this.formatUpdateAggr(type, x))
+      else if (Object.keys(obj[key]).length === 0) result[key] = { $literal: obj[key] }
+      else if (type.inner) result[key] = this.formatUpdateAggr(type, obj[key])
+      else result[key] = obj[key]
+    }
+    return result
   }
 }

@@ -60,11 +60,12 @@ export namespace Type {
     return value?.[kType] === true
   }
 
-  export function getInner(type: Type<any>, key?: string): Type | undefined {
+  export function getInner(type?: Type<any>, key?: string): Type | undefined {
     if (!type?.inner) return
     if (globalThis.Array.isArray(type.inner) && isNullable(key)) return type.inner[0]
     if (isNullable(key)) return
     if (type.inner[key]) return type.inner[key]
+    if (key.includes('.')) return key.split('.').reduce((t, k) => getInner(t, k), type)
     return Object(globalThis.Object.fromEntries(globalThis.Object.entries(type.inner)
       .filter(([k]) => k.startsWith(`${key}.`))
       .map(([k, v]) => [k.slice(key.length + 1), v]),
