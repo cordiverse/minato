@@ -294,7 +294,7 @@ export class PostgresBuilder extends Builder {
     // json_set cannot create deeply nested property when non-exist
     // therefore we merge a layout to it
     if (Object.keys(jsonInit).length !== 0) {
-      value = `(${value} || jsonb ${this.escape(jsonInit, 'json')})`
+      value = `(jsonb ${this.escape(jsonInit, 'json')} || ${value})`
     }
 
     for (const prop in item) {

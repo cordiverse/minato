@@ -328,6 +328,22 @@ namespace ModelOperations {
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
     })
 
+
+    it('using expressions in modifier', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+
+      table[0].object!.json!.num! = 543 + (table[0].object!.json!.num ?? 0)
+      table[0].object!.embed!.bool! = !table[0].object!.embed!.bool!
+      table[0].object!.embed!.bigint = 999n
+
+      await database.set('dtypes', table[0].id, row => ({
+        'object.json.num': $.add($.ifNull(row.object.json.num, 0), 543),
+        'object.embed.bool': $.not(row.object.embed.bool),
+        'object.embed.bigint': 999n,
+      }))
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+    })
+
     it('primitive', async () => {
       expect(Type.fromTerm($.literal(123)).type).to.equal(Type.Number.type)
       expect(Type.fromTerm($.literal('abc')).type).to.equal(Type.String.type)
@@ -433,6 +449,13 @@ namespace ModelOperations {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
         key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => getValue(x, key)))
+      ))
+    })
+
+    it('$.array encoding boxed', async () => {
+      const table = await setup(database, 'dobjects', dobjectTable)
+      await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
+        key => expect(database.eval('dobjects', row => $.array($.object({ x: row[key] })))).to.eventually.have.shape(table.map(x => ({ x: getValue(x, key) })))
       ))
     })
 
