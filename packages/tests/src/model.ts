@@ -328,7 +328,6 @@ namespace ModelOperations {
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
     })
 
-
     it('using expressions in modifier', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
 
@@ -341,6 +340,18 @@ namespace ModelOperations {
         'object.embed.bool': $.not(row.object.embed.bool),
         'object.embed.bigint': 999n,
       }))
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+
+      table[0].object!.embed!.bool! = false
+      await database.set('dtypes', table[0].id, {
+        'object.embed.bool': false,
+      })
+      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+
+      table[0].object!.embed!.bool! = true
+      await database.set('dtypes', table[0].id, {
+        'object.embed.bool': true,
+      })
       await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
     })
 

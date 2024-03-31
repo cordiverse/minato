@@ -302,11 +302,10 @@ export class PostgresBuilder extends Builder {
       const rest = prop.slice(key.length + 1).split('.')
       const type = Type.getInner(field?.type, prop.slice(key.length + 1))
       let escaped: string
-      const v = isEvalExpr(item[prop]) ? this.encode(this.parseEval(item[prop]), true, true)
-        : (escaped = this.escape(item[prop], type),
-        escaped.endsWith('::jsonb') ? escaped
+      const v = isEvalExpr(item[prop]) ? this.encode(this.parseEval(item[prop]), true, true, Type.fromTerm(item[prop]))
+        : (escaped = this.escape(item[prop], type), escaped.endsWith('::jsonb') ? escaped
           : escaped.startsWith(`'`) ? this.encode(`(${escaped})::text`, true, true)
-            : this.encode(escaped, true, true))
+            : this.encode(escaped, true, true, type))
       value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${v}, true)`
     }
 

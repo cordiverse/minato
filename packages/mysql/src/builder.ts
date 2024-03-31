@@ -182,7 +182,8 @@ export class MySQLBuilder extends Builder {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')
       const type = Type.getInner(field?.type, prop.slice(key.length + 1))
-      const v = isEvalExpr(item[prop]) ? this.parseEval(item[prop]) : this.escape(item[prop], type)
+      const v = isEvalExpr(item[prop]) ? this.transform(Type.fromTerm(item[prop]), this.parseEval(item[prop]), 'encode')
+        : this.transform(type, this.escape(item[prop], type), 'encode')
       value = `json_set(${value}, '$${rest.map(key => `."${key}"`).join('')}', ${v})`
     }
 
