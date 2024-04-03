@@ -69,11 +69,11 @@ interface Types {
   custom: Custom
 }
 
-function flatten<T, N, P extends string>(type: Field.Definition<T, N>, prefix: P): Field.Extension<{ [K in P]: T }, N> {
-  if (typeof type.type === 'object') {
+function flatten(type: any, prefix) {
+  if (typeof type === 'object' && type?.type === 'object') {
     const result = {}
-    for (const key in type.type) {
-      Object.assign(result, flatten(type.type[key], `${prefix}.${key}`))
+    for (const key in type.inner) {
+      Object.assign(result, flatten(type.inner[key]!, `${prefix}.${key}`))
     }
     return result
   } else {
@@ -134,12 +134,14 @@ function ModelOperations(database: Database<Tables, Types>) {
       initial: [1, 2, 3],
     },
     object: {
-      type: {
+      type: 'object',
+      inner: {
         num: 'unsigned',
         text: 'string',
         json: 'json',
         embed: {
-          type: {
+          type: 'object',
+          inner: {
             bool: {
               type: 'boolean',
               initial: false,
@@ -203,7 +205,8 @@ function ModelOperations(database: Database<Tables, Types>) {
   }
 
   const baseObject = {
-    type: { nested: { type: baseFields } },
+    type: 'object',
+    inner: { nested: { type: 'object', inner: baseFields } },
     initial: { nested: { id: 1 } }
   }
 
@@ -213,9 +216,13 @@ function ModelOperations(database: Database<Tables, Types>) {
 
   database.extend('dobjects', {
     id: 'unsigned',
-    foo: baseObject,
+    foo:  baseObject,
     ...flatten(baseObject, 'bar'),
-    baz: { type: [baseObject], initial: [] },
+    baz: {
+      type: 'array',
+      inner: baseObject,
+      initial: []
+    },
   }, { autoInc: true })
 }
 

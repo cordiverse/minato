@@ -36,15 +36,21 @@ export namespace Field {
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends Uint8Array ? 'binary'
-    : T extends unknown[] ? 'list' | 'json'
-    : T extends object ? 'json'
+    : T extends unknown[] ? 'list' | 'json' | 'array'
+    : T extends object ? 'json' | 'object'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
-  export type Definition<T = any, N = any> = {
-    type: Type<T> | (T extends (infer I)[] ? [Definition<I, N> | Shorthand<Type<I>> | Transform<I> | Keys<N, I> | NewType<I>] : never) | Extension<T, N>
+  export type Object<T = any, N = any> = {
+    type: 'object'
+    inner: Extension<T, N>
   } & Omit<Field<T>, 'type'>
+
+  export type Array<T = any, N = any> = {
+    type: 'array'
+    inner?: Definition<T, N>
+  } & Omit<Field<T[]>, 'type'>
 
   export type Transform<S = any, T = any> = {
     type: Type<T>
@@ -57,8 +63,17 @@ export namespace Field {
     type: Type<T> | Field<T>['type']
   } & Omit<Field<T>, 'type'>
 
+  export type Definition<T, N> =
+    | (Omit<Field<T>, 'type'> & { type: Type<T> })
+    | Object<T, N>
+    | (T extends (infer I)[] ? Array<I, N> : never)
+    | Shorthand<Type<T>>
+    | Transform<T>
+    | Keys<N, T>
+    | NewType<T>
+
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: Definition<O[K], N> | Shorthand<Type<O[K]>> | Transform<O[K]> | Keys<N, O[K]> | NewType<O[K]>
+    [K in keyof O]?: Definition<O[K], N>
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
@@ -208,7 +223,7 @@ export class Model<S = any> {
         result[key] = obj[key]
       } else if (type.type !== 'json') {
         result[key] = this.resolveValue(type, obj[key])
-      } else if (Type.isArray(type) && Array.isArray(obj[key])) {
+      } else if (type.inner && Type.isArray(type) && Array.isArray(obj[key])) {
         result[key] = obj[key].map(x => this.resolveModel(x, Type.getInner(type)))
       } else if (type.inner) {
         result[key] = this.resolveModel(obj[key], type)
