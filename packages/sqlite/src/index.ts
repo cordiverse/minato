@@ -76,7 +76,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       } else {
         def += (nullable ? ' ' : ' NOT ') + 'NULL'
         if (!isNullable(initial)) {
-          def += ' DEFAULT ' + this.sql.escape(this.sql.dump(model, { [key]: initial })[key])
+          def += ' DEFAULT ' + this.sql.escape(this.sql.dump({ [key]: initial }, model)[key])
         }
       }
       columnDefs.push(def)
@@ -297,7 +297,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const sql = builder.get(sel)
     if (!sql) return []
     const rows = this.#all(sql)
-    return rows.map(row => builder.load(model, row))
+    return rows.map(row => builder.load(row, model))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
@@ -305,7 +305,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
-    return builder.load(expr, value)
+    return builder.load(value, expr)
   }
 
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
@@ -313,7 +313,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const model = this.model(table)
     const modified = !deepEqual(clone(data), executeUpdate(data, update, ref))
     if (!modified) return 0
-    const row = this.sql.dump(model, data)
+    const row = this.sql.dump(data, model)
     const assignment = updateFields.map((key) => `${escapeId(key)} = ?`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
@@ -338,7 +338,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   #create(table: string, data: {}) {
     const model = this.model(table)
-    data = this.sql.dump(model, data)
+    data = this.sql.dump(data, model)
     const keys = Object.keys(data)
     const sql = `INSERT INTO ${escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${Array(keys.length).fill('?').join(', ')})`
     return this.#run(sql, keys.map(key => data[key] ?? null), () => this.#get(`SELECT last_insert_rowid() AS id`))

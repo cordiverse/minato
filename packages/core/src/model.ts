@@ -136,6 +136,8 @@ export class Model<S = any> {
   fields: Field.Config<S> = {}
   migrations = new Map<Model.Migration, string[]>()
 
+  private type: Type<S> | undefined
+
   constructor(public name: string) {
     this.autoInc = false
     this.primary = 'id' as never
@@ -188,11 +190,33 @@ export class Model<S = any> {
       const date = new Date(value)
       date.setHours(0, 0, 0, 0)
       return date
-    } else if (field?.inner) {
-      if (Array.isArray(field.inner)) return value.map((item: any) => this.resolveValue(Type.getInner(field)!, item))
-      else return valueMap(field.inner, (type, key) => this.resolveValue(Type.getInner(field, key)!, value[key]))
     }
     return value
+  }
+
+  resolveModel(obj: any, model?: Type) {
+    if (!model) model = this.getType()
+    if (isNullable(obj) || !model.inner) return obj
+    if (Array.isArray(model.inner) && Array.isArray(obj)) {
+      return obj.map(x => this.resolveModel(x, Type.getInner(model)!))
+    }
+
+    const result = {}
+    for (const key in obj) {
+      const type = Type.getInner(model, key)
+      if (!type || isNullable(obj[key])) {
+        result[key] = obj[key]
+      } else if (type.type !== 'json') {
+        result[key] = this.resolveValue(type, obj[key])
+      } else if (Array.isArray(type.inner) && Array.isArray(obj[key])) {
+        result[key] = obj[key].map(x => this.resolveModel(x, Type.getInner(type)))
+      } else if (type.inner) {
+        result[key] = this.resolveModel(obj[key], type)
+      } else {
+        result[key] = obj[key]
+      }
+    }
+    return result
   }
 
   format(source: object, strict = true, prefix = '', result = {} as S) {
@@ -201,7 +225,7 @@ export class Model<S = any> {
       key = prefix + key
       if (value === undefined) return
       if (fields.includes(key)) {
-        result[key] = this.resolveValue(key, value)
+        result[key] = value
         return
       }
       const field = fields.find(field => key.startsWith(field + '.'))
@@ -215,7 +239,7 @@ export class Model<S = any> {
         this.format(value, strict, key + '.', result)
       }
     })
-    return result
+    return prefix === '' ? this.resolveModel(result) : result
   }
 
   parse(source: object, strict = true, prefix = '', result = {} as S) {
@@ -231,19 +255,19 @@ export class Model<S = any> {
         const fullKey = prefix + key, value = source[key]
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
-          node[segments[0]] = this.resolveValue(key, value)
+          node[segments[0]] = value
         } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || isUint8Array(value) || Object.keys(value).length === 0) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {
-            node[segments[0]] = this.resolveValue(key, value)
+            node[segments[0]] = value
           }
         } else {
           this.parse(value, strict, fullKey + '.', node[segments[0]] ??= {})
         }
       }
     }
-    return result
+    return prefix === '' ? this.resolveModel(result) : result
   }
 
   create(data?: {}) {
@@ -259,7 +283,10 @@ export class Model<S = any> {
     return this.parse({ ...result, ...data })
   }
 
-  getType(): Type {
-    return Type.Object(valueMap(this.fields!, field => Type.fromField(field!)))
+  getType(): Type<S>
+  getType(key: string): Type | undefined
+  getType(key?: string): Type | undefined {
+    this.type ??= Type.Object(valueMap(this.fields!, field => Type.fromField(field!))) as any
+    return key ? Type.getInner(this.type, key) : this.type
   }
 }

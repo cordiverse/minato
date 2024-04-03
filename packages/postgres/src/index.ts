@@ -147,10 +147,10 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       ...this.config,
     })
 
-    this.define<object, string>({
+    this.define<object, object>({
       types: ['json'],
-      dump: value => JSON.stringify(value),
-      load: value => value as any,
+      dump: value => value,
+      load: value => value,
     })
 
     this.define<Date, string>({
@@ -339,7 +339,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const query = builder.get(sel)
     if (!query) return []
     return this.queue(query).then(data => {
-      return data.map(row => builder.load(sel.model, row))
+      return data.map(row => builder.load(row, sel.model))
     })
   }
 
@@ -349,7 +349,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const output = builder.parseEval(expr, false)
     const ref = isBracketed(inner) ? sel.ref : ''
     const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${ref}`)
-    return builder.load(expr, data?.value)
+    return builder.load(data?.value, expr)
   }
 
   async set(sel: Selection.Mutable, data: {}) {
@@ -381,14 +381,14 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   async create(sel: Selection.Mutable, data: any) {
     const { table, model } = sel
     const builder = new PostgresBuilder(this, sel.tables)
-    const formatted = builder.dump(model, data)
+    const formatted = builder.dump(data, model)
     const keys = Object.keys(formatted)
     const [row] = await this.query([
       `INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})`,
-      `VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})`,
+      `VALUES (${keys.map(key => builder.escapePrimitive(formatted[key], model.getType(key))).join(', ')})`,
       `RETURNING *`,
     ].join(' '))
-    return builder.load(model, row)
+    return builder.load(row, model)
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {

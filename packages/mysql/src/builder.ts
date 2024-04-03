@@ -84,7 +84,7 @@ export class MySQLBuilder extends Builder {
     }
   }
 
-  protected escapePrimitive(value: any) {
+  escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) {
       value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
@@ -94,14 +94,14 @@ export class MySQLBuilder extends Builder {
     } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
-    return super.escapePrimitive(value)
+    return super.escapePrimitive(value, type)
   }
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded(encoded === this.isEncoded() && !pure ? value : encoded
-      ? (this.compat.maria ? `json_extract(json_object('v', ${this.transform(type, value, 'encode')}), '$.v')`
-        : `cast(${this.transform(type, value, 'encode')} as json)`)
-      : this.transform(type, `json_unquote(${value})`, 'decode'), pure ? undefined : encoded)
+      ? (this.compat.maria ? `json_extract(json_object('v', ${this.transform(value, type, 'encode')}), '$.v')`
+        : `cast(${this.transform(value, type, 'encode')} as json)`)
+      : this.transform(`json_unquote(${value})`, type, 'decode'), pure ? undefined : encoded)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, compat?: (value: string) => string) {
@@ -131,7 +131,7 @@ export class MySQLBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      query = `(ifnull((SELECT ${this.groupArray(this.transform(Type.getInner(Type.fromTerm(expr)), output, 'encode'))}
+      query = `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
     if (Object.keys(refFields ?? {}).length) {
@@ -165,7 +165,7 @@ export class MySQLBuilder extends Builder {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')
       if (rest.length === 1) continue
-      rest.reduce((obj, k) => obj[k] ??= {}, jsonInit)
+      rest.slice(0, -1).reduce((obj, k) => obj[k] ??= {}, jsonInit)
     }
 
     // update with json_set
@@ -175,15 +175,15 @@ export class MySQLBuilder extends Builder {
     // json_set cannot create deeply nested property when non-exist
     // therefore we merge a layout to it
     if (Object.keys(jsonInit).length !== 0) {
-      value = `json_merge(${value}, ${this.escape(jsonInit, 'json')})`
+      value = `json_merge_patch(${this.escape(jsonInit, 'json')}, ${value})`
     }
 
     for (const prop in item) {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')
       const type = Type.getInner(field?.type, prop.slice(key.length + 1))
-      const v = isEvalExpr(item[prop]) ? this.transform(Type.fromTerm(item[prop]), this.parseEval(item[prop]), 'encode')
-        : this.transform(type, this.escape(item[prop], type), 'encode')
+      const v = isEvalExpr(item[prop]) ? this.transform(this.parseEval(item[prop]), item[prop], 'encode')
+        : this.transform(this.escape(item[prop], type), type, 'encode')
       value = `json_set(${value}, '$${rest.map(key => `."${key}"`).join('')}', ${v})`
     }
 

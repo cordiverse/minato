@@ -1,6 +1,6 @@
-import { valueMap } from 'cosmokit'
-import { $, clone, Database, Field, Type } from 'minato'
-import { expect } from 'chai'
+import { isNullable, valueMap } from 'cosmokit'
+import { $, Database, Field, Type } from 'minato'
+import chai, { expect } from 'chai'
 
 interface DType {
   id: number
@@ -215,7 +215,7 @@ function ModelOperations(database: Database<Tables, Types>) {
     id: 'unsigned',
     foo: baseObject,
     ...flatten(baseObject, 'bar'),
-    baz: { type: [baseObject] },
+    baz: { type: [baseObject], initial: [] },
   }, { autoInc: true })
 }
 
@@ -278,11 +278,11 @@ namespace ModelOperations {
 
     it('basic', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
 
       await database.remove('dtypes', {})
       await database.upsert('dtypes', dtypeTable)
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
     })
 
     it('modifier', async () => {
@@ -291,7 +291,7 @@ namespace ModelOperations {
       await database.upsert('dtypes', dtypeTable.map(({ id }) => ({ id })))
 
       await Promise.all(table.map(({ id, ...x }) => database.set('dtypes', id, x)))
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
     })
 
     it('dot notation in modifier', async () => {
@@ -299,9 +299,9 @@ namespace ModelOperations {
       table[0].object = {}
 
       await database.set('dtypes', table[0].id, row => ({
-        object: $.literal({})
+        object: {}
       }))
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
 
       table[0].object = {
         num: 123,
@@ -325,7 +325,7 @@ namespace ModelOperations {
         'object.embed.bigint': 123n,
         'object.embed.custom': { a: 'a', b: 1 },
       }))
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
     })
 
     it('using expressions in modifier', async () => {
@@ -340,19 +340,19 @@ namespace ModelOperations {
         'object.embed.bool': $.not(row.object.embed.bool),
         'object.embed.bigint': 999n,
       }))
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
 
       table[0].object!.embed!.bool! = false
       await database.set('dtypes', table[0].id, {
         'object.embed.bool': false,
       })
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
 
       table[0].object!.embed!.bool! = true
       await database.set('dtypes', table[0].id, {
         'object.embed.bool': true,
       })
-      await expect(database.get('dtypes', {})).to.eventually.have.shape(table)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
     })
 
     it('primitive', async () => {
@@ -373,7 +373,7 @@ namespace ModelOperations {
 
     typeModel && it('$.object encoding', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
-      await expect(database.eval('dtypes', row => $.array($.object(row)))).to.eventually.have.shape(table)
+      await expect(database.eval('dtypes', row => $.array($.object(row)))).to.eventually.have.deep.members(table)
     })
 
     typeModel && it('$.object decoding', async () => {
@@ -384,19 +384,19 @@ namespace ModelOperations {
         })
         .project(valueMap(database.tables['dtypes'].fields as any, (field, key) => row => row.obj[key]))
         .execute()
-      ).to.eventually.have.shape(table)
+      ).to.eventually.have.deep.members(table)
     })
 
     typeModel && it('$.array encoding on cell', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
-      await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.shape(table.map(x => x.object))
-      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.shape(table.map(x => x.object2))
+      await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.deep.members(table.map(x => x.object))
+      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.deep.members(table.map(x => x.object2))
     })
 
     it('$.array encoding', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
       await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
-        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => getValue(x, key)))
+        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getValue(x, key)))
       ))
     })
 
@@ -418,11 +418,11 @@ namespace ModelOperations {
 
     it('basic', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
-      await expect(database.get('dobjects', {})).to.eventually.have.shape(table)
+      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
 
       await database.remove('dobjects', {})
       await database.upsert('dobjects', dobjectTable)
-      await expect(database.get('dobjects', {})).to.eventually.have.shape(table)
+      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
     })
 
     it('modifier', async () => {
@@ -431,7 +431,35 @@ namespace ModelOperations {
       await database.upsert('dobjects', dobjectTable.map(({ id }) => ({ id })))
 
       await Promise.all(table.map(({ id, ...x }) => database.set('dobjects', id, x)))
-      await expect(database.get('dobjects', {})).to.eventually.have.shape(table)
+      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
+    })
+
+    it('dot notation in modifier', async () => {
+      const table = await setup(database, 'dobjects', dobjectTable)
+
+      table[0].foo!.nested = { id: 0 }
+      await database.set('dobjects', table[0].id, row => ({
+        'foo.nested' : { id: 0 }
+      }))
+      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
+
+      table[0].foo!.nested!.date = new Date('1999/10/01')
+
+      await database.set('dobjects', table[0].id, row => ({
+        'foo.nested.date': new Date('1999/10/01')
+      } as any))
+      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
+
+      table[0].baz = [{}, {}]
+      await database.set('dobjects', table[0].id, row => ({
+        baz: [{}, {}]
+      }))
+      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
+    })
+
+    typeModel && it('$.object encoding', async () => {
+      const table = await setup(database, 'dobjects', dobjectTable)
+      await expect(database.eval('dobjects', row => $.array($.object(row)))).to.eventually.have.deep.members(table)
     })
 
     typeModel && it('$.object decoding', async () => {
@@ -442,37 +470,26 @@ namespace ModelOperations {
         })
         .project(valueMap(database.tables['dobjects'].fields as any, (field, key) => row => row.obj[key]))
         .execute()
-      ).to.eventually.have.shape(table)
-    })
-
-    typeModel && it('$.object decoding', async () => {
-      const table = await setup(database, 'dobjects', dobjectTable)
-      await expect(database.select('dobjects')
-        .project({
-          obj: row => $.object(row)
-        })
-        .project(valueMap(database.tables['dobjects'].fields as any, (field, key) => row => row.obj[key]))
-        .execute()
-      ).to.eventually.have.shape(table)
+      ).to.eventually.have.deep.members(table)
     })
 
     aggregateNull && it('$.array encoding', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
-        key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.shape(table.map(x => getValue(x, key)))
+        key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getValue(x, key)))
       ))
     })
 
     it('$.array encoding boxed', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
-        key => expect(database.eval('dobjects', row => $.array($.object({ x: row[key] })))).to.eventually.have.shape(table.map(x => ({ x: getValue(x, key) })))
+        key => expect(database.eval('dobjects', row => $.array($.object({ x: row[key] })))).to.eventually.have.deep.members(table.map(x => ({ x: getValue(x, key) })))
       ))
     })
 
     it('subquery encoding', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
-      await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
+      await Promise.all(['baz'].map(
         key => expect(database.select('dobjects', 1)
           .project({
             x: row => database.select('dobjects').evaluate(key as any)

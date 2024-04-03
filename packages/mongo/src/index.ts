@@ -295,7 +295,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
-      .toArray().then(rows => rows.map(row => this.builder.load(sel.model, row)))
+      .toArray().then(rows => rows.map(row => this.builder.load(row, sel.model)))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
@@ -306,7 +306,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
       .toArray()
-    return this.builder.load(expr, res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault)
+    return this.builder.load(res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault, expr)
   }
 
   async set(sel: Selection.Mutable, update: {}) {
@@ -316,7 +316,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const coll = this.db.collection(table)
 
     const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-    const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(model, update),
+    const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
       (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
     const $unset = Object.entries($set)
       .filter(([_, value]) => typeof value === 'object')
@@ -377,7 +377,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       await this.ensurePrimary(table, [data])
 
       try {
-        const copy = this.unpatchVirtual(table, { ...this.builder.dump(model, data) })
+        const copy = this.unpatchVirtual(table, { ...this.builder.dump(data, model) })
         const insertedId = (await coll.insertOne(copy, { session: this.session })).insertedId
         if (this.shouldFillPrimary(table)) {
           return { ...data, [model.primary as string]: insertedId }
@@ -410,7 +410,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
         if (item) {
           const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
-          const override = this.builder.dump(model, omit(pick(executeUpdate(item, update, ref), updateFields), keys))
+          const override = this.builder.dump(omit(pick(executeUpdate(item, update, ref), updateFields), keys), model)
           const query = this.transformQuery(sel, pick(item, keys), table)
           if (!query) continue
           bulk.find(query).updateOne({ $set: override })
@@ -420,7 +420,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       }
       await this.ensurePrimary(table, insertion)
       for (const update of insertion) {
-        const copy = this.builder.dump(model, executeUpdate(model.create(), update, ref))
+        const copy = this.builder.dump(executeUpdate(model.create(), update, ref), model)
         bulk.insert(this.unpatchVirtual(table, copy))
       }
       const result = await bulk.execute({ session: this.session })
@@ -433,7 +433,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
         const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-        const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(model, update),
+        const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
           (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')

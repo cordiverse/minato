@@ -439,20 +439,20 @@ export class Builder {
     return this
   }
 
-  dump(model: Model | Eval.Expr | Type | undefined, obj: any, prefix: string = ''): any {
-    if (!model) return obj
-    if (isEvalExpr(model)) model = Type.fromTerm(model)
-    if (!Type.isType(model)) model = model.getType()
+  dump(value: any, type: Model | Type | Eval.Expr | undefined): any {
+    if (!type) return value
+    if (isEvalExpr(type)) type = Type.fromTerm(type)
+    if (!Type.isType(type)) type = type.getType()
 
-    const type = Type.isType(model) ? model : Type.fromTerm(model)
+    type = Type.isType(type) ? type : Type.fromTerm(type)
     const converter = this.driver.types[type?.type]
-    let res = obj
+    let res = value
 
     if (!isNullable(res) && type?.inner) {
       if (Array.isArray(type.inner)) {
-        res = res.map(x => this.dump(Type.getInner(type)!, x))
+        res = res.map(x => this.dump(x, Type.getInner(type)!))
       } else {
-        res = mapValues(res, (x, k) => this.dump(Type.getInner(type, k)!, x))
+        res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type, k)))
       }
     }
 
@@ -460,32 +460,31 @@ export class Builder {
     return res
   }
 
-  load(model: Model, obj: any): any
-  load(type: Type | Eval.Expr, obj: any): any
-  load(model: Model | Type | Eval.Expr, obj?: any) {
-    if (Type.isType(model) || isEvalExpr(model)) {
-      const type = Type.isType(model) ? model : Type.fromTerm(model)
-      const converter = this.driver.types[type?.inner ? 'json' : type?.type!]
+  load(value: any, type: Model | Type | Eval.Expr | undefined): any {
+    if (!type) return value
 
-      let res = converter ? converter.load(obj) : obj
+    if (Type.isType(type) || isEvalExpr(type)) {
+      type = Type.isType(type) ? type : Type.fromTerm(type)
+      const converter = this.driver.types[type?.inner ? 'json' : type?.type!]
+      let res = converter ? converter.load(value) : value
 
       if (!isNullable(res) && type?.inner) {
         if (Array.isArray(type.inner)) {
-          res = res.map(x => this.load(Type.getInner(type)!, x))
+          res = res.map(x => this.load(x, Type.getInner(type as Type)))
         } else {
-          res = mapValues(res, (x, k) => this.load(Type.getInner(type, k)!, x))
+          res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k)))
         }
       }
       return res
     }
 
-    obj = model.format(obj)
+    value = type.format(value)
     const result = {}
-    for (const key in obj) {
-      if (!(key in model.fields)) continue
-      result[key] = this.load(model.fields[key]!.type, obj[key])
+    for (const key in value) {
+      if (!(key in type.fields)) continue
+      result[key] = this.load(value[key], type.fields[key]!.type)
     }
-    return model.parse(result)
+    return type.parse(result)
   }
 
   formatUpdateAggr(model: Type, obj: any) {
@@ -493,7 +492,7 @@ export class Builder {
     for (const key in obj) {
       const type = Type.getInner(model, key)
       if (!type || type.type !== 'json' || isNullable(obj[key]) || obj[key].$literal) result[key] = obj[key]
-      else if (Array.isArray(type.inner) && Array.isArray(obj[key])) result[key] = obj[key].map(x => this.formatUpdateAggr(type, x))
+      else if (Array.isArray(type.inner) && Array.isArray(obj[key])) result[key] = obj[key]
       else if (Object.keys(obj[key]).length === 0) result[key] = { $literal: obj[key] }
       else if (type.inner) result[key] = this.formatUpdateAggr(type, obj[key])
       else result[key] = obj[key]

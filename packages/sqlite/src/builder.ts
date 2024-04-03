@@ -33,11 +33,11 @@ export class SQLiteBuilder extends Builder {
     }
   }
 
-  protected escapePrimitive(value: any) {
+  escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
     else if (isUint8Array(value)) return `X'${Uint8ArrayToHex(value)}'`
-    return super.escapePrimitive(value)
+    return super.escapePrimitive(value, type)
   }
 
   protected createElementQuery(key: string, value: any) {

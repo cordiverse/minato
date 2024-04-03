@@ -1,4 +1,4 @@
-import { defineProperty, Dict, isNullable, mapValues } from 'cosmokit'
+import { defineProperty, isNullable, mapValues } from 'cosmokit'
 import { Field } from './model.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 
@@ -15,12 +15,15 @@ export namespace Type {
   export const Number: Type<number> = defineProperty({ type: 'double' }, kType, true)
   export const String: Type<string> = defineProperty({ type: 'string' }, kType, true)
 
-  type TypeMap<T extends Dict<any>> = {
-    [K in keyof T]: Type<T[K]>
-  }
+  type Extract<T> =
+    | T extends Type<infer I> ? I
+    : T extends Field<infer I> ? I
+    : T extends Field.Type<infer I> ? I
+    : T extends Eval.Term<infer I> ? I
+    : never
 
   export type Object<T = any> = Type<T>
-  export const Object = <T extends Dict<any>>(obj?: T): Object<TypeMap<T>> => defineProperty({
+  export const Object = <T extends any>(obj?: T): Object<{ [K in keyof T]: Extract<T> }> => defineProperty({
     type: 'json' as any,
     inner: globalThis.Object.keys(obj ?? {}).length ? mapValues(obj!, (value) => isType(value) ? value : fromField(value)) as any : undefined,
   }, kType, true)

@@ -177,7 +177,7 @@ export class PostgresBuilder extends Builder {
 
   protected createElementQuery(key: string, value: any) {
     if (this.isJsonQuery(key)) {
-      return this.jsonContains(key, this.escape(value, 'json'))
+      return this.jsonContains(key, this.encode(value, true, true))
     } else {
       return `${key} && ARRAY['${value}']::TEXT[]`
     }
@@ -207,23 +207,22 @@ export class PostgresBuilder extends Builder {
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type, outtype?: string) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
-      : encoded ? `to_jsonb(${this.transform(type, value, 'encode')})`
-        : this.transform(type, `(jsonb_build_object('v', ${value})->>'v')`, 'decode') + `${typeof outtype === 'string' ? `::${outtype}` : ''}`
+      : encoded ? `to_jsonb(${this.transform(value, type, 'encode')})`
+        : this.transform(`(jsonb_build_object('v', ${value})->>'v')`, type, 'decode') + `${typeof outtype === 'string' ? `::${outtype}` : ''}`
     , pure ? undefined : encoded)
   }
 
   protected groupObject(_fields: any) {
-    const _groupObject = (fields: any, type?: Type, prefix: string = '', root: boolean = false) => {
+    const _groupObject = (fields: any, type?: Type, prefix: string = '') => {
       const parse = (expr, key) => {
         const value = (!_fields[`${prefix}${key}`] && type && Type.getInner(type, key)?.inner)
           ? _groupObject(expr, Type.getInner(type, key), `${prefix}${key}.`)
           : this.parseEval(expr, false)
-        if (!root) return this.transform(expr, value, 'encode')
-        return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(expr, value, 'encode')
+        return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(value, expr, 'encode')
       }
       return `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, '', true), true)
+    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, ''), true)
   }
 
   protected groupArray(value: string) {
@@ -239,7 +238,7 @@ export class PostgresBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(coalesce((SELECT ${this.groupArray(this.transform(Type.getInner(Type.fromTerm(expr)), output, 'encode'))}
+      return `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
     }
   }
@@ -250,19 +249,19 @@ export class PostgresBuilder extends Builder {
     return `'${value}'`
   }
 
-  protected escapePrimitive(value: any) {
+  escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) {
       value = formatTime(value)
     } else if (value instanceof RegExp) {
       value = value.source
     } else if (isUint8Array(value)) {
       return `'\\x${Uint8ArrayToHex(value)}'::bytea`
-    } else if (Array.isArray(value)) {
+    } else if (type?.type === 'list' && Array.isArray(value)) {
       return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
     } else if (!!value && typeof value === 'object') {
       return `${this.quote(JSON.stringify(value))}::jsonb`
     }
-    return super.escapePrimitive(value)
+    return super.escapePrimitive(value, type)
   }
 
   toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
@@ -302,9 +301,10 @@ export class PostgresBuilder extends Builder {
       const rest = prop.slice(key.length + 1).split('.')
       const type = Type.getInner(field?.type, prop.slice(key.length + 1))
       let escaped: string
+
       const v = isEvalExpr(item[prop]) ? this.encode(this.parseEval(item[prop]), true, true, Type.fromTerm(item[prop]))
         : (escaped = this.escape(item[prop], type), escaped.endsWith('::jsonb') ? escaped
-          : escaped.startsWith(`'`) ? this.encode(`(${escaped})::text`, true, true)
+          : escaped.startsWith(`'`) ? this.encode(`(${escaped})::text`, true, true, type)
             : this.encode(escaped, true, true, type))
       value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${v}, true)`
     }

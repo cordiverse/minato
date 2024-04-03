@@ -96,7 +96,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
   static name = 'mysql'
 
   public pool!: Pool
-  public sql = new MySQLBuilder(this)
+  public sql: MySQLBuilder = new MySQLBuilder(this)
 
   private session?: PoolConnection
   private _compat: Compat = {}
@@ -132,7 +132,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     this.define<object, string>({
       types: ['json'],
-      dump: value => JSON.stringify(value),
+      dump: value => value as any,
       load: value => typeof value === 'string' ? JSON.parse(value) : value,
     })
 
@@ -389,7 +389,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const sql = builder.get(sel)
     if (!sql) return []
     return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
-      return data.at(-1).map((row) => builder.load(model, row))
+      return data.at(-1).map((row) => builder.load(row, model))
     })
   }
 
@@ -400,7 +400,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const ref = isBracketed(inner) ? sel.ref : ''
     const sql = `SELECT ${output} AS value FROM ${inner} ${ref}`
     return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
-      return builder.load(expr, data.at(-1)[0].value)
+      return builder.load(data.at(-1)[0].value, expr)
     })
   }
 
@@ -434,7 +434,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   async create(sel: Selection.Mutable, data: {}) {
     const { table, model } = sel
     const { autoInc, primary } = model
-    const formatted = this.sql.dump(model, data)
+    const formatted = this.sql.dump(data, model)
     const keys = Object.keys(formatted)
     const header = await this.query<OkPacket>([
       `INSERT INTO ${escapeId(table)} (${keys.map(escapeId).join(', ')})`,

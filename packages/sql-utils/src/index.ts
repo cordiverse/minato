@@ -185,7 +185,7 @@ export class Builder {
         : this.asEncoded(`if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false)),
 
       $object: (fields) => this.groupObject(fields),
-      $array: (expr) => this.groupArray(this.transform(expr, this.parseEval(expr, false), 'encode')),
+      $array: (expr) => this.groupArray(this.transform(this.parseEval(expr, false), expr, 'encode')),
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
@@ -215,7 +215,7 @@ export class Builder {
 
   protected createElementQuery(key: string, value: any) {
     if (this.isJsonQuery(key)) {
-      return this.jsonContains(key, this.escape(value, 'json'))
+      return this.jsonContains(key, this.encode(value, true, true))
     } else {
       return `find_in_set(${this.escape(value)}, ${key})`
     }
@@ -262,7 +262,7 @@ export class Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(ifnull((SELECT ${this.groupArray(this.transform(Type.getInner(Type.fromTerm(expr)), output, 'encode'))}
+      return `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
         AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
   }
@@ -282,8 +282,8 @@ export class Builder {
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
-      : encoded ? `cast(${this.transform(type, value, 'encode')} as json)`
-        : `json_unquote(${this.transform(type, value, 'decode')})`, pure ? undefined : encoded)
+      : encoded ? `cast(${this.transform(value, type, 'encode')} as json)`
+        : `json_unquote(${this.transform(value, type, 'decode')})`, pure ? undefined : encoded)
   }
 
   protected isEncoded(key?: string) {
@@ -306,8 +306,11 @@ export class Builder {
     }
   }
 
-  protected transform(expr: any, value: string, method: 'encode' | 'decode' | 'load' | 'dump', miss?: any) {
-    const type = Type.isType(expr) ? expr : Type.fromTerm(expr)
+  /**
+   * Convert value from SQL field to JSON field
+   */
+  protected transform(value: string, type: Type | Eval.Expr | undefined, method: 'encode' | 'decode' | 'load' | 'dump', miss?: any) {
+    type = Type.isType(type) ? type : Type.fromTerm(type)
     const transformer = this.transformers[type.type] ?? this.transformers[this.driver.database.types[type.type]?.deftype!]
     return transformer ? transformer[method](value) : (miss ?? value)
   }
@@ -318,8 +321,8 @@ export class Builder {
         const value = (!_fields[`${prefix}${key}`] && type && Type.getInner(type, key)?.inner)
           ? _groupObject(expr, Type.getInner(type, key), `${prefix}${key}.`)
           : this.parseEval(expr, false)
-        if (!root) return this.transform(expr, value, 'encode')
-        return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(expr, value, 'encode')
+        // if (!root) return this.transform(value, expr, 'encode')
+        return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(value, expr, 'encode')
       }
       return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
@@ -538,71 +541,88 @@ export class Builder {
     return inline ? `(${result})` : result
   }
 
-  dump(model: Model | Eval.Expr | Type, obj: any, root: boolean = true): any {
-    if (Type.isType(model) || isEvalExpr(model)) {
-      const type = Type.isType(model) ? model : Type.fromTerm(model)
-      const converter = (type?.inner || type?.type === 'json') ? (root ? this.driver.types['json'] : undefined) : this.driver.types[type?.type!]
-      if (type?.inner || type?.type === 'json') root = false
-      let res = obj
+  /**
+   * Convert value from Type to Field.Type.
+   * @param root indicate whether the context is inside json
+   */
+  dump(value: any, type: Model | Type | Eval.Expr | undefined, root: boolean = true): any {
+    if (!type) return value
+
+    if (Type.isType(type) || isEvalExpr(type)) {
+      type = Type.isType(type) ? type : Type.fromTerm(type)
+      const converter = (type.inner || type.type === 'json') ? (root ? this.driver.types['json'] : undefined) : this.driver.types[type.type]
+      if (type.inner || type.type === 'json') root = false
+      let res = value
 
       if (!isNullable(res) && type?.inner) {
         if (Array.isArray(type.inner)) {
-          res = res.map(x => this.dump(Type.getInner(type)!, x, root))
+          res = res.map(x => this.dump(x, Type.getInner(type as any), root))
         } else {
-          res = mapValues(res, (x, k) => this.dump(Type.getInner(type, k)!, x, root))
+          res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type as any, k)!, root))
         }
       }
       res = converter ? converter.dump(res) : res
-      if (!root) res = this.transform(type, res, 'dump')
+      if (!root) res = this.transform(res, type, 'dump')
       return res
     }
 
-    obj = model.format(obj)
+    value = type.format(value)
     const result = {}
-    for (const key in obj) {
-      const { type } = model.fields[key]!
-      result[key] = this.dump(type, obj[key])
+    for (const key in value) {
+      const { type: ftype } = type.fields[key]!
+      result[key] = this.dump(value[key], ftype)
     }
     return result
   }
 
-  load(model: Model, obj: any): any
-  load(type: Type | Eval.Expr, obj: any): any
-  load(model: Model | Type | Eval.Expr, obj?: any) {
-    if (Type.isType(model) || isEvalExpr(model)) {
-      const type = Type.isType(model) ? model : Type.fromTerm(model)
-      const converter = this.driver.types[type?.inner ? 'json' : type?.type!] ?? this.driver.types[type?.type!]
-      let res = this.transform(type, obj, 'load')
+  /**
+   * Convert value from Field.Type to Type.
+   */
+  load(value: any, type: Model | Type | Eval.Expr | undefined, root: boolean = true): any {
+    if (!type) return value
+
+    if (Type.isType(type) || isEvalExpr(type)) {
+      type = Type.isType(type) ? type : Type.fromTerm(type)
+      const converter = this.driver.types[(root && value && type.type === 'json') ? 'json' : type.type]
+      let res = this.transform(value, type, 'load')
       res = converter ? converter.load(res) : res
 
-      if (!isNullable(res) && type?.inner) {
+      if (!isNullable(res) && type.inner) {
         if (Array.isArray(type.inner)) {
-          res = res.map(x => this.load(Type.getInner(type)!, x))
+          res = res.map(x => this.load(x, Type.getInner(type as Type), false))
         } else {
-          res = mapValues(res, (x, k) => this.load(Type.getInner(type, k)!, x))
+          res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k), false))
         }
       }
-      return (type?.inner && !Array.isArray(type.inner)) ? unravel(res) : res
+      return (type.inner && !Array.isArray(type.inner)) ? unravel(res) : res
     }
 
     const result = {}
-    for (const key in obj) {
-      if (!(key in model.fields)) continue
-      result[key] = obj[key]
-
-      if (this.isEncoded(key)) {
+    for (const key in value) {
+      if (!(key in type.fields)) continue
+      result[key] = value[key]
+      let subroot = root
+      if (subroot && result[key] && this.isEncoded(key)) {
+        subroot = false
         result[key] = this.driver.types['json'].load(result[key])
       }
-      result[key] = this.load(model.fields[key]!.type, result[key])
+      result[key] = this.load(result[key], type.fields[key]!.type, subroot)
     }
-    return model.parse(result)
+    return type.parse(result)
   }
 
-  escape(value: any, field?: Field | Field.Type | Type) {
-    return this.escapePrimitive(field ? this.dump(Type.isType(field) ? field : Type.fromField(field), value) : value)
+  /**
+   * Convert value from Type to SQL.
+   */
+  escape(value: any, type?: Field | Field.Type | Type) {
+    type &&= (Type.isType(type) ? type : Type.fromField(type))
+    return this.escapePrimitive(type ? this.dump(value, type) : value, type)
   }
 
-  protected escapePrimitive(value: any) {
+  /**
+   * Convert value from Field.Type to SQL.
+   */
+  escapePrimitive(value: any, type?: Type) {
     if (isNullable(value)) return 'NULL'
 
     switch (typeof value) {
