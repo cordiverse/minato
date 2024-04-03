@@ -301,7 +301,7 @@ namespace ModelOperations {
       await database.set('dtypes', table[0].id, row => ({
         object: {}
       }))
-      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
+      await expect(database.get('dtypes', table[0].id)).to.eventually.deep.eq([table[0]])
 
       table[0].object = {
         num: 123,
@@ -325,7 +325,7 @@ namespace ModelOperations {
         'object.embed.bigint': 123n,
         'object.embed.custom': { a: 'a', b: 1 },
       }))
-      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
+      await expect(database.get('dtypes', table[0].id)).to.eventually.deep.eq([table[0]])
     })
 
     it('using expressions in modifier', async () => {
@@ -437,24 +437,42 @@ namespace ModelOperations {
     it('dot notation in modifier', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
 
-      table[0].foo!.nested = { id: 0 }
+      table[0].foo!.nested = { id: 1 }
       await database.set('dobjects', table[0].id, row => ({
-        'foo.nested' : { id: 0 }
+        'foo.nested': { id: 1 }
       }))
-      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
+      await expect(database.get('dobjects', table[0].id)).to.eventually.deep.eq([table[0]])
 
-      table[0].foo!.nested!.date = new Date('1999/10/01')
+      table[0].foo!.nested = {
+        id: 1,
+        timestamp: new Date('2009/10/01 15:40:00'),
+        date: new Date('1999/10/01'),
+        binary: Buffer.from('boom'),
+      }
+      table[0].bar!.nested = {
+        ...table[0].bar?.nested,
+        id: 9,
+        timestamp: new Date('2009/10/01 15:40:00'),
+        date: new Date('1999/10/01'),
+        binary: Buffer.from('boom'),
+      }
 
       await database.set('dobjects', table[0].id, row => ({
-        'foo.nested.date': new Date('1999/10/01')
+        'foo.nested.timestamp': new Date('2009/10/01 15:40:00'),
+        'foo.nested.date': new Date('1999/10/01'),
+        'foo.nested.binary': Buffer.from('boom'),
+        'bar.nested.id': 9,
+        'bar.nested.timestamp': new Date('2009/10/01 15:40:00'),
+        'bar.nested.date': new Date('1999/10/01'),
+        'bar.nested.binary': Buffer.from('boom'),
       } as any))
-      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
+      await expect(database.get('dobjects', table[0].id)).to.eventually.deep.eq([table[0]])
 
       table[0].baz = [{}, {}]
       await database.set('dobjects', table[0].id, row => ({
         baz: [{}, {}]
       }))
-      await expect(database.get('dobjects', {})).to.eventually.have.deep.members(table)
+      await expect(database.get('dobjects', table[0].id)).to.eventually.deep.eq([table[0]])
     })
 
     typeModel && it('$.object encoding', async () => {

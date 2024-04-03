@@ -316,17 +316,16 @@ export class Builder {
   }
 
   protected groupObject(_fields: any) {
-    const _groupObject = (fields: any, type?: Type, prefix: string = '', root: boolean = false) => {
+    const _groupObject = (fields: any, type?: Type, prefix: string = '') => {
       const parse = (expr, key) => {
         const value = (!_fields[`${prefix}${key}`] && type && Type.getInner(type, key)?.inner)
           ? _groupObject(expr, Type.getInner(type, key), `${prefix}${key}.`)
           : this.parseEval(expr, false)
-        // if (!root) return this.transform(value, expr, 'encode')
         return this.isEncoded() ? `json_extract(${value}, '$')` : this.transform(value, expr, 'encode')
       }
       return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, '', true), true)
+    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, ''), true)
   }
 
   protected groupArray(value: string) {
@@ -556,9 +555,9 @@ export class Builder {
 
       if (!isNullable(res) && type?.inner) {
         if (Array.isArray(type.inner)) {
-          res = res.map(x => this.dump(x, Type.getInner(type as any), root))
+          res = res.map(x => this.dump(x, Type.getInner(type as Type), root))
         } else {
-          res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type as any, k)!, root))
+          res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type as Type, k), root))
         }
       }
       res = converter ? converter.dump(res) : res

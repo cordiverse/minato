@@ -303,9 +303,9 @@ export class PostgresBuilder extends Builder {
       let escaped: string
 
       const v = isEvalExpr(item[prop]) ? this.encode(this.parseEval(item[prop]), true, true, Type.fromTerm(item[prop]))
-        : (escaped = this.escape(item[prop], type), escaped.endsWith('::jsonb') ? escaped
-          : escaped.startsWith(`'`) ? this.encode(`(${escaped})::text`, true, true, type)
-            : this.encode(escaped, true, true, type))
+        : (escaped = this.transform(this.escape(item[prop], type), type, 'encode'), escaped.endsWith('::jsonb') ? escaped
+          : escaped.startsWith(`'`) ? this.encode(`(${escaped})::text`, true, true) // not passing type to prevent duplicated transform
+            : this.encode(escaped, true, true))
       value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${v}, true)`
     }
 
