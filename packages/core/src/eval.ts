@@ -246,7 +246,7 @@ defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(ta
   : Array.from(executeEval(table, expr)).length, Type.Number))
 
 operators.$object = (field, table) => valueMap(field, value => executeAggr(value, table))
-Eval.object = (fields) => {
+Eval.object = (fields: any) => {
   if (fields.$model) {
     const modelFields: [string, Field][] = Object.entries(fields.$model.fields)
     const prefix: string = fields.$prefix
@@ -258,6 +258,7 @@ Eval.object = (fields) => {
   }
   return Eval('object', fields, Type.Object(valueMap(fields, (value) => Type.fromTerm(value)))) as any
 }
+
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data))
   : Array.from(executeEval(table, expr)), (expr) => Type.Array(Type.fromTerm(expr)))

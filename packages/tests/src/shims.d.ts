@@ -1,5 +1,4 @@
 /// <reference types="chai" />
-/// <reference types="deep-eql" />
 
 interface DeepEqualOptions<T1 = unknown, T2 = unknown> {
   comparator?: (leftHandOperand: T1, rightHandOperand: T2) => boolean | null;

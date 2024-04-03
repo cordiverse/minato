@@ -445,7 +445,7 @@ namespace SelectionTests {
     it('access from join', async () => {
       const w = x => database.select('bar').evaluate(row => $.add($.count(row.id), -6, x))
       await expect(database
-        .join(['foo', 'bar'] as const, (foo, bar) => $.gt(foo.id, w(bar.pid)))
+        .join(['foo', 'bar'], (foo, bar) => $.gt(foo.id, w(bar.pid)))
         .execute()
       ).to.eventually.have.length(9)
     })

@@ -1,6 +1,6 @@
-import { isNullable, valueMap } from 'cosmokit'
+import { valueMap } from 'cosmokit'
 import { $, Database, Field, Type } from 'minato'
-import chai, { expect } from 'chai'
+import { expect } from 'chai'
 
 interface DType {
   id: number
@@ -464,7 +464,7 @@ namespace ModelOperations {
         binary: Buffer.from('boom'),
       }
 
-      await database.set('dobjects', table[0].id, row => ({
+      await database.set('dobjects', table[0].id, {
         'foo.nested.timestamp': new Date('2009/10/01 15:40:00'),
         'foo.nested.date': new Date('1999/10/01'),
         'foo.nested.binary': Buffer.from('boom'),
@@ -472,13 +472,13 @@ namespace ModelOperations {
         'bar.nested.timestamp': new Date('2009/10/01 15:40:00'),
         'bar.nested.date': new Date('1999/10/01'),
         'bar.nested.binary': Buffer.from('boom'),
-      } as any))
+      })
       await expect(database.get('dobjects', table[0].id)).to.eventually.deep.eq([table[0]])
 
       table[0].baz = [{}, {}]
-      await database.set('dobjects', table[0].id, row => ({
+      await database.set('dobjects', table[0].id, {
         baz: [{}, {}]
-      }))
+      })
       await expect(database.get('dobjects', table[0].id)).to.eventually.deep.eq([table[0]])
     })
 

@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/tests",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Test Cases for Minato",
   "type": "module",
   "main": "lib/index.js",
@@ -27,15 +27,14 @@
     "unit"
   ],
   "devDependencies": {
-    "@types/chai": "^4.3.11",
-    "@types/chai-as-promised": "^7.1.8",
-    "@types/deep-eql": "^4.0.2"
+    "@types/chai": "^4.3.14",
+    "@types/chai-as-promised": "^7.1.8"
   },
   "peerDependencies": {
-    "minato": "^3.0.1"
+    "minato": "^3.0.2"
   },
   "dependencies": {
-    "chai": "^4.3.10",
+    "chai": "^4.4.1",
     "chai-as-promised": "^7.1.1",
     "cosmokit": "^1.5.2"
   }

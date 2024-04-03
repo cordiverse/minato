@@ -7,24 +7,40 @@ export type Keys<O, T = any> = Values<{
   [K in keyof O]: O[K] extends T | undefined ? K : never
 }> & string
 
-export type Atomic = number | string | boolean | bigint | symbol | Date
+export interface AtomicTypes {
+  Number: number
+  String: string
+  Boolean: boolean
+  BigInt: bigint
+  Symbol: symbol
+  Date: Date
+  RegExp: RegExp
+  Function: Function
+  ArrayBuffer: ArrayBuffer
+  SharedArrayBuffer: SharedArrayBuffer
+}
+
 export type Indexable = string | number
 export type Comparable = string | number | boolean | Date
 
-type FlatWrap<S, T, P extends string> = { [K in P]?: S }
-  // rule out atomic / recursive types
-  | (S extends Atomic | T ? never
+type FlatWrap<S, A extends 0[], P extends string> = { [K in P]?: S }
+  // rule out atomic types
+  | (S extends Values<AtomicTypes> ? never
   // rule out array types
   : S extends any[] ? never
+  // check recursion depth
   // rule out dict / infinite types
   : string extends keyof S ? never
-  : FlatMap<S, T, `${P}.`>)
+  : A extends [0, ...infer R extends 0[]] ? FlatMap<S, R, `${P}.`>
+  : never)
 
-type FlatMap<S, T = never, P extends string = ''> = Values<{
-  [K in keyof S & string as `${P}${K}`]: FlatWrap<S[K], S | T, `${P}${K}`>
+type FlatMap<S, T extends 0[], P extends string = ''> = Values<{
+  [K in keyof S & string as `${P}${K}`]: FlatWrap<S[K], T, `${P}${K}`>
 }>
 
-export type Flatten<S> = Intersect<FlatMap<S>>
+type Sequence<N extends number, A extends 0[] = []> = A['length'] extends N ? A : Sequence<N, [0, ...A]>
+
+export type Flatten<S, D extends number = 5> = Intersect<FlatMap<S, Sequence<D>>>
 
 export type Row<S> = {
   [K in keyof S]-?: Row.Cell<NonNullable<S[K]>>
