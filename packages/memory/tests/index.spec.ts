@@ -16,5 +16,19 @@ describe('@minatojs/driver-memory', () => {
 
   test(database, {
     migration: false,
+    model: {
+      fields: {
+        cast: false,
+        typeModel: false,
+      },
+      object: {
+        typeModel: false,
+      }
+    },
+    query: {
+      comparison: {
+        nullableComparator: false,
+      }
+    }
   })
 })

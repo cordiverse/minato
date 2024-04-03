@@ -2,7 +2,7 @@ import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient,
 import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
-import { Transformer } from './utils'
+import { Builder } from './builder'
 
 const tempKey = '__temp_minato_mongo__'
 
@@ -13,6 +13,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   public db!: Db
   public mongo = this
 
+  private builder: Builder = new Builder(this, [])
   private session?: ClientSession
   private _createTasks: Dict<Promise<void>> = {}
 
@@ -44,6 +45,12 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       'writeConcern',
     ]))
     this.db = this.client.db(this.config.database)
+
+    this.define<Uint8Array, Uint8Array>({
+      types: ['binary'],
+      dump: value => value,
+      load: (value: any) => value ? value.buffer : value,
+    })
   }
 
   stop() {
@@ -124,7 +131,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     if (!found) {
       const doc = await this.db.collection(table).findOne()
       if (doc) {
-        virtual = typeof doc._id !== 'object' || (typeof primary === 'string' && modelFields[primary]?.type === 'primary')
+        virtual = typeof doc._id !== 'object' || (typeof primary === 'string' && modelFields[primary]?.deftype === 'primary')
       } else {
         // Empty collection, just set meta and return
         fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
@@ -254,14 +261,14 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   public getVirtualKey(table: string) {
     const { primary, fields } = this.model(table)
-    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.deftype === 'primary')) {
       return primary
     }
   }
 
   private patchVirtual(table: string, row: any) {
     const { primary, fields } = this.model(table)
-    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.deftype === 'primary')) {
       row[primary] = row['_id']
       delete row['_id']
     }
@@ -270,7 +277,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   private unpatchVirtual(table: string, row: any) {
     const { primary, fields } = this.model(table)
-    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.type === 'primary')) {
+    if (typeof primary === 'string' && (this.config.optimizeIndex || fields[primary]?.deftype === 'primary')) {
       row['_id'] = row[primary]
       delete row[primary]
     }
@@ -278,38 +285,39 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   private transformQuery(sel: Selection.Immutable, query: Query.Expr, table: string) {
-    return new Transformer(Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
+    return new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
   }
 
   async get(sel: Selection.Immutable) {
-    const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
+    const transformer = new Builder(this, Object.keys(sel.tables)).select(sel)
     if (!transformer) return []
     this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
-      .toArray()
+      .toArray().then(rows => rows.map(row => this.builder.load(row, sel.model)))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const transformer = new Transformer(Object.keys(sel.tables)).select(sel)
+    const transformer = new Builder(this, Object.keys(sel.tables)).select(sel)
     if (!transformer) return
     this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
     const res = await this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
       .toArray()
-    return res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault
+    return this.builder.load(res.length ? res[0][transformer.evalKey!] : transformer.aggrDefault, expr)
   }
 
   async set(sel: Selection.Mutable, update: {}) {
-    const { query, table } = sel
+    const { query, table, model } = sel
     const filter = this.transformQuery(sel, query, table)
     if (!filter) return {}
     const coll = this.db.collection(table)
 
-    const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-    const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
+    const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
+    const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
+      (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
     const $unset = Object.entries($set)
       .filter(([_, value]) => typeof value === 'object')
       .map(([key, _]) => key)
@@ -335,19 +343,19 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   private shouldEnsurePrimary(table: string) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    return typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary'
+    return typeof primary === 'string' && autoInc && model.fields[primary]?.deftype !== 'primary'
   }
 
   private shouldFillPrimary(table: string) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    return typeof primary === 'string' && autoInc && model.fields[primary]?.type === 'primary'
+    return typeof primary === 'string' && autoInc && model.fields[primary]?.deftype === 'primary'
   }
 
   private async ensurePrimary(table: string, data: any[]) {
     const model = this.model(table)
     const { primary, autoInc } = model
-    if (typeof primary === 'string' && autoInc && model.fields[primary]?.type !== 'primary') {
+    if (typeof primary === 'string' && autoInc && model.fields[primary]?.deftype !== 'primary') {
       const missing = data.filter(item => !(primary in item))
       if (!missing.length) return
       const doc = await this.db.collection('_fields').findOneAndUpdate(
@@ -362,16 +370,14 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   async create(sel: Selection.Mutable, data: any) {
-    const { table } = sel
+    const { table, model } = sel
     const lastTask = Promise.resolve(this._createTasks[table]).catch(noop)
     return this._createTasks[table] = lastTask.then(async () => {
-      const model = this.model(table)
       const coll = this.db.collection(table)
       await this.ensurePrimary(table, [data])
 
       try {
-        data = model.create(data)
-        const copy = this.unpatchVirtual(table, { ...data })
+        const copy = this.unpatchVirtual(table, { ...this.builder.dump(data, model) })
         const insertedId = (await coll.insertOne(copy, { session: this.session })).insertedId
         if (this.shouldFillPrimary(table)) {
           return { ...data, [model.primary as string]: insertedId }
@@ -404,7 +410,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
         if (item) {
           const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
-          const override = omit(pick(executeUpdate(item, update, ref), updateFields), keys)
+          const override = this.builder.dump(omit(pick(executeUpdate(item, update, ref), updateFields), keys), model)
           const query = this.transformQuery(sel, pick(item, keys), table)
           if (!query) continue
           bulk.find(query).updateOne({ $set: override })
@@ -414,7 +420,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       }
       await this.ensurePrimary(table, insertion)
       for (const update of insertion) {
-        const copy = executeUpdate(model.create(), update, ref)
+        const copy = this.builder.dump(executeUpdate(model.create(), update, ref), model)
         bulk.insert(this.unpatchVirtual(table, copy))
       }
       const result = await bulk.execute({ session: this.session })
@@ -426,8 +432,9 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
-        const transformer = new Transformer(Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-        const $set = transformer.eval(mapValues(update, (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : value))
+        const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
+        const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
+          (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)

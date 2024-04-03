@@ -3,13 +3,15 @@ import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Dict, difference, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
 import { escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Compat, DEFAULT_DATE, MySQLBuilder } from './builder'
+import { Compat, MySQLBuilder } from './builder'
 
 declare module 'mysql' {
   interface UntypedFieldInfo {
     packet: UntypedFieldInfo
   }
 }
+
+const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
 function getIntegerType(length = 4) {
   if (length <= 1) return 'tinyint'
@@ -19,12 +21,12 @@ function getIntegerType(length = 4) {
   return 'bigint'
 }
 
-function getTypeDef({ type, length, precision, scale }: Field) {
+function getTypeDef({ deftype: type, length, precision, scale }: Field) {
   switch (type) {
     case 'float':
     case 'double':
-    case 'date':
-    case 'time': return type
+    case 'date': return type
+    case 'time': return 'time(3)'
     case 'timestamp': return 'datetime(3)'
     case 'boolean': return 'bit'
     case 'integer':
@@ -34,10 +36,11 @@ function getTypeDef({ type, length, precision, scale }: Field) {
     case 'unsigned':
       if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
       return `${getIntegerType(length)} unsigned`
-    case 'decimal': return `decimal(${precision}, ${scale}) unsigned`
+    case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`
     case 'char': return `char(${length || 255})`
-    case 'string': return `varchar(${length || 255})`
-    case 'text': return `text(${length || 65535})`
+    case 'string': return (length || 255) > 65536 ? 'longtext' : `varchar(${length || 255})`
+    case 'text': return (length || 255) > 65536 ? 'longtext' : `text(${length || 65535})`
+    case 'binary': return (length || 65537) > 65536 ? 'longblob' : `blob`
     case 'list': return `text(${length || 65535})`
     case 'json': return `text(${length || 65535})`
     default: throw new Error(`unsupported type: ${type}`)
@@ -48,7 +51,7 @@ function isDefUpdated(field: Field, column: ColumnInfo, def: string) {
   const typename = def.split(/[ (]/)[0]
   if (typename === 'text') return !column.DATA_TYPE.endsWith('text')
   if (typename !== column.DATA_TYPE) return true
-  switch (field.type) {
+  switch (field.deftype) {
     case 'integer':
     case 'unsigned':
     case 'char':
@@ -93,7 +96,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
   static name = 'mysql'
 
   public pool!: Pool
-  public sql = new MySQLBuilder()
+  public sql: MySQLBuilder = new MySQLBuilder(this)
 
   private session?: PoolConnection
   private _compat: Compat = {}
@@ -106,27 +109,8 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       charset: 'utf8mb4_general_ci',
       multipleStatements: true,
       typeCast: (field, next) => {
-        const { orgName, orgTable } = field.packet
-        const meta = this.database.tables[orgTable]?.fields[orgName]
-
-        if (Field.string.includes(meta!?.type)) {
-          return field.string()
-        } else if (meta?.type === 'json') {
-          const source = field.string()
-          return source ? JSON.parse(source) : meta.initial
-        } else if (meta?.type === 'time') {
-          const source = field.string()
-          if (!source) return meta.initial
-          const time = new Date(DEFAULT_DATE)
-          const [h, m, s] = source.split(':')
-          time.setHours(parseInt(h))
-          time.setMinutes(parseInt(m))
-          time.setSeconds(parseInt(s))
-          return time
-        }
-
         if (field.type === 'BIT') {
-          return Boolean(field.buffer()?.readUInt8(0))
+          return Boolean(field.buffer()?.readUint8(0))
         } else {
           return next()
         }
@@ -145,6 +129,31 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     if (this._compat.mysql57 || this._compat.maria) {
       await this._setupCompatFunctions()
     }
+
+    this.define<object, string>({
+      types: ['json'],
+      dump: value => value as any,
+      load: value => typeof value === 'string' ? JSON.parse(value) : value,
+    })
+
+    this.define<string[], string>({
+      types: ['list'],
+      dump: value => Array.isArray(value) ? value.join(',') : value,
+      load: value => value ? value.split(',') : [],
+    })
+
+    this.define<Date, any>({
+      types: ['time'],
+      dump: value => value,
+      load: (value) => {
+        if (!value || typeof value === 'object') return value
+        const date = new Date(0)
+        const parsed = timeRegex.exec(value)
+        if (!parsed) throw Error(`unexpected time value: ${value}`)
+        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
+        return date
+      },
+    })
   }
 
   async stop() {
@@ -196,7 +205,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
           def += (nullable ? ' ' : ' not ') + 'null'
         }
         // blob, text, geometry or json columns cannot have default values
-        if (initial && !typedef.startsWith('text')) {
+        if (initial && !typedef.startsWith('text') && !typedef.endsWith('blob')) {
           def += ' default ' + this.sql.escape(initial, fields[key])
         }
       }
@@ -376,28 +385,28 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   async get(sel: Selection.Immutable) {
     const { model, tables } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
     const sql = builder.get(sel)
     if (!sql) return []
     return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
-      return data.at(-1).map((row) => builder.load(model, row))
+      return data.at(-1).map((row) => builder.load(row, model))
     })
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
-    const builder = new MySQLBuilder(sel.tables, this._compat)
+    const builder = new MySQLBuilder(this, sel.tables, this._compat)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const ref = isBracketed(inner) ? sel.ref : ''
     const sql = `SELECT ${output} AS value FROM ${inner} ${ref}`
     return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
-      return builder.load(data.at(-1)[0].value)
+      return builder.load(data.at(-1)[0].value, expr)
     })
   }
 
   async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
     const filter = builder.parseQuery(query)
     const { fields } = model
     if (filter === '0') return {}
@@ -415,7 +424,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 
   async remove(sel: Selection.Mutable) {
     const { query, table, tables } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
     const filter = builder.parseQuery(query)
     if (filter === '0') return {}
     const result = await this.query(`DELETE FROM ${escapeId(table)} WHERE ` + filter)
@@ -425,7 +434,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   async create(sel: Selection.Mutable, data: {}) {
     const { table, model } = sel
     const { autoInc, primary } = model
-    const formatted = this.sql.dump(model, data)
+    const formatted = this.sql.dump(data, model)
     const keys = Object.keys(formatted)
     const header = await this.query<OkPacket>([
       `INSERT INTO ${escapeId(table)} (${keys.map(escapeId).join(', ')})`,
@@ -438,7 +447,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
-    const builder = new MySQLBuilder(tables, this._compat)
+    const builder = new MySQLBuilder(this, tables, this._compat)
 
     const merged = {}
     const insertion = data.map((item) => {
@@ -489,6 +498,8 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       `ON DUPLICATE KEY UPDATE ${update}`,
     ].join(' '))
     const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
+    if (!result.message && !result.insertId) return { inserted: 0, matched: result.affectedRows, modified: 0 }
+    if (!result.message && result.affectedRows > 1) return { inserted: 0, matched: result.affectedRows / 2, modified: result.affectedRows / 2 }
     return { inserted: records - result.changedRows, matched: result.changedRows, modified: result.affectedRows - records }
   }
 

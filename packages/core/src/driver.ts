@@ -2,8 +2,9 @@ import { Awaitable, Dict, valueMap } from 'cosmokit'
 import { Context, Logger } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
-import { Model } from './model.ts'
+import { Field, Model } from './model.ts'
 import { Database } from './database.ts'
+import { Type } from './type.ts'
 
 export namespace Driver {
   export interface Stats {
@@ -31,6 +32,12 @@ export namespace Driver {
     modified?: number
     removed?: number
   }
+
+  export interface Transformer<S = any, T = any> {
+    types: Field.Type<S>[]
+    dump: (value: S) => T | null
+    load: (value: T) => S | null
+  }
 }
 
 export namespace Driver {
@@ -56,6 +63,7 @@ export abstract class Driver<T = any> {
 
   public database: Database
   public logger: Logger
+  public types: Dict<Driver.Transformer> = Object.create(null)
 
   constructor(public ctx: Context, public config: T) {
     this.database = ctx.model
@@ -87,8 +95,8 @@ export abstract class Driver<T = any> {
     if (table instanceof Selection) {
       if (!table.args[0].fields) return table.model
       const model = new Model('temp')
-      model.fields = valueMap(table.args[0].fields, (_, key) => ({
-        type: 'expr',
+      model.fields = valueMap(table.args[0].fields, (expr, key) => ({
+        type: Type.fromTerm(expr),
       }))
       return model
     }
@@ -99,8 +107,8 @@ export abstract class Driver<T = any> {
       for (const field in submodel.fields) {
         if (submodel.fields[field]!.deprecated) continue
         model.fields[`${key}.${field}`] = {
-          type: 'expr',
-          expr: { $: [key, field] } as any,
+          expr: Eval('', [table[key].ref, field], Type.fromField(submodel.fields[field]!)),
+          type: Type.fromField(submodel.fields[field]!),
         }
       }
     }
@@ -123,6 +131,10 @@ export abstract class Driver<T = any> {
         }
       }))
     }).then(hooks.finalize).catch(hooks.error)
+  }
+
+  define<S, T>(converter: Driver.Transformer<S, T>) {
+    converter.types.forEach(type => this.types[type] = converter)
   }
 }
 

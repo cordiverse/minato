@@ -1,8 +1,9 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Dict, isNullable, Time } from 'cosmokit'
-import { Field, isEvalExpr, Model, randomId, Selection } from 'minato'
-
-const timeRegex = /(\d+):(\d+):(\d+)/
+import {
+  Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type,
+  Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex, unravel,
+} from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -22,24 +23,15 @@ export function formatTime(time: Date) {
 }
 
 export class PostgresBuilder extends Builder {
-  // eslint-disable-next-line no-control-regex
-  protected escapeRegExp = /[\0\b\t\n\r\x1a'\\]/g
   protected escapeMap = {
-    '\0': '\\0',
-    '\b': '\\b',
-    '\t': '\\t',
-    '\n': '\\n',
-    '\r': '\\r',
-    '\x1a': '\\Z',
-    '\'': '\'\'',
-    '\\': '\\\\',
+    "'": "''",
   }
 
   protected $true = 'TRUE'
   protected $false = 'FALSE'
 
-  constructor(public tables?: Dict<Model>) {
-    super(tables)
+  constructor(protected driver: Driver, public tables?: Dict<Model>) {
+    super(driver, tables)
 
     this.queryOperators = {
       ...this.queryOperators,
@@ -47,7 +39,7 @@ export class PostgresBuilder extends Builder {
       $regexFor: (key, value) => `${this.escape(value)} ~ ${key}`,
       $size: (key, value) => {
         if (!value) return this.logicalNot(key)
-        if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
+        if (this.isJsonQuery(key)) {
           return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
           return `${key} IS NOT NULL AND ARRAY_LENGTH(${key}, 1) = ${value}`
@@ -84,10 +76,9 @@ export class PostgresBuilder extends Builder {
 
       $number: (arg) => {
         const value = this.parseEval(arg)
-        const res = this.state.sqlType === 'raw' ? `${value}::double precision`
-          : `extract(epoch from ${value})::bigint`
-        this.state.sqlType = 'raw'
-        return `coalesce(${res}, 0)`
+        const type = Type.fromTerm(arg)
+        const res = Field.date.includes(type.type!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
+        return this.asEncoded(`coalesce(${res}, 0)`, false)
       },
 
       $sum: (expr) => this.createAggr(expr, value => `coalesce(sum(${value})::double precision, 0)`, undefined, 'double precision'),
@@ -95,37 +86,63 @@ export class PostgresBuilder extends Builder {
       $min: (expr) => this.createAggr(expr, value => `min(${value})`, undefined, 'double precision'),
       $max: (expr) => this.createAggr(expr, value => `max(${value})`, undefined, 'double precision'),
       $count: (expr) => this.createAggr(expr, value => `count(distinct ${value})::integer`),
-      $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`, value => {
-        if (this.state.sqlType === 'json') {
-          this.state.sqlType = 'raw'
-          return `${this.jsonLength(value)}`
-        } else {
-          this.state.sqlType = 'raw'
-          return `COALESCE(ARRAY_LENGTH(${value}, 1), 0)`
-        }
-      }),
+      $length: (expr) => this.createAggr(expr, value => `count(${value})::integer`,
+        value => this.isEncoded() ? this.jsonLength(value) : this.asEncoded(`COALESCE(ARRAY_LENGTH(${value}, 1), 0)`, false),
+      ),
 
       $concat: (args) => `${args.map(arg => this.parseEval(arg, 'text')).join('||')}`,
     }
 
-    this.define<Date, string>({
-      types: ['time'],
-      dump: date => date ? (typeof date === 'string' ? date : formatTime(date)) : null,
-      load: str => {
-        if (isNullable(str)) return str
-        const date = new Date(0)
-        const parsed = timeRegex.exec(str)
-        if (!parsed) throw Error(`unexpected time value: ${str}`)
-        date.setHours(+parsed[1], +parsed[2], +parsed[3])
+    this.transformers['boolean'] = {
+      encode: value => value,
+      decode: value => `(${value})::boolean`,
+      load: value => value,
+      dump: value => value,
+    }
+
+    this.transformers['decimal'] = {
+      encode: value => value,
+      decode: value => `(${value})::double precision`,
+      load: value => isNullable(value) ? value : +value,
+      dump: value => value,
+    }
+
+    this.transformers['binary'] = {
+      encode: value => `encode(${value}, 'base64')`,
+      decode: value => `decode(${value}, 'base64')`,
+      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
+      dump: value => isNullable(value) ? value : Uint8ArrayToBase64(value),
+    }
+
+    this.transformers['date'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as date)`,
+      load: value => {
+        if (isNullable(value) || typeof value === 'object') return value
+        const parsed = new Date(value), date = new Date()
+        date.setFullYear(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+        date.setHours(0, 0, 0, 0)
         return date
       },
-    })
+      dump: value => isNullable(value) ? value : formatTime(value),
+    }
 
-    this.define<string[], any>({
-      types: ['list'],
-      dump: value => '{' + value.join(',') + '}',
-      load: value => value,
-    })
+    this.transformers['time'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as time)`,
+      load: value => this.driver.types['time'].load(value),
+      dump: value => this.driver.types['time'].dump(value),
+    }
+
+    this.transformers['timestamp'] = {
+      encode: value => value,
+      decode: value => `cast(${value} as datetime)`,
+      load: value => {
+        if (isNullable(value) || typeof value === 'object') return value
+        return new Date(value)
+      },
+      dump: value => isNullable(value) ? value : formatTime(value),
+    }
   }
 
   upsert(table: string) {
@@ -145,12 +162,13 @@ export class PostgresBuilder extends Builder {
     else if (typeof expr === 'string') return 'boolean'
   }
 
-  parseEval(expr: any, outtype: boolean | string = false): string {
-    this.state.sqlType = 'raw'
+  parseEval(expr: any, outtype: boolean | string = true): string {
+    this.state.encoded = false
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return outtype ? this.jsonUnquote(this.parseEvalExpr(expr), false, typeof outtype === 'string' ? outtype : undefined) : this.parseEvalExpr(expr)
+    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)})`
+      : this.parseEvalExpr(expr)
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
@@ -158,8 +176,8 @@ export class PostgresBuilder extends Builder {
   }
 
   protected createElementQuery(key: string, value: any) {
-    if (this.state.sqlTypes?.[this.unescapeId(key)] === 'json') {
-      return this.jsonContains(key, this.quote(JSON.stringify(value)))
+    if (this.isJsonQuery(key)) {
+      return this.jsonContains(key, this.encode(value, true, true))
     } else {
       return `${key} && ARRAY['${value}']::TEXT[]`
     }
@@ -168,56 +186,47 @@ export class PostgresBuilder extends Builder {
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string, eltype?: string) {
     if (!this.state.group && !nonaggr) {
       const value = this.parseEval(expr, false)
-      return `(select ${aggr(this.jsonUnquote(this.escapeId('value'), true, eltype))} from jsonb_array_elements(${value}) ${randomId()})`
+      return `(select ${aggr(`(${this.encode(this.escapeId('value'), false, true, undefined)})${eltype ? `::${eltype}` : ''}`)}
+        from jsonb_array_elements(${value}) ${randomId()})`
     } else {
       return super.createAggr(expr, aggr, nonaggr)
     }
   }
 
   protected transformJsonField(obj: string, path: string) {
-    this.state.sqlType = 'json'
-    return `jsonb_extract_path(${obj}, ${path.slice(1).replace('.', ',')})`
+    return this.asEncoded(`jsonb_extract_path(${obj}, ${path.slice(1).replaceAll('.', ',')})`, true)
   }
 
   protected jsonLength(value: string) {
-    return `jsonb_array_length(${value})`
+    return this.asEncoded(`jsonb_array_length(${value})`, false)
   }
 
   protected jsonContains(obj: string, value: string) {
-    return `(${obj} @> ${value})`
+    return this.asEncoded(`(${obj} @> ${value})`, false)
   }
 
-  protected jsonUnquote(value: string, pure: boolean = false, type?: string) {
-    if (pure && type) return `(jsonb_build_object('v', ${value})->>'v')::${type}`
-    if (this.state.sqlType === 'json') {
-      this.state.sqlType = 'raw'
-      return `(jsonb_build_object('v', ${value})->>'v')::${type}`
-    }
-    return value
+  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type, outtype?: string) {
+    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
+      : encoded ? `to_jsonb(${this.transform(value, type, 'encode')})`
+        : this.transform(`(jsonb_build_object('v', ${value})->>'v')`, type, 'decode') + `${typeof outtype === 'string' ? `::${outtype}` : ''}`
+    , pure ? undefined : encoded)
   }
 
-  protected jsonQuote(value: string, pure: boolean = false) {
-    if (pure) return `to_jsonb(${value})`
-    if (this.state.sqlType !== 'json') {
-      this.state.sqlType = 'json'
-      return `to_jsonb(${value})`
+  protected groupObject(_fields: any) {
+    const _groupObject = (fields: any, type?: Type, prefix: string = '') => {
+      const parse = (expr, key) => {
+        const value = (!_fields[`${prefix}${key}`] && type && Type.getInner(type, key)?.inner)
+          ? _groupObject(expr, Type.getInner(type, key), `${prefix}${key}.`)
+          : this.parseEval(expr, false)
+        return this.isEncoded() ? this.encode(`to_jsonb(${value})`, true) : this.transform(value, expr, 'encode')
+      }
+      return `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return value
-  }
-
-  protected groupObject(fields: any) {
-    const parse = (expr) => {
-      const value = this.parseEval(expr, false)
-      return this.state.sqlType === 'json' ? `to_jsonb(${value})` : `${value}`
-    }
-    const res = `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr)}`).join(',') + `)`
-    this.state.sqlType = 'json'
-    return res
+    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, ''), true)
   }
 
   protected groupArray(value: string) {
-    this.state.sqlType = 'json'
-    return `coalesce(jsonb_agg(${value}), '[]'::jsonb)`
+    return this.asEncoded(`coalesce(jsonb_agg(${value}), '[]'::jsonb)`, true)
   }
 
   protected parseSelection(sel: Selection) {
@@ -229,7 +238,8 @@ export class PostgresBuilder extends Builder {
     if (!(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(coalesce((SELECT ${this.groupArray(output)} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
+      return `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
+        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
     }
   }
 
@@ -239,15 +249,19 @@ export class PostgresBuilder extends Builder {
     return `'${value}'`
   }
 
-  escape(value: any, field?: Field) {
+  escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) {
       value = formatTime(value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (!field && !!value && typeof value === 'object') {
+    } else if (isUint8Array(value)) {
+      return `'\\x${Uint8ArrayToHex(value)}'::bytea`
+    } else if (type?.type === 'list' && Array.isArray(value)) {
+      return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
+    } else if (!!value && typeof value === 'object') {
       return `${this.quote(JSON.stringify(value))}::jsonb`
     }
-    return super.escape(value, field)
+    return super.escapePrimitive(value, type)
   }
 
   toUpdateExpr(item: any, key: string, field?: Field, upsert?: boolean) {
@@ -279,13 +293,20 @@ export class PostgresBuilder extends Builder {
     // json_set cannot create deeply nested property when non-exist
     // therefore we merge a layout to it
     if (Object.keys(jsonInit).length !== 0) {
-      value = `(${value} || jsonb ${this.quote(JSON.stringify(jsonInit))})`
+      value = `(jsonb ${this.escape(jsonInit, 'json')} || ${value})`
     }
 
     for (const prop in item) {
       if (!prop.startsWith(key + '.')) continue
       const rest = prop.slice(key.length + 1).split('.')
-      value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${this.jsonQuote(this.parseEval(item[prop]), true)}, true)`
+      const type = Type.getInner(field?.type, prop.slice(key.length + 1))
+      let escaped: string
+
+      const v = isEvalExpr(item[prop]) ? this.encode(this.parseEval(item[prop]), true, true, Type.fromTerm(item[prop]))
+        : (escaped = this.transform(this.escape(item[prop], type), type, 'encode'), escaped.endsWith('::jsonb') ? escaped
+          : escaped.startsWith(`'`) ? this.encode(`(${escaped})::text`, true, true) // not passing type to prevent duplicated transform
+            : this.encode(escaped, true, true))
+      value = `jsonb_set(${value}, '{${rest.map(key => `"${key}"`).join(',')}}', ${v}, true)`
     }
 
     if (value === valueInit) {

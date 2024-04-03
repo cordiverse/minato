@@ -1,14 +1,16 @@
-import { clone, isNullable, makeArray, MaybeArray } from 'cosmokit'
+import { isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
-import { Selection } from './selection.ts'
-import { Flatten, Keys } from './utils.ts'
+import { clone, Flatten, isUint8Array, Keys } from './utils.ts'
+import { Type } from './type.ts'
+import { Driver } from './driver.ts'
 
 export const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }
 
 export interface Field<T = any> {
-  type: Field.Type<T>
+  type: Type<T>
+  deftype?: Field.Type<T>
   length?: number
   nullable?: boolean
   initial?: T
@@ -17,6 +19,7 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
+  transformers?: Driver.Transformer[]
 }
 
 export namespace Field {
@@ -32,17 +35,51 @@ export namespace Field {
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
-    : T extends unknown[] ? 'list' | 'json'
-    : T extends object ? 'json'
+    : T extends Uint8Array ? 'binary'
+    : T extends unknown[] ? 'list' | 'json' | 'array'
+    : T extends object ? 'json' | 'object'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
-  type MapField<O = any> = {
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]>
+  export type Object<T = any, N = any> = {
+    type: 'object'
+    inner: Extension<T, N>
+  } & Omit<Field<T>, 'type'>
+
+  export type Array<T = any, N = any> = {
+    type: 'array'
+    inner?: Definition<T, N>
+  } & Omit<Field<T[]>, 'type'>
+
+  export type Transform<S = any, T = any> = {
+    type: Type<T>
+    dump: (value: S) => T | null
+    load: (value: T) => S | null
+    initial?: S
+  } & Omit<Field<T>, 'type' | 'initial'>
+
+  type Parsed<T = any> = {
+    type: Type<T> | Field<T>['type']
+  } & Omit<Field<T>, 'type'>
+
+  export type Definition<T, N> =
+    | (Omit<Field<T>, 'type'> & { type: Type<T> })
+    | Object<T, N>
+    | (T extends (infer I)[] ? Array<I, N> : never)
+    | Shorthand<Type<T>>
+    | Transform<T>
+    | Keys<N, T>
+    | NewType<T>
+
+  type MapField<O = any, N = any> = {
+    [K in keyof O]?: Definition<O[K], N>
   }
 
-  export type Extension<O = any> = MapField<Flatten<O>>
+  export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
+
+  const NewType = Symbol('newtype')
+  export type NewType<T> = { [NewType]?: T }
 
   export type Config<O = any> = {
     [K in keyof O]?: Field<O[K]>
@@ -50,24 +87,26 @@ export namespace Field {
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
-  export function parse(source: string | Field): Field {
-    if (typeof source === 'function') return { type: 'expr', expr: source }
-    if (typeof source !== 'string') return { initial: null, ...source }
+  export function parse(source: string | Parsed): Field {
+    if (typeof source === 'function') throw new TypeError('view field is not supported')
+    if (typeof source !== 'string') {
+      return {
+        initial: null,
+        deftype: source.type as any,
+        ...source,
+        type: Type.isType(source.type) ? source.type : Type.fromField(source.type),
+      }
+    }
 
     // parse string definition
     const capture = regexp.exec(source)
     if (!capture) throw new TypeError('invalid field definition')
     const type = capture[1] as Type
     const args = (capture[2] || '').split(',')
-    const field: Field = { type }
+    const field: Field = { deftype: type, type: Type.fromField(type) }
 
     // set default initial value
-    if (field.initial === undefined) {
-      if (number.includes(field.type)) field.initial = 0
-      if (string.includes(field.type)) field.initial = ''
-      if (field.type === 'list') field.initial = []
-      if (field.type === 'json') field.initial = {}
-    }
+    if (field.initial === undefined) field.initial = getInitial(type)
 
     // set length information
     if (type === 'decimal') {
@@ -78,6 +117,16 @@ export namespace Field {
     }
 
     return field
+  }
+
+  export function getInitial(type: Field.Type, initial?: any) {
+    if (initial === undefined) {
+      if (Field.number.includes(type)) return 0
+      if (Field.string.includes(type)) return ''
+      if (type === 'list') return []
+      if (type === 'json') return {}
+    }
+    return initial
   }
 }
 
@@ -102,6 +151,8 @@ export class Model<S = any> {
   fields: Field.Config<S> = {}
   migrations = new Map<Model.Migration, string[]>()
 
+  private type: Type<S> | undefined
+
   constructor(public name: string) {
     this.autoInc = false
     this.primary = 'id' as never
@@ -125,7 +176,7 @@ export class Model<S = any> {
       this.fields[key].deprecated = !!callback
     }
 
-    if (typeof this.primary === 'string' && this.fields[this.primary]?.type === 'primary') {
+    if (typeof this.primary === 'string' && this.fields[this.primary]?.deftype === 'primary') {
       this.autoInc = true
     }
 
@@ -142,18 +193,45 @@ export class Model<S = any> {
     }
   }
 
-  resolveValue(key: string, value: any) {
+  resolveValue(field: string | Field | Type, value: any) {
     if (isNullable(value)) return value
-    if (this.fields[key]?.type === 'time') {
+    if (typeof field === 'string') field = this.fields[field] as Field
+    if (field && !Type.isType(field)) field = Type.fromField(field)
+    if (field?.type === 'time') {
       const date = new Date(0)
       date.setHours(value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds())
       return date
-    } else if (this.fields[key]?.type === 'date') {
+    } else if (field?.type === 'date') {
       const date = new Date(value)
       date.setHours(0, 0, 0, 0)
       return date
     }
     return value
+  }
+
+  resolveModel(obj: any, model?: Type) {
+    if (!model) model = this.getType()
+    if (isNullable(obj) || !model.inner) return obj
+    if (Type.isArray(model) && Array.isArray(obj)) {
+      return obj.map(x => this.resolveModel(x, Type.getInner(model)!))
+    }
+
+    const result = {}
+    for (const key in obj) {
+      const type = Type.getInner(model, key)
+      if (!type || isNullable(obj[key])) {
+        result[key] = obj[key]
+      } else if (type.type !== 'json') {
+        result[key] = this.resolveValue(type, obj[key])
+      } else if (type.inner && Type.isArray(type) && Array.isArray(obj[key])) {
+        result[key] = obj[key].map(x => this.resolveModel(x, Type.getInner(type)))
+      } else if (type.inner) {
+        result[key] = this.resolveModel(obj[key], type)
+      } else {
+        result[key] = obj[key]
+      }
+    }
+    return result
   }
 
   format(source: object, strict = true, prefix = '', result = {} as S) {
@@ -162,7 +240,7 @@ export class Model<S = any> {
       key = prefix + key
       if (value === undefined) return
       if (fields.includes(key)) {
-        result[key] = this.resolveValue(key, value)
+        result[key] = value
         return
       }
       const field = fields.find(field => key.startsWith(field + '.'))
@@ -176,7 +254,7 @@ export class Model<S = any> {
         this.format(value, strict, key + '.', result)
       }
     })
-    return result
+    return prefix === '' ? this.resolveModel(result) : result
   }
 
   parse(source: object, strict = true, prefix = '', result = {} as S) {
@@ -192,19 +270,19 @@ export class Model<S = any> {
         const fullKey = prefix + key, value = source[key]
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
-          node[segments[0]] = this.resolveValue(key, value)
-        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || Object.keys(value).length === 0) {
+          node[segments[0]] = value
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || isUint8Array(value) || Object.keys(value).length === 0) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {
-            node[segments[0]] = this.resolveValue(key, value)
+            node[segments[0]] = value
           }
         } else {
           this.parse(value, strict, fullKey + '.', node[segments[0]] ??= {})
         }
       }
     }
-    return result
+    return prefix === '' ? this.resolveModel(result) : result
   }
 
   create(data?: {}) {
@@ -218,5 +296,12 @@ export class Model<S = any> {
       }
     }
     return this.parse({ ...result, ...data })
+  }
+
+  getType(): Type<S>
+  getType(key: string): Type | undefined
+  getType(key?: string): Type | undefined {
+    this.type ??= Type.Object(valueMap(this.fields!, field => Type.fromField(field!))) as any
+    return key ? Type.getInner(this.type, key) : this.type
   }
 }

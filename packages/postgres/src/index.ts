@@ -2,7 +2,7 @@ import postgres from 'postgres'
 import { Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
 import { isBracketed } from '@minatojs/sql-utils'
-import { formatTime, PostgresBuilder } from './builder'
+import { escapeId, formatTime, PostgresBuilder } from './builder'
 
 interface ColumnInfo {
   table_catalog: string
@@ -55,79 +55,52 @@ interface QueryTask {
   reject: (reason: unknown) => void
 }
 
-function escapeId(value: string) {
-  return '"' + value.replace(/"/g, '""') + '"'
-}
+const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
 function getTypeDef(field: Field & { autoInc?: boolean }) {
-  let { type, length, precision, scale, initial, autoInc } = field
-  let def = ''
-  if (['primary', 'unsigned', 'integer'].includes(type)) {
-    length ||= 4
-    if (precision) def += `numeric(${precision}, ${scale ?? 0})`
-    else if (length <= 2) def += autoInc ? 'smallserial' : 'smallint'
-    else if (length <= 4) def += autoInc ? 'serial' : 'integer'
-    else {
-      if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
-      def += autoInc ? 'bigserial' : 'bigint'
-    }
-    if (!isNullable(initial) && !autoInc) def += ` DEFAULT ${initial}`
-  } else if (type === 'decimal') {
-    def += `numeric(${precision}, ${scale})`
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'float') {
-    def += 'real'
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'double') {
-    def += 'double precision'
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'char') {
-    def += `varchar(${length || 64}) `
-    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
-  } else if (type === 'string') {
-    def += `varchar(${length || 255})`
-    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
-  } else if (type === 'text') {
-    def += `text`
-    if (!isNullable(initial)) def += ` DEFAULT '${initial.replace(/'/g, "''")}'`
-  } else if (type === 'boolean') {
-    def += 'boolean'
-    if (!isNullable(initial)) def += ` DEFAULT ${initial}`
-  } else if (type === 'list') {
-    def += 'text[]'
-    if (initial) {
-      def += ` DEFAULT ${transformArray(initial)}`
-    }
-  } else if (type === 'json') {
-    def += 'jsonb'
-    if (initial) def += ` DEFAULT '${JSON.stringify(initial)}'::JSONB` // TODO
-  } else if (type === 'date') {
-    def += 'timestamp with time zone'
-    if (initial) def += ` DEFAULT ${formatTime(initial)}`
-  } else if (type === 'time') {
-    def += 'time with time zone'
-    if (initial) def += ` DEFAULT ${formatTime(initial)}`
-  } else if (type === 'timestamp') {
-    def += 'timestamp with time zone'
-    if (initial) def += ` DEFAULT ${formatTime(initial)}`
-  } else throw new Error(`unsupported type: ${type}`)
-
-  return def
+  let { deftype: type, length, precision, scale, autoInc } = field
+  switch (type) {
+    case 'primary':
+    case 'unsigned':
+    case 'integer':
+      length ||= 4
+      if (precision) return `numeric(${precision}, ${scale ?? 0})`
+      else if (length <= 2) return autoInc ? 'smallserial' : 'smallint'
+      else if (length <= 4) return autoInc ? 'serial' : 'integer'
+      else {
+        if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+        return autoInc ? 'bigserial' : 'bigint'
+      }
+    case 'decimal': return `numeric(${precision ?? 10}, ${scale ?? 0})`
+    case 'float': return 'real'
+    case 'double': return 'double precision'
+    case 'char': return `varchar(${length || 64}) `
+    case 'string': return `varchar(${length || 255})`
+    case 'text': return `text`
+    case 'boolean': return 'boolean'
+    case 'list': return 'text[]'
+    case 'json': return 'jsonb'
+    case 'date': return 'timestamp with time zone'
+    case 'time': return 'time with time zone'
+    case 'timestamp': return 'timestamp with time zone'
+    case 'binary': return 'bytea'
+    default: throw new Error(`unsupported type: ${type}`)
+  }
 }
 
 function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, def: string) {
   const typename = def.split(/[ (]/)[0]
   if (field.autoInc) return false
-  if (['unsigned', 'integer'].includes(field.type)) {
+  if (['unsigned', 'integer'].includes(field.deftype!)) {
     if (column.data_type !== typename) return true
   } else if (typename === 'text[]') {
     if (column.data_type !== 'ARRAY') return true
-  } else if (Field.date.includes(field.type)) {
+  } else if (Field.date.includes(field.deftype!)) {
     if (column.data_type !== def) return true
   } else if (typename === 'varchar') {
     if (column.data_type !== 'character varying') return true
   } else if (typename !== column.data_type) return true
-  switch (field.type) {
+  switch (field.deftype) {
     case 'integer':
     case 'unsigned':
     case 'char':
@@ -147,15 +120,11 @@ function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
 
-function transformArray(arr: any[]) {
-  return `ARRAY[${arr.map(v => `'${v.replace(/'/g, "''")}'`).join(',')}]::TEXT[]`
-}
-
 export class PostgresDriver extends Driver<PostgresDriver.Config> {
   static name = 'postgres'
 
   public postgres!: postgres.Sql
-  public sql = new PostgresBuilder()
+  public sql = new PostgresBuilder(this)
 
   private session?: postgres.TransactionSql
   private _counter = 0
@@ -176,6 +145,25 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
         },
       },
       ...this.config,
+    })
+
+    this.define<object, object>({
+      types: ['json'],
+      dump: value => value,
+      load: value => value,
+    })
+
+    this.define<Date, string>({
+      types: ['time'],
+      dump: date => date ? (typeof date === 'string' ? date : formatTime(date)) : null,
+      load: str => {
+        if (isNullable(str)) return str
+        const date = new Date(0)
+        const parsed = timeRegex.exec(str)
+        if (!parsed) throw Error(`unexpected time value: ${str}`)
+        date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
+        return date
+      },
     })
   }
 
@@ -235,7 +223,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     // field definitions
     for (const key in fields) {
-      const { deprecated } = fields[key]!
+      const { deprecated, initial, nullable = true } = fields[key]!
       if (deprecated) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.column_name))
@@ -247,12 +235,13 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       }
 
       if (!column) {
-        create.push(`${escapeId(key)} ${typedef}`)
+        create.push(`${escapeId(key)} ${typedef} ${makeArray(primary).includes(key) || !nullable ? 'not null' : 'null'}`
+         + (initial ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
       } else if (shouldUpdate) {
         if (column.column_name !== key) rename.push(`RENAME ${escapeId(column.column_name)} TO ${escapeId(key)}`)
-        const [ctype, cdefault] = typedef.split('DEFAULT')
-        update.push(`ALTER ${escapeId(key)} TYPE ${ctype}`)
-        if (cdefault) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${cdefault}`)
+        update.push(`ALTER ${escapeId(key)} TYPE ${typedef}`)
+        update.push(`ALTER ${escapeId(key)} ${makeArray(primary).includes(key) || !nullable ? 'SET' : 'DROP'} NOT NULL`)
+        if (initial) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${this.sql.escape(initial, fields[key])}`)
       }
     }
 
@@ -346,26 +335,26 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   }
 
   async get(sel: Selection.Immutable) {
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(this, sel.tables)
     const query = builder.get(sel)
     if (!query) return []
     return this.queue(query).then(data => {
-      return data.map(row => builder.load(sel.model, row))
+      return data.map(row => builder.load(row, sel.model))
     })
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr<any, boolean>) {
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(this, sel.tables)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
     const ref = isBracketed(inner) ? sel.ref : ''
     const [data] = await this.queue(`SELECT ${output} AS value FROM ${inner} ${ref}`)
-    return builder.load(data?.value)
+    return builder.load(data?.value, expr)
   }
 
   async set(sel: Selection.Mutable, data: {}) {
     const { model, query, table, tables, ref } = sel
-    const builder = new PostgresBuilder(tables)
+    const builder = new PostgresBuilder(this, tables)
     const filter = builder.parseQuery(query)
     const { fields } = model
     if (filter === '0') return {}
@@ -382,7 +371,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   }
 
   async remove(sel: Selection.Mutable) {
-    const builder = new PostgresBuilder(sel.tables)
+    const builder = new PostgresBuilder(this, sel.tables)
     const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return {}
     const { count } = await this.query(`DELETE FROM ${sel.table} WHERE ${query}`)
@@ -391,21 +380,21 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
   async create(sel: Selection.Mutable, data: any) {
     const { table, model } = sel
-    const builder = new PostgresBuilder(sel.tables)
-    const formatted = builder.dump(model, data)
+    const builder = new PostgresBuilder(this, sel.tables)
+    const formatted = builder.dump(data, model)
     const keys = Object.keys(formatted)
     const [row] = await this.query([
       `INSERT INTO ${builder.escapeId(table)} (${keys.map(builder.escapeId).join(', ')})`,
-      `VALUES (${keys.map(key => builder.escape(formatted[key])).join(', ')})`,
+      `VALUES (${keys.map(key => builder.escapePrimitive(formatted[key], model.getType(key))).join(', ')})`,
       `RETURNING *`,
     ].join(' '))
-    return builder.load(model, row)
+    return builder.load(row, model)
   }
 
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, tables, ref } = sel
-    const builder = new PostgresBuilder(tables)
+    const builder = new PostgresBuilder(this, tables)
     builder.upsert(table)
 
     this._counter = (this._counter + 1) % 256

@@ -4,6 +4,7 @@ import { Eval, executeEval } from './eval.ts'
 import { Model } from './model.ts'
 import { Query } from './query.ts'
 import { Keys, randomId, Row } from './utils.ts'
+import { Type } from './type.ts'
 
 declare module './eval.ts' {
   export namespace Eval {
@@ -42,7 +43,23 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
     if (key === '$prefix') return prefix
     if (key === '$model') return model
     if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
-    return createRow(ref, Eval('', [ref, `${prefix}${key}`]), `${prefix}${key}.`, model)
+
+    let type: Type
+    const field = model?.fields[prefix + key as string]
+    if (Type.getInner(expr?.[Type.kType], key)) {
+      // type may conatins object layout
+      type = Type.getInner(expr?.[Type.kType], key)!
+    } else if (field) {
+      type = Type.fromField(field)
+    } else if (Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {
+      type = Type.Object(Object.fromEntries(Object.entries(model?.fields!)
+        .filter(([k]) => k.startsWith(`${prefix}${key}`))
+        .map(([k, field]) => [k.slice(prefix.length + key.length + 1), Type.fromField(field!)])))
+    } else {
+      // unknown field inside json
+      type = Type.fromField('expr')
+    }
+    return createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
   },
 })
 
@@ -218,7 +235,9 @@ export class Selection<S = any> extends Executable<S, S[]> {
   evaluate(callback?: any): any {
     const selection = new Selection(this.driver, this)
     if (!callback) callback = (row) => Eval.array(Eval.object(row))
-    return Eval('exec', selection._action('eval', this.resolveField(callback)))
+    const expr = this.resolveField(callback)
+    if (expr['$']) defineProperty(expr, Type.kType, Type.Array(Type.fromTerm(expr)))
+    return Eval.exec(selection._action('eval', expr))
   }
 
   execute<K extends Keys<S> = Keys<S>>(cursor?: Driver.Cursor<K>): Promise<Pick<S, K>[]>

@@ -1,8 +1,8 @@
 import { $, Database, Primary } from 'minato'
 import { Context, ForkScope, Logger } from 'cordis'
 import { expect } from 'chai'
-import { } from 'chai-shape'
 import MongoDriver from '@minatojs/driver-mongo'
+import '@minatojs/tests'
 
 const logger = new Logger('mongo')
 
@@ -97,21 +97,21 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     }))
     table.push(await database.create('temp1', { text: 'awesome bar' }))
     table.push(await database.create('temp1', { text: 'awesome baz' }))
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
 
     await resetConfig(true)
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
 
     await resetConfig(false)
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
 
     await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await resetConfig(true)
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
 
     await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await resetConfig(false)
-    await expect(database.get('temp1', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
   })
 
   it('using primary', async () => {
@@ -137,20 +137,20 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     }))
     table.push(await database.create('temp2', { text: 'awesome bar' }))
     table.push(await database.create('temp2', { text: 'awesome baz' }))
-    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
 
     await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await resetConfig(true)
-    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
 
     await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
     await resetConfig(false)
-    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
 
     // query & eval
     table.push(await database.create('temp2', { foreign: table[0].id }))
-    await expect(database.get('temp2', {})).to.eventually.have.shape(table)
-    await expect(database.get('temp2', { foreign: table[0].id })).to.eventually.have.shape([table[3]])
-    await expect(database.get('temp2', row => $.eq(row.foreign, table[0].id!))).to.eventually.have.shape([table[3]])
+    await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
+    await expect(database.get('temp2', { foreign: table[0].id })).to.eventually.deep.eq([table[3]])
+    await expect(database.get('temp2', row => $.eq(row.foreign, table[0].id!))).to.eventually.deep.eq([table[3]])
   })
 })

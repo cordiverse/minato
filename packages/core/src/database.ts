@@ -1,11 +1,12 @@
-import { Dict, Intersect, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Dict, Intersect, makeArray, mapValues, MaybeArray, valueMap } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { Flatten, Indexable, Keys, Row } from './utils.ts'
+import { Flatten, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
+import { Type } from './type.ts'
 
 type TableLike<S> = Keys<S> | Selection
 
@@ -47,12 +48,13 @@ export namespace Join2 {
 
 const kTransaction = Symbol('transaction')
 
-export class Database<S = any, C extends Context = Context> extends Service<undefined, C> {
+export class Database<S = any, N = any, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
 
   public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
   public drivers: Record<keyof any, Driver> = Object.create(null)
+  public types: Dict<Field.Transform> = Object.create(null)
   public migrating = false
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   private migrateTasks: Dict<Promise<void>> = Object.create(null)
@@ -90,21 +92,103 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     await this.prepareTasks[name]
     await Promise.resolve()
     if (!this.stashed.delete(name)) return
-    await this.getDriver(name)?.prepare(name)
+
+    const driver = this.getDriver(name)
+    if (!driver) return
+
+    const { fields } = driver.model(name)
+    Object.values(fields).forEach(field => field?.transformers?.forEach(x => driver.define(x)))
+
+    await driver.prepare(name)
   }
 
-  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, config: Partial<Model.Config<S[K]>> = {}) {
+  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<S[K]>> = {}) {
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
       // model.driver = config.driver
     }
+    Object.entries(fields).forEach(([key, field]: [string, any]) => {
+      const transformer = []
+      this.parseField(field, transformer, undefined, value => field = fields[key] = value)
+      if (typeof field === 'object') field.transformers = transformer
+    })
     model.extend(fields, config)
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
   }
 
-  migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K]>, callback: Model.Migration) {
+  private parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {
+    if (field === 'array') {
+      setInitial?.([])
+      setField?.({ type: 'json', initial: [] })
+      return Type.Array()
+    } else if (field === 'object') {
+      setInitial?.({})
+      setField?.({ type: 'json', initial: {} })
+      return Type.Object()
+    } else if (typeof field === 'string' && this.types[field]) {
+      transformers.push({
+        types: [this.types[field].type],
+        load: this.types[field].load,
+        dump: this.types[field].dump,
+      })
+      setInitial?.(this.types[field].initial)
+      setField?.(this.types[field])
+      return Type.fromField(field as any)
+    } else if (typeof field === 'object' && field.load && field.dump) {
+      const name = this.define(field)
+      transformers.push({
+        types: [name as any],
+        load: field.load,
+        dump: field.dump,
+      })
+      // for transform type, intentionally assign a null initial on default
+      // setInitial?.(Field.getInitial(field.type, field.initial))
+      setInitial?.(field.initial)
+      setField?.({ ...field, deftype: field.type, type: name })
+      return Type.fromField(name as any)
+    } else if (typeof field === 'object' && field.type === 'object') {
+      const inner = unravel(field.inner, value => (value.type = 'object', value.inner ??= {}))
+      const initial = Object.create(null)
+      const res = Type.Object(mapValues(inner, (x, k) => this.parseField(x, transformers, value => initial[k] = value)))
+      setInitial?.(Field.getInitial('json', initial))
+      setField?.({ initial: Field.getInitial('json', initial), ...field, deftype: 'json', type: res })
+      return res
+    } else if (typeof field === 'object' && field.type === 'array') {
+      const res = field.inner ? Type.Array(this.parseField(field.inner, transformers)) : Type.Array()
+      setInitial?.([])
+      setField?.({ initial: [], ...field, deftype: 'json', type: res })
+      return res
+    } else if (typeof field === 'object') {
+      setInitial?.(Field.getInitial(field.type.split('(')[0], field.initial))
+      setField?.(field)
+      return Type.fromField(field.type.split('(')[0])
+    } else {
+      setInitial?.(Field.getInitial(field.split('(')[0]))
+      setField?.(field)
+      return Type.fromField(field.split('(')[0])
+    }
+  }
+
+  define<K extends Exclude<Keys<N>, Field.Type>>(name: K, field: Field.Transform<N[K]>): K
+  define<S>(field: Field.Transform<S>): Field.NewType<S>
+  define(name: any, field?: any) {
+    if (typeof name === 'object') {
+      field = name
+      name = undefined
+    }
+
+    if (name && this.types[name]) throw new Error(`type "${name}" already defined`)
+    if (!name) while (this.types[name = '_define_' + randomId()]);
+    this[Context.current].effect(() => {
+      this.types[name] = { deftype: field.type, ...field, type: name }
+      return () => delete this.types[name]
+    })
+    return name as any
+  }
+
+  migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, callback: Model.Migration) {
     this.extend(name, fields, { callback })
   }
 
@@ -183,8 +267,8 @@ export class Database<S = any, C extends Context = Context> extends Service<unde
     return await sel._action('upsert', upsert, keys).execute()
   }
 
-  async withTransaction(callback: (database: Database<S>) => Promise<void>): Promise<void>
-  async withTransaction<T extends Keys<S>>(table: T, callback: (database: Database<S>) => Promise<void>): Promise<void>
+  async withTransaction(callback: (database: this) => Promise<void>): Promise<void>
+  async withTransaction<T extends Keys<S>>(table: T, callback: (database: this) => Promise<void>): Promise<void>
   async withTransaction(arg: any, ...args: any[]) {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
     const [table, callback] = typeof arg === 'string' ? [arg, ...args] : [null, arg, ...args]
