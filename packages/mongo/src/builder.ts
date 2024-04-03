@@ -448,8 +448,8 @@ export class Builder {
     const converter = this.driver.types[type?.type]
     let res = value
 
-    if (!isNullable(res) && type?.inner) {
-      if (Array.isArray(type.inner)) {
+    if (!isNullable(res) && type.inner) {
+      if (Type.isArray(type)) {
         res = res.map(x => this.dump(x, Type.getInner(type)!))
       } else {
         res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type, k)))
@@ -468,8 +468,8 @@ export class Builder {
       const converter = this.driver.types[type?.inner ? 'json' : type?.type!]
       let res = converter ? converter.load(value) : value
 
-      if (!isNullable(res) && type?.inner) {
-        if (Array.isArray(type.inner)) {
+      if (!isNullable(res) && type.inner) {
+        if (Type.isArray(type)) {
           res = res.map(x => this.load(x, Type.getInner(type as Type)))
         } else {
           res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k)))
@@ -492,7 +492,7 @@ export class Builder {
     for (const key in obj) {
       const type = Type.getInner(model, key)
       if (!type || type.type !== 'json' || isNullable(obj[key]) || obj[key].$literal) result[key] = obj[key]
-      else if (Array.isArray(type.inner) && Array.isArray(obj[key])) result[key] = obj[key]
+      else if (Type.isArray(type) && Array.isArray(obj[key])) result[key] = obj[key]
       else if (Object.keys(obj[key]).length === 0) result[key] = { $literal: obj[key] }
       else if (type.inner) result[key] = this.formatUpdateAggr(type, obj[key])
       else result[key] = obj[key]

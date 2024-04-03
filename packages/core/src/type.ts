@@ -5,7 +5,8 @@ import { Eval, isEvalExpr } from './eval.ts'
 export interface Type<T = any> {
   [Type.kType]?: true
   type: Field.Type<T>
-  inner?: T extends (infer I)[] ? [Type<I>] : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key]> } : never
+  inner?: T extends (infer I)[] ? Type<I> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key]> } : never
+  array?: boolean
 }
 
 export namespace Type {
@@ -31,7 +32,8 @@ export namespace Type {
   export type Array<T = any> = Type<T[]>
   export const Array = <T>(type?: Type<T>): Type.Array<T> => defineProperty({
     type: 'json',
-    inner: type ? [type] : undefined,
+    inner: type,
+    array: true,
   }, kType, true)
 
   export function fromPrimitive<T>(value: T): Type<T> {
@@ -63,9 +65,13 @@ export namespace Type {
     return value?.[kType] === true
   }
 
+  export function isArray(type: Type) {
+    return (type.type === 'json') && type.array
+  }
+
   export function getInner(type?: Type<any>, key?: string): Type | undefined {
     if (!type?.inner) return
-    if (globalThis.Array.isArray(type.inner) && isNullable(key)) return type.inner[0]
+    if (isArray(type) && isNullable(key)) return type.inner
     if (isNullable(key)) return
     if (type.inner[key]) return type.inner[key]
     if (key.includes('.')) return key.split('.').reduce((t, k) => getInner(t, k), type)

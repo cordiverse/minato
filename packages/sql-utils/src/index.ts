@@ -553,8 +553,8 @@ export class Builder {
       if (type.inner || type.type === 'json') root = false
       let res = value
 
-      if (!isNullable(res) && type?.inner) {
-        if (Array.isArray(type.inner)) {
+      if (!isNullable(res) && type.inner) {
+        if (Type.isArray(type)) {
           res = res.map(x => this.dump(x, Type.getInner(type as Type), root))
         } else {
           res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type as Type, k), root))
@@ -587,13 +587,13 @@ export class Builder {
       res = converter ? converter.load(res) : res
 
       if (!isNullable(res) && type.inner) {
-        if (Array.isArray(type.inner)) {
+        if (Type.isArray(type)) {
           res = res.map(x => this.load(x, Type.getInner(type as Type), false))
         } else {
           res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k), false))
         }
       }
-      return (type.inner && !Array.isArray(type.inner)) ? unravel(res) : res
+      return (type.inner && !Type.isArray(type)) ? unravel(res) : res
     }
 
     const result = {}

@@ -49,7 +49,7 @@ export namespace Field {
   export type Transform<S = any, T = any> = {
     type: Type<T>
     dump: (value: S) => T | null
-    load: ((value: T, initial?: S) => S | null)
+    load: (value: T) => S | null
     initial?: S
   } & Omit<Field<T>, 'type' | 'initial'>
 
@@ -197,7 +197,7 @@ export class Model<S = any> {
   resolveModel(obj: any, model?: Type) {
     if (!model) model = this.getType()
     if (isNullable(obj) || !model.inner) return obj
-    if (Array.isArray(model.inner) && Array.isArray(obj)) {
+    if (Type.isArray(model) && Array.isArray(obj)) {
       return obj.map(x => this.resolveModel(x, Type.getInner(model)!))
     }
 
@@ -208,7 +208,7 @@ export class Model<S = any> {
         result[key] = obj[key]
       } else if (type.type !== 'json') {
         result[key] = this.resolveValue(type, obj[key])
-      } else if (Array.isArray(type.inner) && Array.isArray(obj[key])) {
+      } else if (Type.isArray(type) && Array.isArray(obj[key])) {
         result[key] = obj[key].map(x => this.resolveModel(x, Type.getInner(type)))
       } else if (type.inner) {
         result[key] = this.resolveModel(obj[key], type)
