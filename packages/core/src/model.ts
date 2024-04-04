@@ -1,7 +1,7 @@
-import { isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { is, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
-import { clone, Flatten, isUint8Array, Keys } from './utils.ts'
+import { clone, Flatten, Keys } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 
@@ -35,7 +35,7 @@ export namespace Field {
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
-    : T extends Uint8Array ? 'binary'
+    : T extends ArrayBuffer ? 'binary'
     : T extends unknown[] ? 'list' | 'json' | 'array'
     : T extends object ? 'json' | 'object'
     : 'expr'
@@ -52,10 +52,10 @@ export namespace Field {
     inner?: Definition<T, N>
   } & Omit<Field<T[]>, 'type'>
 
-  export type Transform<S = any, T = any> = {
-    type: Type<T>
-    dump: (value: S) => T | null
-    load: (value: T) => S | null
+  export type Transform<S = any, T = any, N = any> = {
+    type: Type<T> | Keys<N, T> | NewType<T>
+    dump: (value: S | null) => T | null | void
+    load: (value: T | null) => S | null | void
     initial?: S
   } & Omit<Field<T>, 'type' | 'initial'>
 
@@ -68,7 +68,7 @@ export namespace Field {
     | Object<T, N>
     | (T extends (infer I)[] ? Array<I, N> : never)
     | Shorthand<Type<T>>
-    | Transform<T>
+    | Transform<T, any, N>
     | Keys<N, T>
     | NewType<T>
 
@@ -79,7 +79,7 @@ export namespace Field {
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
 
   const NewType = Symbol('newtype')
-  export type NewType<T> = { [NewType]?: T }
+  export type NewType<T> = string & { [NewType]: T }
 
   export type Config<O = any> = {
     [K in keyof O]?: Field<O[K]>
@@ -271,7 +271,8 @@ export class Model<S = any> {
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
           node[segments[0]] = value
-        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || isUint8Array(value) || Object.keys(value).length === 0) {
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || is('ArrayBuffer', value)
+           || Object.keys(value).length === 0) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {

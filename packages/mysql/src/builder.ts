@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex } from 'minato'
+import { Dict, is, isNullable, Time } from 'cosmokit'
+import { arrayBufferToBase64, arrayBufferToHex, base64ToArrayBuffer, Driver, Field, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -43,8 +43,8 @@ export class MySQLBuilder extends Builder {
     this.transformers['binary'] = {
       encode: value => `to_base64(${value})`,
       decode: value => `from_base64(${value})`,
-      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
-      dump: value => isNullable(value) ? value : Uint8ArrayToBase64(value),
+      load: value => isNullable(value) || typeof value === 'object' ? value : base64ToArrayBuffer(value),
+      dump: value => isNullable(value) || typeof value === 'string' ? value : arrayBufferToBase64(value),
     }
 
     this.transformers['date'] = {
@@ -89,8 +89,8 @@ export class MySQLBuilder extends Builder {
       value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (isUint8Array(value)) {
-      return `X'${Uint8ArrayToHex(value)}'`
+    } else if (is('ArrayBuffer', value)) {
+      return `X'${arrayBufferToHex(value)}'`
     } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }

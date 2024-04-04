@@ -1,5 +1,5 @@
 import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { clone, Driver, Eval, executeUpdate, Field, Selection, toLocalUint8Array, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, Selection, toArrayBuffer, z } from 'minato'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -202,10 +202,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       load: value => isNullable(value) ? value : new Date(value),
     })
 
-    this.define<Uint8Array, Uint8Array>({
+    this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
-      dump: value => value,
-      load: value => value ? toLocalUint8Array(value) : value,
+      dump: value => isNullable(value) ? value : new Uint8Array(value),
+      load: value => isNullable(value) ? value : toArrayBuffer(value),
     })
   }
 
@@ -311,14 +311,12 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
     const { ref, table } = sel
     const model = this.model(table)
-    const modified = !deepEqual(clone(data), executeUpdate(data, update, ref))
-    if (!modified) return 0
+    executeUpdate(data, update, ref)
     const row = this.sql.dump(data, model)
     const assignment = updateFields.map((key) => `${escapeId(key)} = ?`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
     this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key] ?? null))
-    return 1
   }
 
   async set(sel: Selection.Mutable, update: {}) {
@@ -329,11 +327,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     }))]
     const primaryFields = makeArray(primary)
     const data = await this.database.get(table, query)
-    let modified = 0
     for (const row of data) {
-      modified += this.#update(sel, primaryFields, updateFields, update, row)
+      this.#update(sel, primaryFields, updateFields, update, row)
     }
-    return { matched: data.length, modified }
+    return { matched: data.length }
   }
 
   #create(table: string, data: {}) {
@@ -371,7 +368,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       for (const item of chunk) {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
-          result.modified += this.#update(sel, keys, updateFields, item, row)
+          this.#update(sel, keys, updateFields, item, row)
           result.matched++
         } else {
           this.#create(table, executeUpdate(model.create(), item, ref))

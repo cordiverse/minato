@@ -1,9 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
-import { Dict, isNullable, Time } from 'cosmokit'
-import {
-  Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type,
-  Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex, unravel,
-} from 'minato'
+import { Dict, is, isNullable, Time } from 'cosmokit'
+import { arrayBufferToBase64, arrayBufferToHex, base64ToArrayBuffer, Driver, Field, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -77,7 +74,7 @@ export class PostgresBuilder extends Builder {
       $number: (arg) => {
         const value = this.parseEval(arg)
         const type = Type.fromTerm(arg)
-        const res = Field.date.includes(type.type!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
+        const res = Field.date.includes(type.type as any) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
         return this.asEncoded(`coalesce(${res}, 0)`, false)
       },
 
@@ -110,8 +107,8 @@ export class PostgresBuilder extends Builder {
     this.transformers['binary'] = {
       encode: value => `encode(${value}, 'base64')`,
       decode: value => `decode(${value}, 'base64')`,
-      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
-      dump: value => isNullable(value) ? value : Uint8ArrayToBase64(value),
+      load: value => isNullable(value) || typeof value === 'object' ? value : base64ToArrayBuffer(value),
+      dump: value => isNullable(value) || typeof value === 'string' ? value : arrayBufferToBase64(value),
     }
 
     this.transformers['date'] = {
@@ -254,8 +251,8 @@ export class PostgresBuilder extends Builder {
       value = formatTime(value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (isUint8Array(value)) {
-      return `'\\x${Uint8ArrayToHex(value)}'::bytea`
+    } else if (is('ArrayBuffer', value)) {
+      return `'\\x${arrayBufferToHex(value)}'::bytea`
     } else if (type?.type === 'list' && Array.isArray(value)) {
       return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
     } else if (!!value && typeof value === 'object') {

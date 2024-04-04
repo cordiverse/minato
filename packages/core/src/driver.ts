@@ -35,8 +35,8 @@ export namespace Driver {
 
   export interface Transformer<S = any, T = any> {
     types: Field.Type<S>[]
-    dump: (value: S) => T | null
-    load: (value: T) => S | null
+    dump: (value: S | null) => T | null | void
+    load: (value: T | null) => S | null | void
   }
 }
 

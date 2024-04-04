@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
-import { Dict, isNullable } from 'cosmokit'
-import { Driver, Field, isUint8Array, Model, randomId, Type, Uint8ArrayFromHex, Uint8ArrayToHex } from 'minato'
+import { Dict, is, isNullable } from 'cosmokit'
+import { arrayBufferToHex, Driver, Field, hexToArrayBuffer, Model, randomId, Type } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -21,22 +21,22 @@ export class SQLiteBuilder extends Builder {
     this.evalOperators.$number = (arg) => {
       const type = Type.fromTerm(arg)
       const value = this.parseEval(arg)
-      const res = Field.date.includes(type.type!) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
+      const res = Field.date.includes(type.type as any) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
 
     this.transformers['binary'] = {
       encode: value => `hex(${value})`,
       decode: value => `unhex(${value})`,
-      load: value => isNullable(value) ? value : Uint8ArrayFromHex(value),
-      dump: value => isNullable(value) ? value : Uint8ArrayToHex(value),
+      load: value => isNullable(value) || typeof value === 'object' ? value : hexToArrayBuffer(value),
+      dump: value => isNullable(value) || typeof value === 'string' ? value : arrayBufferToHex(value),
     }
   }
 
   escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
-    else if (isUint8Array(value)) return `X'${Uint8ArrayToHex(value)}'`
+    else if (is('ArrayBuffer', value)) return `X'${arrayBufferToHex(value)}'`
     return super.escapePrimitive(value, type)
   }
 

@@ -1,11 +1,12 @@
-import { defineProperty, isNullable, mapValues } from 'cosmokit'
+import { defineProperty, is, isNullable, mapValues } from 'cosmokit'
 import { Field } from './model.ts'
 import { Eval, isEvalExpr } from './eval.ts'
+import { Keys } from './utils.ts'
 
-export interface Type<T = any> {
+export interface Type<T = any, N = any> {
   [Type.kType]?: true
-  type: Field.Type<T>
-  inner?: T extends (infer I)[] ? Type<I> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key]> } : never
+  type: Field.Type<T> | Keys<N, T> | Field.NewType<T>
+  inner?: T extends (infer I)[] ? Type<I> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key], N> } : never
   array?: boolean
 }
 
@@ -42,13 +43,13 @@ export namespace Type {
     else if (typeof value === 'string') return String as any
     else if (typeof value === 'boolean') return Boolean as any
     else if (value instanceof Date) return fromField('timestamp' as any)
-    else if (ArrayBuffer.isView(value)) return fromField('binary' as any)
+    else if (is('ArrayBuffer', value)) return fromField('binary' as any)
     else if (globalThis.Array.isArray(value)) return Array(value.length ? fromPrimitive(value[0]) : undefined) as any
     else if (typeof value === 'object') return fromField('json' as any)
     throw new TypeError(`invalid primitive: ${value}`)
   }
 
-  export function fromField<T>(field: Field<T> | Field.Type<T>): Type<T> {
+  export function fromField<T, N>(field: Field<T> | Field.Type<T> | Keys<N, T> | Field.NewType<T>): Type<T, N> {
     if (isType(field)) throw new TypeError(`invalid field: ${JSON.stringify(field)}`)
     if (typeof field === 'string') return defineProperty({ type: field }, kType, true)
     else if (field.type) return field.type
@@ -58,7 +59,7 @@ export namespace Type {
 
   export function fromTerm<T>(value: Eval.Term<T>): Type<T> {
     if (isEvalExpr(value)) return value[kType] ?? fromField('expr' as any)
-    else return fromPrimitive(value)
+    else return fromPrimitive(value as T)
   }
 
   export function isType(value: any): value is Type {
@@ -69,7 +70,7 @@ export namespace Type {
     return (type.type === 'json') && type.array
   }
 
-  export function getInner(type?: Type<any>, key?: string): Type | undefined {
+  export function getInner(type?: Type, key?: string): Type | undefined {
     if (!type?.inner) return
     if (isArray(type) && isNullable(key)) return type.inner
     if (isNullable(key)) return

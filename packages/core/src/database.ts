@@ -129,12 +129,12 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
       return Type.Object()
     } else if (typeof field === 'string' && this.types[field]) {
       transformers.push({
-        types: [this.types[field].type],
+        types: [field as any],
         load: this.types[field].load,
         dump: this.types[field].dump,
       })
       setInitial?.(this.types[field].initial)
-      setField?.(this.types[field])
+      setField?.({ ...this.types[field], type: field })
       return Type.fromField(field as any)
     } else if (typeof field === 'object' && field.load && field.dump) {
       const name = this.define(field)
@@ -171,8 +171,8 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     }
   }
 
-  define<K extends Exclude<Keys<N>, Field.Type>>(name: K, field: Field.Transform<N[K]>): K
-  define<S>(field: Field.Transform<S>): Field.NewType<S>
+  define<K extends Exclude<Keys<N>, Field.Type>, T = any>(name: K, field: Field.Transform<N[K], T, N>): K
+  define<S, T = any>(field: Field.Transform<S, T, N>): Field.NewType<S>
   define(name: any, field?: any) {
     if (typeof name === 'object') {
       field = name
@@ -182,7 +182,7 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     if (name && this.types[name]) throw new Error(`type "${name}" already defined`)
     if (!name) while (this.types[name = '_define_' + randomId()]);
     this[Context.current].effect(() => {
-      this.types[name] = { deftype: field.type, ...field, type: name }
+      this.types[name] = { deftype: this.types[field.type]?.deftype ?? field.type, ...field }
       return () => delete this.types[name]
     })
     return name as any
