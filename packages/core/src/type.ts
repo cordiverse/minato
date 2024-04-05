@@ -49,8 +49,8 @@ export namespace Type {
     throw new TypeError(`invalid primitive: ${value}`)
   }
 
-  export function fromField<T, N>(field: Field<T> | Field.Type<T> | Keys<N, T> | Field.NewType<T>): Type<T, N> {
-    if (isType(field)) throw new TypeError(`invalid field: ${JSON.stringify(field)}`)
+  export function fromField<T, N>(field: Type | Field<T> | Field.Type<T> | Keys<N, T> | Field.NewType<T>): Type<T, N> {
+    if (isType(field)) return field
     if (typeof field === 'string') return defineProperty({ type: field }, kType, true)
     else if (field.type) return field.type
     else if (field.expr?.[kType]) return field.expr[kType]

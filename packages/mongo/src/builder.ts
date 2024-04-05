@@ -455,7 +455,7 @@ export class Builder {
       }
     }
 
-    res = converter ? converter.dump(res) : res
+    res = converter?.dump ? converter.dump(res) : res
     const ancestor = this.driver.database.types[type.type]?.type
     res = this.dump(res, ancestor ? Type.fromField(ancestor) : undefined)
     return res
@@ -469,7 +469,7 @@ export class Builder {
       const converter = this.driver.types[type.type]
       const ancestor = this.driver.database.types[type.type]?.type
       let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined)
-      res = converter ? converter.load(res) : res
+      res = converter?.load ? converter.load(res) : res
 
       if (!isNullable(res) && type.inner) {
         if (Type.isArray(type)) {

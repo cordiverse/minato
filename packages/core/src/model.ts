@@ -36,8 +36,8 @@ export namespace Field {
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends ArrayBuffer ? 'binary'
-    : T extends unknown[] ? 'list' | 'json' | 'array'
-    : T extends object ? 'json' | 'object'
+    : T extends unknown[] ? 'list' | 'json'
+    : T extends object ? 'json'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
@@ -49,31 +49,32 @@ export namespace Field {
 
   export type Array<T = any, N = any> = {
     type: 'array'
-    inner?: Definition<T, N>
+    inner?: Literal<T, N> | Definition<T, N> | Transform<T, any, N>
   } & Omit<Field<T[]>, 'type'>
 
-  export type Transform<S = any, T = any, N = any> = {
-    type: Type<T> | Keys<N, T> | NewType<T>
+  export type Transform<S = any, T = S, N = any> = {
+    type: Type<T> | Keys<N, T> | NewType<T> | 'object' | 'array'
     dump: (value: S | null) => T | null | void
     load: (value: T | null) => S | null | void
     initial?: S
-  } & Omit<Field<T>, 'type' | 'initial'>
-
-  type Parsed<T = any> = {
-    type: Type<T> | Field<T>['type']
-  } & Omit<Field<T>, 'type'>
+  } & Omit<Definition<T, N>, 'type' | 'initial'>
 
   export type Definition<T, N> =
     | (Omit<Field<T>, 'type'> & { type: Type<T> })
     | Object<T, N>
     | (T extends (infer I)[] ? Array<I, N> : never)
+
+  export type Literal<T, N> =
     | Shorthand<Type<T>>
-    | Transform<T, any, N>
     | Keys<N, T>
     | NewType<T>
 
+  export type Parsable<T = any> = {
+    type: Type<T> | Field<T>['type']
+  } & Omit<Field<T>, 'type'>
+
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: Definition<O[K], N>
+    [K in keyof O]?: Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
@@ -87,14 +88,14 @@ export namespace Field {
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
-  export function parse(source: string | Parsed): Field {
+  export function parse(source: string | Parsable): Field {
     if (typeof source === 'function') throw new TypeError('view field is not supported')
     if (typeof source !== 'string') {
       return {
         initial: null,
         deftype: source.type as any,
         ...source,
-        type: Type.isType(source.type) ? source.type : Type.fromField(source.type),
+        type: Type.fromField(source.type),
       }
     }
 
@@ -196,7 +197,7 @@ export class Model<S = any> {
   resolveValue(field: string | Field | Type, value: any) {
     if (isNullable(value)) return value
     if (typeof field === 'string') field = this.fields[field] as Field
-    if (field && !Type.isType(field)) field = Type.fromField(field)
+    if (field) field = Type.fromField(field)
     if (field?.type === 'time') {
       const date = new Date(0)
       date.setHours(value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds())

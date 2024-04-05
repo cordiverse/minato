@@ -60,14 +60,27 @@ interface Custom {
   b: number
 }
 
+interface RecursiveX {
+  id: number
+  y?: RecursiveY
+}
+
+interface RecursiveY {
+  id: number
+  x?: RecursiveX
+}
+
 interface Tables {
   dtypes: DType
   dobjects: DObject
+  recurxs: RecursiveX
 }
 
 interface Types {
   bigint: bigint
   custom: Custom
+  recurx: RecursiveX
+  recury: RecursiveY
 }
 
 function toBinary(source: string): ArrayBuffer {
@@ -91,7 +104,7 @@ function ModelOperations(database: Database<Tables, Types>) {
     type: 'string',
     dump: value => isNullable(value) ? value : value.toString(),
     load: value => isNullable(value) ? value : BigInt(value),
-    initial: 123n
+    initial: 123n,
   })
 
   database.define('custom', {
@@ -112,6 +125,22 @@ function ModelOperations(database: Database<Tables, Types>) {
     dump: value => isNullable(value) ? value : { a: value, b: 1 },
     load: value => isNullable(value) ? value : value.a,
     initial: 'pooo',
+  })
+
+  database.define('recurx', {
+    type: 'object',
+    inner: {
+      id: 'unsigned',
+      y: 'recury',
+    },
+  })
+
+  database.define('recury', {
+    type: 'object',
+    inner: {
+      id: 'unsigned',
+      x: 'recurx',
+    },
   })
 
   const baseFields: Field.Extension<DType, Types> = {
@@ -159,21 +188,9 @@ function ModelOperations(database: Database<Tables, Types>) {
               initial: false,
             },
             bigint: 'bigint',
-            custom: 'custom',
+            custom: { type: 'custom' },
             bstr: bstr,
           },
-        },
-      },
-      initial: {
-        num: 1,
-        text: '2',
-        json: {
-          text: '3',
-          num: 4,
-        },
-        embed: {
-          bool: true,
-          bigint: 123n,
         },
       },
     },
@@ -236,6 +253,11 @@ function ModelOperations(database: Database<Tables, Types>) {
       inner: baseObject,
       initial: []
     },
+  }, { autoInc: true })
+
+  database.extend('recurxs', {
+    id: 'unsigned',
+    y: 'recury',
   }, { autoInc: true })
 }
 
@@ -430,6 +452,11 @@ namespace ModelOperations {
           .execute()
         ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
       ))
+    })
+
+    it('recursive type', async () => {
+      const table = await setup(database, 'recurxs', [{ id: 1, y: { id: 2, x: { id: 3, y: { id: 4, x: { id: 5 } } } } }])
+      await expect(database.get('recurxs', {})).to.eventually.have.deep.members(table)
     })
   }
 
