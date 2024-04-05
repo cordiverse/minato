@@ -357,7 +357,7 @@ export class Builder {
         groupStages.push(...this.flushLookups(), { $match: { $expr } })
       }
       stages.push(...this.flushLookups(), ...groupStages, { $project })
-      $group['_id'] = model.parse($group['_id'], false)
+      $group['_id'] = unravel($group['_id'])
     } else if (fields) {
       const $project = valueMap(fields, (expr) => this.eval(expr))
       $project._id = 0
@@ -481,7 +481,7 @@ export class Builder {
       return res
     }
 
-    value = type.format(value)
+    value = type.format(value, false)
     const result = {}
     for (const key in value) {
       if (!(key in type.fields)) continue

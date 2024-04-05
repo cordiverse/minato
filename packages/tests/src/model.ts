@@ -1,5 +1,5 @@
 import { valueMap, isNullable } from 'cosmokit'
-import { $, Database, Field, Type } from 'minato'
+import { $, Database, Field, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
 interface DType {
@@ -561,6 +561,14 @@ namespace ModelOperations {
           })
           .execute()
         ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
+      ))
+    })
+
+    it('project with dot notation', async () => {
+      const table = await setup(database, 'dobjects', dobjectTable)
+      const keys = Object.keys(database.tables['dobjects'].fields).flatMap(k => k.split('.').reduce((arr, c) => arr.length ? [`${arr[0]}.${c}`, ...arr] : [c], []))
+      await Promise.all(keys.map(key =>
+        expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getValue(row, key) })))
       ))
     })
   }

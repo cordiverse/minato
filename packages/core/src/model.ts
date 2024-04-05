@@ -1,7 +1,7 @@
 import { is, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
-import { clone, Flatten, Keys } from './utils.ts'
+import { clone, Flatten, Keys, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 
@@ -260,6 +260,13 @@ export class Model<S = any> {
 
   parse(source: object, strict = true, prefix = '', result = {} as S) {
     const fields = Object.keys(this.fields)
+    if (strict && prefix === '') {
+      // initialize object layout
+      Object.assign(result as any, unravel(Object.fromEntries(fields
+        .filter(key => key.includes('.'))
+        .map(key => [key.slice(0, key.lastIndexOf('.')), {}])),
+      ))
+    }
     for (const key in source) {
       let node = result
       const segments = key.split('.').reverse()

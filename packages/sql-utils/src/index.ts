@@ -597,7 +597,7 @@ export class Builder {
           res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k), false))
         }
       }
-      return (type.inner && !Type.isArray(type)) ? unravel(res) : res
+      return (!isNullable(res) && type.inner && !Type.isArray(type)) ? unravel(res) : res
     }
 
     const result = {}
