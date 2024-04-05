@@ -59,7 +59,13 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
       // unknown field inside json
       type = Type.fromField('expr')
     }
-    return createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
+
+    const row = createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
+    if (Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {
+      return createRow(ref, Eval.object(row), `${prefix}${key}.`, model)
+    } else {
+      return row
+    }
   },
 })
 

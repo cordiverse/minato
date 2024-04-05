@@ -432,7 +432,7 @@ namespace ModelOperations {
     typeModel && it('$.array encoding on cell', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
       await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.deep.members(table.map(x => x.object))
-      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.deep.members(table.map(x => x.object2))
+      await expect(database.eval('dtypes', row => $.array(row.object2))).to.eventually.have.deep.members(table.map(x => x.object2))
     })
 
     it('$.array encoding', async () => {

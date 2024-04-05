@@ -6,7 +6,7 @@ import { Keys } from './utils.ts'
 export interface Type<T = any, N = any> {
   [Type.kType]?: true
   type: Field.Type<T> | Keys<N, T> | Field.NewType<T>
-  inner?: T extends (infer I)[] ? Type<I> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key], N> } : never
+  inner?: T extends (infer I)[] ? Type<I, N> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key], N> } : never
   array?: boolean
 }
 
