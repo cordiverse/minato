@@ -188,6 +188,7 @@ namespace OrmOperations {
       data.text = null as never
       await database.set('temp2', { timestamp: { $exists: true } }, { text: null })
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+      await expect(database.get('temp2', { text: { $exists: false } })).to.eventually.have.length(1)
     })
 
     it('noop', async () => {

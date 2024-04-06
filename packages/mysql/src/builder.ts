@@ -48,7 +48,6 @@ export class MySQLBuilder extends Builder {
     }
 
     this.transformers['date'] = {
-      encode: value => value,
       decode: value => `cast(${value} as date)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value
@@ -67,14 +66,12 @@ export class MySQLBuilder extends Builder {
     }
 
     this.transformers['time'] = {
-      encode: value => value,
       decode: value => `cast(${value} as time)`,
       load: value => this.driver.types['time'].load(value),
       dump: value => isNullable(value) ? value : Time.template('yyyy-MM-dd hh:mm:ss.SSS', value),
     }
 
     this.transformers['timestamp'] = {
-      encode: value => value,
       decode: value => `cast(${value} as datetime)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value

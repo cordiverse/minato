@@ -24,7 +24,7 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   } else if (query instanceof RegExp) {
     return { $regex: query }
   } else if (isNullable(query)) {
-    return { $exists: false }
+    return null
   }
 
   // query operators
@@ -52,7 +52,7 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
     } else if (prop === '$el') {
       const child = transformFieldQuery(query[prop], key, filters)
       if (child === false) return false
-      if (child !== true) result.$elemMatch = child
+      if (child !== true) result.$elemMatch = child!
     } else if (prop === '$regexFor') {
       filters.push({
         $expr: {
@@ -62,6 +62,9 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
           },
         },
       })
+    } else if (prop === '$exists') {
+      if (query[prop]) return { $ne: null }
+      else return null
     } else {
       result[prop] = query[prop]
     }

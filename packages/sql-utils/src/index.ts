@@ -24,10 +24,10 @@ export type EvalOperators = {
 } & { $: (expr: any) => string }
 
 interface Transformer<S=any, T=any> {
-  encode(value: string): string
-  decode(value: string): string
-  load(value: S): T
-  dump(value: T): S
+  encode?(value: string): string
+  decode?(value: string): string
+  load?(value: S | null): T | null
+  dump?(value: T | null): S | null
 }
 
 interface State {
@@ -312,7 +312,7 @@ export class Builder {
   protected transform(value: string, type: Type | Eval.Expr | undefined, method: 'encode' | 'decode' | 'load' | 'dump', miss?: any) {
     type = Type.isType(type) ? type : Type.fromTerm(type)
     const transformer = this.transformers[type.type] ?? this.transformers[this.driver.database.types[type.type]?.type!]
-    return transformer ? transformer[method](value) : (miss ?? value)
+    return transformer?.[method] ? transformer[method]!(value) : (miss ?? value)
   }
 
   protected groupObject(_fields: any) {

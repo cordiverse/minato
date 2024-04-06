@@ -1,4 +1,4 @@
-import { valueMap, isNullable } from 'cosmokit'
+import { valueMap, isNullable, deduplicate } from 'cosmokit'
 import { $, Database, Field, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
@@ -264,7 +264,7 @@ function ModelOperations(database: Database<Tables, Types>) {
 function getValue(obj: any, path: string) {
   if (path.includes('.')) {
     const index = path.indexOf('.')
-    return getValue(obj[path.slice(0, index)] ??= {}, path.slice(index + 1))
+    return getValue(obj[path.slice(0, index)] ?? {}, path.slice(index + 1))
   } else {
     return obj[path]
   }
@@ -566,7 +566,11 @@ namespace ModelOperations {
 
     it('project with dot notation', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
-      const keys = Object.keys(database.tables['dobjects'].fields).flatMap(k => k.split('.').reduce((arr, c) => arr.length ? [`${arr[0]}.${c}`, ...arr] : [c], []))
+      const keys = deduplicate([
+        'foo.nested.object',
+        'foo.nested.object.embed',
+        ...Object.keys(database.tables['dobjects'].fields).flatMap(k => k.split('.').reduce((arr, c) => arr.length ? [`${arr[0]}.${c}`, ...arr] : [c], [])),
+      ])
       await Promise.all(keys.map(key =>
         expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getValue(row, key) })))
       ))

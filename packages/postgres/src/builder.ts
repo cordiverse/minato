@@ -91,17 +91,12 @@ export class PostgresBuilder extends Builder {
     }
 
     this.transformers['boolean'] = {
-      encode: value => value,
       decode: value => `(${value})::boolean`,
-      load: value => value,
-      dump: value => value,
     }
 
     this.transformers['decimal'] = {
-      encode: value => value,
       decode: value => `(${value})::double precision`,
       load: value => isNullable(value) ? value : +value,
-      dump: value => value,
     }
 
     this.transformers['binary'] = {
@@ -112,7 +107,6 @@ export class PostgresBuilder extends Builder {
     }
 
     this.transformers['date'] = {
-      encode: value => value,
       decode: value => `cast(${value} as date)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value
@@ -125,15 +119,13 @@ export class PostgresBuilder extends Builder {
     }
 
     this.transformers['time'] = {
-      encode: value => value,
       decode: value => `cast(${value} as time)`,
       load: value => this.driver.types['time'].load(value),
       dump: value => this.driver.types['time'].dump(value),
     }
 
     this.transformers['timestamp'] = {
-      encode: value => value,
-      decode: value => `cast(${value} as datetime)`,
+      decode: value => `cast(${value} as timestamp)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value
         return new Date(value)
