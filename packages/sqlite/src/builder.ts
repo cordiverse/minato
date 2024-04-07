@@ -37,6 +37,7 @@ export class SQLiteBuilder extends Builder {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
     else if (Binary.is(value)) return `X'${Binary.toHex(value)}'`
+    else if (Binary.isSource(value)) return `X'${Binary.toHex(Binary.fromSource(value))}'`
     return super.escapePrimitive(value, type)
   }
 

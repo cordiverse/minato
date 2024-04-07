@@ -324,6 +324,13 @@ namespace ModelOperations {
       await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
     })
 
+    typeModel && it('pass view to binary', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      table[0].binary = toBinary('this is Buffer')
+      await database.set('dtypes', table[0].id, { binary: Buffer.from('this is Buffer') })
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
+    })
+
     it('modifier', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
       await database.remove('dtypes', {})

@@ -245,6 +245,8 @@ export class PostgresBuilder extends Builder {
       value = value.source
     } else if (Binary.is(value)) {
       return `'\\x${Binary.toHex(value)}'::bytea`
+    } else if (Binary.isSource(value)) {
+      return `'\\x${Binary.toHex(Binary.fromSource(value))}'::bytea`
     } else if (type?.type === 'list' && Array.isArray(value)) {
       return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
     } else if (!!value && typeof value === 'object') {

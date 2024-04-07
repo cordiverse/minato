@@ -88,6 +88,8 @@ export class MySQLBuilder extends Builder {
       value = value.source
     } else if (Binary.is(value)) {
       return `X'${Binary.toHex(value)}'`
+    } else if (Binary.isSource(value)) {
+      return `X'${Binary.toHex(Binary.fromSource(value))}'`
     } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }
