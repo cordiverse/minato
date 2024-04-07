@@ -1,5 +1,5 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
-import { Binary, Dict, is, isNullable, Time } from 'cosmokit'
+import { Binary, Dict, isNullable, Time } from 'cosmokit'
 import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
@@ -243,7 +243,7 @@ export class PostgresBuilder extends Builder {
       value = formatTime(value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (is('ArrayBuffer', value)) {
+    } else if (Binary.is(value)) {
       return `'\\x${Binary.toHex(value)}'::bytea`
     } else if (type?.type === 'list' && Array.isArray(value)) {
       return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`

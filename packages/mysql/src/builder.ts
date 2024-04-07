@@ -1,5 +1,5 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Binary, Dict, is, isNullable, Time } from 'cosmokit'
+import { Binary, Dict, isNullable, Time } from 'cosmokit'
 import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
 
 export interface Compat {
@@ -86,7 +86,7 @@ export class MySQLBuilder extends Builder {
       value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (is('ArrayBuffer', value)) {
+    } else if (Binary.is(value)) {
       return `X'${Binary.toHex(value)}'`
     } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`

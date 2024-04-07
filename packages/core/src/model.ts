@@ -1,4 +1,4 @@
-import { clone, is, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Binary, clone, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Flatten, Keys, unravel } from './utils.ts'
@@ -60,14 +60,16 @@ export namespace Field {
   } & Omit<Definition<T, N>, 'type' | 'initial'>
 
   export type Definition<T, N> =
-    | (Omit<Field<T>, 'type'> & { type: Type<T> })
-    | Object<T, N>
+    | (Omit<Field<T>, 'type'> & { type: Type<T> | Keys<N, T> | NewType<T> })
+    | (T extends object ? Object<T, N> : never)
     | (T extends (infer I)[] ? Array<I, N> : never)
 
   export type Literal<T, N> =
     | Shorthand<Type<T>>
     | Keys<N, T>
     | NewType<T>
+    | (T extends object ? 'object' : never)
+    | (T extends unknown[] ? 'array' : never)
 
   export type Parsable<T = any> = {
     type: Type<T> | Field<T>['type']
@@ -279,8 +281,7 @@ export class Model<S = any> {
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
           node[segments[0]] = value
-        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || is('ArrayBuffer', value)
-           || Object.keys(value).length === 0) {
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || Binary.is(value) || Object.keys(value).length === 0) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {

@@ -170,10 +170,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: 'list',
       initial: ['a`a', 'b"b', 'c\'c', 'd\\d'],
     },
-    array: {
-      type: 'json',
-      initial: [1, 2, 3],
-    },
+    array: 'array',
     object: {
       type: 'object',
       inner: {

@@ -1,5 +1,5 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
-import { Binary, Dict, is, isNullable } from 'cosmokit'
+import { Binary, Dict, isNullable } from 'cosmokit'
 import { Driver, Field, Model, randomId, Type } from 'minato'
 
 export class SQLiteBuilder extends Builder {
@@ -36,7 +36,7 @@ export class SQLiteBuilder extends Builder {
   escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
-    else if (is('ArrayBuffer', value)) return `X'${Binary.toHex(value)}'`
+    else if (Binary.is(value)) return `X'${Binary.toHex(value)}'`
     return super.escapePrimitive(value, type)
   }
 

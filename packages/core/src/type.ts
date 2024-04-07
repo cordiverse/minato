@@ -1,4 +1,4 @@
-import { defineProperty, is, isNullable, mapValues } from 'cosmokit'
+import { Binary, defineProperty, isNullable, mapValues } from 'cosmokit'
 import { Field } from './model.ts'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Keys } from './utils.ts'
@@ -43,7 +43,7 @@ export namespace Type {
     else if (typeof value === 'string') return String as any
     else if (typeof value === 'boolean') return Boolean as any
     else if (value instanceof Date) return fromField('timestamp' as any)
-    else if (is('ArrayBuffer', value)) return fromField('binary' as any)
+    else if (Binary.is(value)) return fromField('binary' as any)
     else if (globalThis.Array.isArray(value)) return Array(value.length ? fromPrimitive(value[0]) : undefined) as any
     else if (typeof value === 'object') return fromField('json' as any)
     throw new TypeError(`invalid primitive: ${value}`)
