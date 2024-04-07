@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
-import { Dict, is, isNullable, Time } from 'cosmokit'
-import { arrayBufferToBase64, arrayBufferToHex, base64ToArrayBuffer, Driver, Field, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
+import { Binary, Dict, is, isNullable, Time } from 'cosmokit'
+import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -102,8 +102,8 @@ export class PostgresBuilder extends Builder {
     this.transformers['binary'] = {
       encode: value => `encode(${value}, 'base64')`,
       decode: value => `decode(${value}, 'base64')`,
-      load: value => isNullable(value) || typeof value === 'object' ? value : base64ToArrayBuffer(value),
-      dump: value => isNullable(value) || typeof value === 'string' ? value : arrayBufferToBase64(value),
+      load: value => isNullable(value) || typeof value === 'object' ? value : Binary.fromBase64(value),
+      dump: value => isNullable(value) || typeof value === 'string' ? value : Binary.toBase64(value),
     }
 
     this.transformers['date'] = {
@@ -244,7 +244,7 @@ export class PostgresBuilder extends Builder {
     } else if (value instanceof RegExp) {
       value = value.source
     } else if (is('ArrayBuffer', value)) {
-      return `'\\x${arrayBufferToHex(value)}'::bytea`
+      return `'\\x${Binary.toHex(value)}'::bytea`
     } else if (type?.type === 'list' && Array.isArray(value)) {
       return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
     } else if (!!value && typeof value === 'object') {

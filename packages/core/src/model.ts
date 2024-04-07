@@ -1,7 +1,7 @@
-import { is, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { clone, is, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
-import { clone, Flatten, Keys, unravel } from './utils.ts'
+import { Flatten, Keys, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 

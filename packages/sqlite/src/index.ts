@@ -1,5 +1,5 @@
-import { deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, Selection, toArrayBuffer, z } from 'minato'
+import { Binary, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
+import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -205,7 +205,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : new Uint8Array(value),
-      load: value => isNullable(value) ? value : toArrayBuffer(value),
+      load: value => isNullable(value) ? value : Binary.fromSource(value),
     })
   }
 

@@ -1,4 +1,4 @@
-import { Intersect, is, mapValues } from 'cosmokit'
+import { Intersect } from 'cosmokit'
 import { Eval } from './eval.ts'
 
 export type Values<S> = S[keyof S]
@@ -81,38 +81,4 @@ export function unravel(source: object, init?: (value) => any) {
     node[segments[0]] = source[key]
   }
   return result
-}
-
-export function clone<T>(source: T): T
-export function clone(source: any) {
-  if (!source || typeof source !== 'object') return source
-  if (is('ArrayBuffer', source)) return source.slice(0)
-  if (Array.isArray(source)) return source.map(clone)
-  if (is('Date', source)) return new Date(source.valueOf())
-  if (is('RegExp', source)) return new RegExp(source.source, source.flags)
-  return mapValues(source, clone)
-}
-
-export function toArrayBuffer(source: ArrayBuffer | ArrayBufferView): ArrayBuffer {
-  return ArrayBuffer.isView(source) ? source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength) : source
-}
-
-export function hexToArrayBuffer(source: string): ArrayBuffer {
-  const buffer: number[] = []
-  for (let i = 0; i < source.length; i += 2) {
-    buffer.push(Number.parseInt(source.substring(i, i + 2), 16))
-  }
-  return Uint8Array.from(buffer).buffer
-}
-
-export function arrayBufferToHex(source: ArrayBuffer): string {
-  return Array.from(new Uint8Array(source), byte => byte.toString(16).padStart(2, '0')).join('')
-}
-
-export function base64ToArrayBuffer(source: string): ArrayBuffer {
-  return Uint8Array.from(atob(source), c => c.charCodeAt(0)).buffer
-}
-
-export function arrayBufferToBase64(source: ArrayBuffer): string {
-  return btoa(Array.from(new Uint8Array(source), b => String.fromCharCode(b)).join(''))
 }

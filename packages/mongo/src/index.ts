@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
-import { Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection, toArrayBuffer, z } from 'minato'
+import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
+import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Builder } from './builder'
 
@@ -49,7 +49,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : Buffer.from(value),
-      load: (value: any) => isNullable(value) ? value : toArrayBuffer(value.buffer),
+      load: (value: any) => isNullable(value) ? value : Binary.fromSource(value.buffer),
     })
   }
 

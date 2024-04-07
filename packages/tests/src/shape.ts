@@ -1,4 +1,4 @@
-import { isNullable } from 'cosmokit'
+import { Binary, deepEqual, isNullable } from 'cosmokit'
 import { inspect } from 'util'
 
 function flag(obj, key, value?) {
@@ -60,9 +60,9 @@ export = (({ Assertion }) => {
       return
     }
 
-    // buffer
-    if (Buffer.isBuffer(expect)) {
-      if (!Buffer.isBuffer(actual) || !expect.equals(actual)) {
+    // binary
+    if (Binary.is(expect)) {
+      if (!Binary.is(actual) || !deepEqual(actual, expect)) {
         return formatError(inspect(expect), inspect(actual))
       }
       return

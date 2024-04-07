@@ -1,7 +1,7 @@
-import { Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
+import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
-import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, toArrayBuffer, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
 import { escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Compat, MySQLBuilder } from './builder'
 
@@ -158,7 +158,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
       dump: value => value,
-      load: value => isNullable(value) ? value : toArrayBuffer(value),
+      load: value => isNullable(value) ? value : Binary.fromSource(value),
     })
   }
 

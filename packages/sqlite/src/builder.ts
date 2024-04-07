@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
-import { Dict, is, isNullable } from 'cosmokit'
-import { arrayBufferToHex, Driver, Field, hexToArrayBuffer, Model, randomId, Type } from 'minato'
+import { Binary, Dict, is, isNullable } from 'cosmokit'
+import { Driver, Field, Model, randomId, Type } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -28,15 +28,15 @@ export class SQLiteBuilder extends Builder {
     this.transformers['binary'] = {
       encode: value => `hex(${value})`,
       decode: value => `unhex(${value})`,
-      load: value => isNullable(value) || typeof value === 'object' ? value : hexToArrayBuffer(value),
-      dump: value => isNullable(value) || typeof value === 'string' ? value : arrayBufferToHex(value),
+      load: value => isNullable(value) || typeof value === 'object' ? value : Binary.fromHex(value),
+      dump: value => isNullable(value) || typeof value === 'string' ? value : Binary.toHex(value),
     }
   }
 
   escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) value = +value
     else if (value instanceof RegExp) value = value.source
-    else if (is('ArrayBuffer', value)) return `X'${arrayBufferToHex(value)}'`
+    else if (is('ArrayBuffer', value)) return `X'${Binary.toHex(value)}'`
     return super.escapePrimitive(value, type)
   }
 
