@@ -44,7 +44,7 @@ export namespace Field {
 
   export type Object<T = any, N = any> = {
     type: 'object'
-    inner: Extension<T, N>
+    inner?: Extension<T, N>
   } & Omit<Field<T>, 'type'>
 
   export type Array<T = any, N = any> = {
