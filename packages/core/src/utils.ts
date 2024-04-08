@@ -1,4 +1,4 @@
-import { Intersect, is, mapValues } from 'cosmokit'
+import { Intersect } from 'cosmokit'
 import { Eval } from './eval.ts'
 
 export type Values<S> = S[keyof S]
@@ -81,59 +81,4 @@ export function unravel(source: object, init?: (value) => any) {
     node[segments[0]] = source[key]
   }
   return result
-}
-
-export function clone<T>(source: T): T
-export function clone(source: any) {
-  if (!source || typeof source !== 'object') return source
-  if (isUint8Array(source)) return (hasGlobalBuffer && Buffer.isBuffer(source)) ? Buffer.copyBytesFrom(source) : source.slice()
-  if (Array.isArray(source)) return source.map(clone)
-  if (is('Date', source)) return new Date(source.valueOf())
-  if (is('RegExp', source)) return new RegExp(source.source, source.flags)
-  return mapValues(source, clone)
-}
-
-const hasGlobalBuffer = typeof Buffer === 'function' && Buffer.prototype?._isBuffer !== true
-
-export function isUint8Array(value: any): value is Uint8Array {
-  const stringTag = value?.[Symbol.toStringTag] ?? Object.prototype.toString.call(value)
-  return (hasGlobalBuffer && Buffer.isBuffer(value))
-    || ArrayBuffer.isView(value)
-    || ['ArrayBuffer', 'SharedArrayBuffer', '[object ArrayBuffer]', '[object SharedArrayBuffer]'].includes(stringTag)
-}
-
-export function Uint8ArrayFromHex(source: string) {
-  if (hasGlobalBuffer) return Buffer.from(source, 'hex')
-  const hex = source.length % 2 === 0 ? source : source.slice(0, source.length - 1)
-  const buffer: number[] = []
-  for (let i = 0; i < hex.length; i += 2) {
-    buffer.push(Number.parseInt(`${hex[i]}${hex[i + 1]}`, 16))
-  }
-  return Uint8Array.from(buffer)
-}
-
-export function Uint8ArrayToHex(source: Uint8Array) {
-  return (hasGlobalBuffer) ? toLocalUint8Array(source).toString('hex')
-    : Array.from(toLocalUint8Array(source), byte => byte.toString(16).padStart(2, '0')).join('')
-}
-
-export function Uint8ArrayFromBase64(source: string) {
-  return (hasGlobalBuffer) ? Buffer.from(source, 'base64') : Uint8Array.from(atob(source), c => c.charCodeAt(0))
-}
-
-export function Uint8ArrayToBase64(source: Uint8Array) {
-  return (hasGlobalBuffer) ? (source as Buffer).toString('base64') : btoa(Array.from(Uint16Array.from(source), b => String.fromCharCode(b)).join(''))
-}
-
-export function toLocalUint8Array(source: Uint8Array) {
-  if (hasGlobalBuffer) {
-    return Buffer.isBuffer(source) ? Buffer.from(source)
-      : ArrayBuffer.isView(source) ? Buffer.from(source.buffer, source.byteOffset, source.byteLength)
-        : Buffer.from(source)
-  } else {
-    const stringTag = source?.[Symbol.toStringTag] ?? Object.prototype.toString.call(source)
-    return stringTag === 'Uint8Array' ? source
-      : ArrayBuffer.isView(source) ? new Uint8Array(source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength))
-        : new Uint8Array(source)
-  }
 }

@@ -1,5 +1,5 @@
-import { valueMap } from 'cosmokit'
-import { $, Database, Field, Type } from 'minato'
+import { valueMap, isNullable, deduplicate } from 'cosmokit'
+import { $, Database, Field, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
 interface DType {
@@ -22,6 +22,7 @@ interface DType {
       bool?: boolean
       bigint?: bigint
       custom?: Custom
+      bstr?: string
     }
   }
   object2?: {
@@ -35,7 +36,7 @@ interface DType {
   timestamp?: Date
   date?: Date
   time?: Date
-  binary?: Buffer
+  binary?: ArrayBuffer
   bigint?: bigint
   bnum?: number
   bnum2?: number
@@ -59,14 +60,31 @@ interface Custom {
   b: number
 }
 
+interface RecursiveX {
+  id: number
+  y?: RecursiveY
+}
+
+interface RecursiveY {
+  id: number
+  x?: RecursiveX
+}
+
 interface Tables {
   dtypes: DType
   dobjects: DObject
+  recurxs: RecursiveX
 }
 
 interface Types {
   bigint: bigint
   custom: Custom
+  recurx: RecursiveX
+  recury: RecursiveY
+}
+
+function toBinary(source: string): ArrayBuffer {
+  return new TextEncoder().encode(source).buffer
 }
 
 function flatten(type: any, prefix) {
@@ -84,22 +102,45 @@ function flatten(type: any, prefix) {
 function ModelOperations(database: Database<Tables, Types>) {
   database.define('bigint', {
     type: 'string',
-    dump: value => value ? value.toString() : value,
-    load: value => value ? BigInt(value) : value,
-    initial: 123n
+    dump: value => isNullable(value) ? value : value.toString(),
+    load: value => isNullable(value) ? value : BigInt(value),
+    initial: 123n,
   })
 
   database.define('custom', {
     type: 'string',
-    dump: value => value ? `${value.a}|${value.b}` : value,
-    load: value => value ? { a: value.split('|')[0], b: +value.split('|')[1] } : value
+    dump: value => isNullable(value) ? value : `${value.a}|${value.b}`,
+    load: value => isNullable(value) ? value : { a: value.split('|')[0], b: +value.split('|')[1] },
   })
 
   const bnum = database.define({
     type: 'binary',
-    dump: value => value === undefined ? value : Buffer.from(String(value)),
-    load: value => value ? +value : value,
+    dump: value => isNullable(value) ? value : toBinary(String(value)),
+    load: value => isNullable(value) ? value : +Buffer.from(value),
     initial: 0,
+  })
+
+  const bstr = database.define({
+    type: 'custom',
+    dump: value => isNullable(value) ? value : { a: value, b: 1 },
+    load: value => isNullable(value) ? value : value.a,
+    initial: 'pooo',
+  })
+
+  database.define('recurx', {
+    type: 'object',
+    inner: {
+      id: 'unsigned',
+      y: 'recury',
+    },
+  })
+
+  database.define('recury', {
+    type: 'object',
+    inner: {
+      id: 'unsigned',
+      x: 'recurx',
+    },
   })
 
   const baseFields: Field.Extension<DType, Types> = {
@@ -129,10 +170,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: 'list',
       initial: ['a`a', 'b"b', 'c\'c', 'd\\d'],
     },
-    array: {
-      type: 'json',
-      initial: [1, 2, 3],
-    },
+    array: 'array',
     object: {
       type: 'object',
       inner: {
@@ -147,20 +185,9 @@ function ModelOperations(database: Database<Tables, Types>) {
               initial: false,
             },
             bigint: 'bigint',
-            custom: 'custom',
+            custom: { type: 'custom' },
+            bstr: bstr,
           },
-        },
-      },
-      initial: {
-        num: 1,
-        text: '2',
-        json: {
-          text: '3',
-          num: 4,
-        },
-        embed: {
-          bool: true,
-          bigint: 123n,
         },
       },
     },
@@ -192,14 +219,14 @@ function ModelOperations(database: Database<Tables, Types>) {
     },
     binary: {
       type: 'binary',
-      initial: Buffer.from('initial buffer')
+      initial: toBinary('initial buffer')
     },
     bigint: 'bigint',
     bnum,
     bnum2: {
       type: 'binary',
-      dump: value => value === undefined ? value : Buffer.from(String(value)),
-      load: value => value ? +value : value,
+      dump: value => isNullable(value) ? value : toBinary(String(value)),
+      load: value => isNullable(value) ? value : +Buffer.from(value),
       initial: 0,
     },
   }
@@ -216,7 +243,7 @@ function ModelOperations(database: Database<Tables, Types>) {
 
   database.extend('dobjects', {
     id: 'unsigned',
-    foo:  baseObject,
+    foo: baseObject,
     ...flatten(baseObject, 'bar'),
     baz: {
       type: 'array',
@@ -224,12 +251,17 @@ function ModelOperations(database: Database<Tables, Types>) {
       initial: []
     },
   }, { autoInc: true })
+
+  database.extend('recurxs', {
+    id: 'unsigned',
+    y: 'recury',
+  }, { autoInc: true })
 }
 
 function getValue(obj: any, path: string) {
   if (path.includes('.')) {
     const index = path.indexOf('.')
-    return getValue(obj[path.slice(0, index)] ??= {}, path.slice(index + 1))
+    return getValue(obj[path.slice(0, index)] ?? {}, path.slice(index + 1))
   } else {
     return obj[path]
   }
@@ -243,12 +275,12 @@ namespace ModelOperations {
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
     { id: 4, list: ['1', '1', '4'], array: [1, 1, 4] },
-    { id: 5, object: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n } } },
+    { id: 5, object: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n, bstr: 'world' } } },
     { id: 6, object2: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n } } },
     { id: 7, timestamp: magicBorn },
     { id: 8, date: magicBorn },
     { id: 9, time: new Date('1999-10-01 15:40:00') },
-    { id: 10, binary: Buffer.from('hello') },
+    { id: 10, binary: toBinary('hello') },
     { id: 11, bigint: BigInt(1e63) },
     { id: 12, decimal: 2.432 },
     { id: 13, bnum: 114514, bnum2: 12345 },
@@ -257,9 +289,9 @@ namespace ModelOperations {
 
   const dobjectTable: DObject[] = [
     { id: 1 },
-    { id: 2, foo: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
-    { id: 3, bar: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
-    { id: 4, baz: [{ nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } }, { nested: { id: 2 } }] },
+    { id: 2, foo: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
+    { id: 3, bar: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
+    { id: 4, baz: [{ nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } }, { nested: { id: 2 } }] },
     { id: 5, foo: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object2: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
     { id: 6, bar: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object2: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
     { id: 7, baz: [{ nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object2: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } }, { nested: { id: 2 } }] },
@@ -289,6 +321,13 @@ namespace ModelOperations {
 
       await database.remove('dtypes', {})
       await database.upsert('dtypes', dtypeTable)
+      await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
+    })
+
+    typeModel && it('pass view to binary', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      table[0].binary = toBinary('this is Buffer')
+      await database.set('dtypes', table[0].id, { binary: Buffer.from('this is Buffer') })
       await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
     })
 
@@ -367,7 +406,7 @@ namespace ModelOperations {
       expect(Type.fromTerm($.literal('abc')).type).to.equal(Type.String.type)
       expect(Type.fromTerm($.literal(true)).type).to.equal(Type.Boolean.type)
       expect(Type.fromTerm($.literal(new Date('1970-01-01'))).type).to.equal('timestamp')
-      expect(Type.fromTerm($.literal(Buffer.from('hello'))).type).to.equal('binary')
+      expect(Type.fromTerm($.literal(toBinary('hello'))).type).to.equal('binary')
       expect(Type.fromTerm($.literal([1, 2, 3])).type).to.equal('json')
       expect(Type.fromTerm($.literal({ a: 1 })).type).to.equal('json')
     })
@@ -397,7 +436,7 @@ namespace ModelOperations {
     typeModel && it('$.array encoding on cell', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
       await expect(database.eval('dtypes', row => $.array(row.object))).to.eventually.have.deep.members(table.map(x => x.object))
-      await expect(database.eval('dtypes', row => $.array($.object(row.object2)))).to.eventually.have.deep.members(table.map(x => x.object2))
+      await expect(database.eval('dtypes', row => $.array(row.object2))).to.eventually.have.deep.members(table.map(x => x.object2))
     })
 
     it('$.array encoding', async () => {
@@ -417,6 +456,11 @@ namespace ModelOperations {
           .execute()
         ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
       ))
+    })
+
+    it('recursive type', async () => {
+      const table = await setup(database, 'recurxs', [{ id: 1, y: { id: 2, x: { id: 3, y: { id: 4, x: { id: 5 } } } } }])
+      await expect(database.get('recurxs', {})).to.eventually.have.deep.members(table)
     })
   }
 
@@ -454,24 +498,24 @@ namespace ModelOperations {
         id: 1,
         timestamp: new Date('2009/10/01 15:40:00'),
         date: new Date('1999/10/01'),
-        binary: Buffer.from('boom'),
+        binary: toBinary('boom'),
       }
       table[0].bar!.nested = {
         ...table[0].bar?.nested,
         id: 9,
         timestamp: new Date('2009/10/01 15:40:00'),
         date: new Date('1999/10/01'),
-        binary: Buffer.from('boom'),
+        binary: toBinary('boom'),
       }
 
       await database.set('dobjects', table[0].id, {
         'foo.nested.timestamp': new Date('2009/10/01 15:40:00'),
         'foo.nested.date': new Date('1999/10/01'),
-        'foo.nested.binary': Buffer.from('boom'),
+        'foo.nested.binary': toBinary('boom'),
         'bar.nested.id': 9,
         'bar.nested.timestamp': new Date('2009/10/01 15:40:00'),
         'bar.nested.date': new Date('1999/10/01'),
-        'bar.nested.binary': Buffer.from('boom'),
+        'bar.nested.binary': toBinary('boom'),
       })
       await expect(database.get('dobjects', table[0].id)).to.eventually.deep.eq([table[0]])
 
@@ -521,6 +565,18 @@ namespace ModelOperations {
           })
           .execute()
         ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
+      ))
+    })
+
+    it('project with dot notation', async () => {
+      const table = await setup(database, 'dobjects', dobjectTable)
+      const keys = deduplicate([
+        'foo.nested.object',
+        'foo.nested.object.embed',
+        ...Object.keys(database.tables['dobjects'].fields).flatMap(k => k.split('.').reduce((arr, c) => arr.length ? [`${arr[0]}.${c}`, ...arr] : [c], [])),
+      ])
+      await Promise.all(keys.map(key =>
+        expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getValue(row, key) })))
       ))
     })
   }

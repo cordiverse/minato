@@ -1,7 +1,7 @@
-import { isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Binary, clone, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
 import { Database } from './database.ts'
 import { Eval, isEvalExpr } from './eval.ts'
-import { clone, Flatten, isUint8Array, Keys } from './utils.ts'
+import { Flatten, Keys, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 
@@ -35,51 +35,54 @@ export namespace Field {
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
-    : T extends Uint8Array ? 'binary'
-    : T extends unknown[] ? 'list' | 'json' | 'array'
-    : T extends object ? 'json' | 'object'
+    : T extends ArrayBuffer ? 'binary'
+    : T extends unknown[] ? 'list' | 'json'
+    : T extends object ? 'json'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
   export type Object<T = any, N = any> = {
     type: 'object'
-    inner: Extension<T, N>
+    inner?: Extension<T, N>
   } & Omit<Field<T>, 'type'>
 
   export type Array<T = any, N = any> = {
     type: 'array'
-    inner?: Definition<T, N>
+    inner?: Literal<T, N> | Definition<T, N> | Transform<T, any, N>
   } & Omit<Field<T[]>, 'type'>
 
-  export type Transform<S = any, T = any> = {
-    type: Type<T>
-    dump: (value: S) => T | null
-    load: (value: T) => S | null
+  export type Transform<S = any, T = S, N = any> = {
+    type: Type<T> | Keys<N, T> | NewType<T> | 'object' | 'array'
+    dump: (value: S | null) => T | null | void
+    load: (value: T | null) => S | null | void
     initial?: S
-  } & Omit<Field<T>, 'type' | 'initial'>
+  } & Omit<Definition<T, N>, 'type' | 'initial'>
 
-  type Parsed<T = any> = {
+  export type Definition<T, N> =
+    | (Omit<Field<T>, 'type'> & { type: Type<T> | Keys<N, T> | NewType<T> })
+    | (T extends object ? Object<T, N> : never)
+    | (T extends (infer I)[] ? Array<I, N> : never)
+
+  export type Literal<T, N> =
+    | Shorthand<Type<T>>
+    | Keys<N, T>
+    | NewType<T>
+    | (T extends object ? 'object' : never)
+    | (T extends unknown[] ? 'array' : never)
+
+  export type Parsable<T = any> = {
     type: Type<T> | Field<T>['type']
   } & Omit<Field<T>, 'type'>
 
-  export type Definition<T, N> =
-    | (Omit<Field<T>, 'type'> & { type: Type<T> })
-    | Object<T, N>
-    | (T extends (infer I)[] ? Array<I, N> : never)
-    | Shorthand<Type<T>>
-    | Transform<T>
-    | Keys<N, T>
-    | NewType<T>
-
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: Definition<O[K], N>
+    [K in keyof O]?: Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
 
   const NewType = Symbol('newtype')
-  export type NewType<T> = { [NewType]?: T }
+  export type NewType<T> = string & { [NewType]: T }
 
   export type Config<O = any> = {
     [K in keyof O]?: Field<O[K]>
@@ -87,14 +90,14 @@ export namespace Field {
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
-  export function parse(source: string | Parsed): Field {
+  export function parse(source: string | Parsable): Field {
     if (typeof source === 'function') throw new TypeError('view field is not supported')
     if (typeof source !== 'string') {
       return {
         initial: null,
         deftype: source.type as any,
         ...source,
-        type: Type.isType(source.type) ? source.type : Type.fromField(source.type),
+        type: Type.fromField(source.type),
       }
     }
 
@@ -196,7 +199,7 @@ export class Model<S = any> {
   resolveValue(field: string | Field | Type, value: any) {
     if (isNullable(value)) return value
     if (typeof field === 'string') field = this.fields[field] as Field
-    if (field && !Type.isType(field)) field = Type.fromField(field)
+    if (field) field = Type.fromField(field)
     if (field?.type === 'time') {
       const date = new Date(0)
       date.setHours(value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds())
@@ -259,6 +262,13 @@ export class Model<S = any> {
 
   parse(source: object, strict = true, prefix = '', result = {} as S) {
     const fields = Object.keys(this.fields)
+    if (strict && prefix === '') {
+      // initialize object layout
+      Object.assign(result as any, unravel(Object.fromEntries(fields
+        .filter(key => key.includes('.'))
+        .map(key => [key.slice(0, key.lastIndexOf('.')), {}])),
+      ))
+    }
     for (const key in source) {
       let node = result
       const segments = key.split('.').reverse()
@@ -271,7 +281,7 @@ export class Model<S = any> {
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
           node[segments[0]] = value
-        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || isUint8Array(value) || Object.keys(value).length === 0) {
+        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || Binary.is(value) || Object.keys(value).length === 0) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {

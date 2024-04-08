@@ -1,4 +1,4 @@
-import { defineProperty, Dict, valueMap } from 'cosmokit'
+import { defineProperty, Dict, filterKeys, valueMap } from 'cosmokit'
 import { Driver } from './driver.ts'
 import { Eval, executeEval } from './eval.ts'
 import { Model } from './model.ts'
@@ -59,7 +59,13 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
       // unknown field inside json
       type = Type.fromField('expr')
     }
-    return createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
+
+    const row = createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
+    if (Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {
+      return createRow(ref, Eval.object(row), `${prefix}${key}.`, model)
+    } else {
+      return row
+    }
   },
 })
 
@@ -104,11 +110,14 @@ class Executable<S = any, T = any> {
     if (typeof fields === 'string') fields = [fields]
     if (Array.isArray(fields)) {
       const modelFields = Object.keys(this.model.fields)
-      const keys = fields.flatMap((key) => {
-        if (this.model.fields[key]) return key
-        return modelFields.filter(path => path.startsWith(key + '.'))
+      const entries = fields.flatMap((key) => {
+        if (this.model.fields[key]) return [[key, this.row[key]]]
+        else if (modelFields.some(path => path.startsWith(key + '.'))) {
+          return modelFields.filter(path => path.startsWith(key + '.')).map(path => [path, this.row[path]])
+        }
+        return [[key, key.split('.').reduce((row, k) => row[k], this.row)]]
       })
-      return Object.fromEntries(keys.map(key => [key, this.row[key]]))
+      return Object.fromEntries(entries)
     } else {
       return valueMap(fields, field => this.resolveField(field))
     }
@@ -259,6 +268,11 @@ export class Selection<S = any> extends Executable<S, S[]> {
       for (const field in cursor.sort) {
         this.orderBy(field as any, cursor.sort[field])
       }
+    }
+    if (cursor.fields) {
+      return super.execute().then(
+        rows => rows.map(row => filterKeys(row as any, key => (cursor.fields as string[]).some(k => k === key || k.startsWith(`${key}.`)))),
+      )
     }
     return super.execute()
   }

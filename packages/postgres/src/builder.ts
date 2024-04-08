@@ -1,9 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
-import { Dict, isNullable, Time } from 'cosmokit'
-import {
-  Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type,
-  Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex, unravel,
-} from 'minato'
+import { Binary, Dict, isNullable, Time } from 'cosmokit'
+import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -77,7 +74,7 @@ export class PostgresBuilder extends Builder {
       $number: (arg) => {
         const value = this.parseEval(arg)
         const type = Type.fromTerm(arg)
-        const res = Field.date.includes(type.type!) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
+        const res = Field.date.includes(type.type as any) ? `extract(epoch from ${value})::bigint` : `${value}::double precision`
         return this.asEncoded(`coalesce(${res}, 0)`, false)
       },
 
@@ -94,28 +91,22 @@ export class PostgresBuilder extends Builder {
     }
 
     this.transformers['boolean'] = {
-      encode: value => value,
       decode: value => `(${value})::boolean`,
-      load: value => value,
-      dump: value => value,
     }
 
     this.transformers['decimal'] = {
-      encode: value => value,
       decode: value => `(${value})::double precision`,
       load: value => isNullable(value) ? value : +value,
-      dump: value => value,
     }
 
     this.transformers['binary'] = {
       encode: value => `encode(${value}, 'base64')`,
       decode: value => `decode(${value}, 'base64')`,
-      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
-      dump: value => isNullable(value) ? value : Uint8ArrayToBase64(value),
+      load: value => isNullable(value) || typeof value === 'object' ? value : Binary.fromBase64(value),
+      dump: value => isNullable(value) || typeof value === 'string' ? value : Binary.toBase64(value),
     }
 
     this.transformers['date'] = {
-      encode: value => value,
       decode: value => `cast(${value} as date)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value
@@ -128,15 +119,13 @@ export class PostgresBuilder extends Builder {
     }
 
     this.transformers['time'] = {
-      encode: value => value,
       decode: value => `cast(${value} as time)`,
       load: value => this.driver.types['time'].load(value),
       dump: value => this.driver.types['time'].dump(value),
     }
 
     this.transformers['timestamp'] = {
-      encode: value => value,
-      decode: value => `cast(${value} as datetime)`,
+      decode: value => `cast(${value} as timestamp)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value
         return new Date(value)
@@ -254,8 +243,10 @@ export class PostgresBuilder extends Builder {
       value = formatTime(value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (isUint8Array(value)) {
-      return `'\\x${Uint8ArrayToHex(value)}'::bytea`
+    } else if (Binary.is(value)) {
+      return `'\\x${Binary.toHex(value)}'::bytea`
+    } else if (Binary.isSource(value)) {
+      return `'\\x${Binary.toHex(Binary.fromSource(value))}'::bytea`
     } else if (type?.type === 'list' && Array.isArray(value)) {
       return `ARRAY[${value.map(x => this.escape(x)).join(', ')}]::TEXT[]`
     } else if (!!value && typeof value === 'object') {

@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
-import { Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, isUint8Array, Model, randomId, Selection, Type, Uint8ArrayFromBase64, Uint8ArrayToBase64, Uint8ArrayToHex } from 'minato'
+import { Binary, Dict, isNullable, Time } from 'cosmokit'
+import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -43,12 +43,11 @@ export class MySQLBuilder extends Builder {
     this.transformers['binary'] = {
       encode: value => `to_base64(${value})`,
       decode: value => `from_base64(${value})`,
-      load: value => isNullable(value) ? value : Uint8ArrayFromBase64(value),
-      dump: value => isNullable(value) ? value : Uint8ArrayToBase64(value),
+      load: value => isNullable(value) || typeof value === 'object' ? value : Binary.fromBase64(value),
+      dump: value => isNullable(value) || typeof value === 'string' ? value : Binary.toBase64(value),
     }
 
     this.transformers['date'] = {
-      encode: value => value,
       decode: value => `cast(${value} as date)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value
@@ -67,14 +66,12 @@ export class MySQLBuilder extends Builder {
     }
 
     this.transformers['time'] = {
-      encode: value => value,
       decode: value => `cast(${value} as time)`,
       load: value => this.driver.types['time'].load(value),
       dump: value => isNullable(value) ? value : Time.template('yyyy-MM-dd hh:mm:ss.SSS', value),
     }
 
     this.transformers['timestamp'] = {
-      encode: value => value,
       decode: value => `cast(${value} as datetime)`,
       load: value => {
         if (isNullable(value) || typeof value === 'object') return value
@@ -89,8 +86,10 @@ export class MySQLBuilder extends Builder {
       value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
     } else if (value instanceof RegExp) {
       value = value.source
-    } else if (isUint8Array(value)) {
-      return `X'${Uint8ArrayToHex(value)}'`
+    } else if (Binary.is(value)) {
+      return `X'${Binary.toHex(value)}'`
+    } else if (Binary.isSource(value)) {
+      return `X'${Binary.toHex(Binary.fromSource(value))}'`
     } else if (!!value && typeof value === 'object') {
       return `json_extract(${this.quote(JSON.stringify(value))}, '$')`
     }

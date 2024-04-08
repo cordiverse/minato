@@ -1,4 +1,4 @@
-import { Dict, Intersect, makeArray, mapValues, MaybeArray, valueMap } from 'cosmokit'
+import { Dict, Intersect, makeArray, mapValues, MaybeArray, omit, valueMap } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
 import { Flatten, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
@@ -118,38 +118,30 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     ;(this.ctx as Context).emit('model', name)
   }
 
-  private parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {
-    if (field === 'array') {
-      setInitial?.([])
-      setField?.({ type: 'json', initial: [] })
-      return Type.Array()
-    } else if (field === 'object') {
+  private _parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {
+    if (field === 'object') {
       setInitial?.({})
       setField?.({ type: 'json', initial: {} })
       return Type.Object()
+    } else if (field === 'array') {
+      setInitial?.([])
+      setField?.({ type: 'json', initial: [] })
+      return Type.Array()
     } else if (typeof field === 'string' && this.types[field]) {
       transformers.push({
-        types: [this.types[field].type],
+        types: [field as any],
         load: this.types[field].load,
         dump: this.types[field].dump,
-      })
+      }, ...(this.types[field].transformers ?? []))
       setInitial?.(this.types[field].initial)
-      setField?.(this.types[field])
-      return Type.fromField(field as any)
-    } else if (typeof field === 'object' && field.load && field.dump) {
-      const name = this.define(field)
-      transformers.push({
-        types: [name as any],
-        load: field.load,
-        dump: field.dump,
-      })
-      // for transform type, intentionally assign a null initial on default
-      // setInitial?.(Field.getInitial(field.type, field.initial))
-      setInitial?.(field.initial)
-      setField?.({ ...field, deftype: field.type, type: name })
-      return Type.fromField(name as any)
+      setField?.({ ...this.types[field], type: field })
+      return Type.fromField(field)
+    } else if (typeof field === 'string') {
+      setInitial?.(Field.getInitial((field as any).split('(')[0]))
+      setField?.(field)
+      return Type.fromField(field.split('(')[0])
     } else if (typeof field === 'object' && field.type === 'object') {
-      const inner = unravel(field.inner, value => (value.type = 'object', value.inner ??= {}))
+      const inner = field.inner ? unravel(field.inner, value => (value.type = 'object', value.inner ??= {})) : Object.create(null)
       const initial = Object.create(null)
       const res = Type.Object(mapValues(inner, (x, k) => this.parseField(x, transformers, value => initial[k] = value)))
       setInitial?.(Field.getInitial('json', initial))
@@ -160,19 +152,45 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
       setInitial?.([])
       setField?.({ initial: [], ...field, deftype: 'json', type: res })
       return res
-    } else if (typeof field === 'object') {
-      setInitial?.(Field.getInitial(field.type.split('(')[0], field.initial))
-      setField?.(field)
-      return Type.fromField(field.type.split('(')[0])
+    } else if (typeof field === 'object' && this.types[field.type]) {
+      transformers.push({
+        types: [field.type as any],
+        load: this.types[field.type].load,
+        dump: this.types[field.type].dump,
+      }, ...(this.types[field.type].transformers ?? []))
+      setInitial?.(field.initial === undefined ? this.types[field.type].initial : field.initial)
+      setField?.({ initial: this.types[field.type].initial, ...field })
+      return Type.fromField(field.type)
     } else {
-      setInitial?.(Field.getInitial(field.split('(')[0]))
+      setInitial?.(Field.getInitial(field.type, field.initial))
       setField?.(field)
-      return Type.fromField(field.split('(')[0])
+      return Type.fromField(field.type)
     }
   }
 
-  define<K extends Exclude<Keys<N>, Field.Type>>(name: K, field: Field.Transform<N[K]>): K
-  define<S>(field: Field.Transform<S>): Field.NewType<S>
+  private parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value: Field.Parsable) => void): Type {
+    let midfield
+    let type = this._parseField(field, transformers, setInitial, (value) => (midfield = value, setField?.(value)))
+    if (typeof field === 'object' && field.load && field.dump) {
+      if (type.inner) type = Type.fromField(this.define({ ...omit(midfield, ['load', 'dump']), type } as any))
+
+      const name = this.define({ ...field, deftype: midfield.deftype, type: type.type })
+      transformers.push({
+        types: [name as any],
+        load: field.load,
+        dump: field.dump,
+      })
+      // for transform type, intentionally assign a null initial on default
+      setInitial?.(field.initial)
+      setField?.({ ...field, deftype: midfield.deftype ?? this.types[type.type]?.deftype ?? type.type, initial: midfield.initial, type: name })
+      return Type.fromField(name as any)
+    }
+    if (typeof midfield === 'object') setField?.({ ...midfield, deftype: midfield.deftype ?? this.types[type.type]?.deftype ?? type?.type })
+    return type
+  }
+
+  define<K extends Exclude<Keys<N>, Field.Type | 'object' | 'array'>>(name: K, field: Field.Definition<N[K], N> | Field.Transform<N[K], any, N>): K
+  define<S>(field: Field.Definition<S, N> | Field.Transform<S, any, N>): Field.NewType<S>
   define(name: any, field?: any) {
     if (typeof name === 'object') {
       field = name
@@ -181,8 +199,14 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
 
     if (name && this.types[name]) throw new Error(`type "${name}" already defined`)
     if (!name) while (this.types[name = '_define_' + randomId()]);
+
+    const transformers = []
+    const type = this._parseField(field, transformers, undefined, value => field = value)
+    field.transformers = transformers
+
     this[Context.current].effect(() => {
-      this.types[name] = { deftype: field.type, ...field, type: name }
+      this.types[name] = { ...field }
+      this.types[name].deftype ??= this.types[field.type]?.deftype ?? type.type as any
       return () => delete this.types[name]
     })
     return name as any

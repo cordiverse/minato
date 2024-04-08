@@ -1,5 +1,5 @@
 import postgres from 'postgres'
-import { Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
+import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
 import { isBracketed } from '@minatojs/sql-utils'
 import { escapeId, formatTime, PostgresBuilder } from './builder'
@@ -164,6 +164,12 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
         date.setHours(+parsed[1], +parsed[2], +parsed[3], +(parsed[5] ?? 0))
         return date
       },
+    })
+
+    this.define<ArrayBuffer, ArrayBuffer>({
+      types: ['binary'],
+      dump: value => value,
+      load: value => isNullable(value) ? value : Binary.fromSource(value),
     })
   }
 

@@ -24,7 +24,7 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
   } else if (query instanceof RegExp) {
     return { $regex: query }
   } else if (isNullable(query)) {
-    return { $exists: false }
+    return null
   }
 
   // query operators
@@ -52,7 +52,7 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
     } else if (prop === '$el') {
       const child = transformFieldQuery(query[prop], key, filters)
       if (child === false) return false
-      if (child !== true) result.$elemMatch = child
+      if (child !== true) result.$elemMatch = child!
     } else if (prop === '$regexFor') {
       filters.push({
         $expr: {
@@ -62,6 +62,9 @@ function transformFieldQuery(query: Query.FieldQuery, key: string, filters: Filt
           },
         },
       })
+    } else if (prop === '$exists') {
+      if (query[prop]) return { $ne: null }
+      else return null
     } else {
       result[prop] = query[prop]
     }
@@ -357,7 +360,7 @@ export class Builder {
         groupStages.push(...this.flushLookups(), { $match: { $expr } })
       }
       stages.push(...this.flushLookups(), ...groupStages, { $project })
-      $group['_id'] = model.parse($group['_id'], false)
+      $group['_id'] = unravel($group['_id'])
     } else if (fields) {
       const $project = valueMap(fields, (expr) => this.eval(expr))
       $project._id = 0
@@ -444,7 +447,6 @@ export class Builder {
     if (isEvalExpr(type)) type = Type.fromTerm(type)
     if (!Type.isType(type)) type = type.getType()
 
-    type = Type.isType(type) ? type : Type.fromTerm(type)
     const converter = this.driver.types[type?.type]
     let res = value
 
@@ -456,7 +458,9 @@ export class Builder {
       }
     }
 
-    res = converter ? converter.dump(res) : res
+    res = converter?.dump ? converter.dump(res) : res
+    const ancestor = this.driver.database.types[type.type]?.type
+    res = this.dump(res, ancestor ? Type.fromField(ancestor) : undefined)
     return res
   }
 
@@ -465,8 +469,10 @@ export class Builder {
 
     if (Type.isType(type) || isEvalExpr(type)) {
       type = Type.isType(type) ? type : Type.fromTerm(type)
-      const converter = this.driver.types[type?.inner ? 'json' : type?.type!]
-      let res = converter ? converter.load(value) : value
+      const converter = this.driver.types[type.type]
+      const ancestor = this.driver.database.types[type.type]?.type
+      let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined)
+      res = converter?.load ? converter.load(res) : res
 
       if (!isNullable(res) && type.inner) {
         if (Type.isArray(type)) {
@@ -478,7 +484,7 @@ export class Builder {
       return res
     }
 
-    value = type.format(value)
+    value = type.format(value, false)
     const result = {}
     for (const key in value) {
       if (!(key in type.fields)) continue

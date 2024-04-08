@@ -24,10 +24,10 @@ export type EvalOperators = {
 } & { $: (expr: any) => string }
 
 interface Transformer<S=any, T=any> {
-  encode(value: string): string
-  decode(value: string): string
-  load(value: S): T
-  dump(value: T): S
+  encode?(value: string): string
+  decode?(value: string): string
+  load?(value: S | null): T | null
+  dump?(value: T | null): S | null
 }
 
 interface State {
@@ -311,8 +311,8 @@ export class Builder {
    */
   protected transform(value: string, type: Type | Eval.Expr | undefined, method: 'encode' | 'decode' | 'load' | 'dump', miss?: any) {
     type = Type.isType(type) ? type : Type.fromTerm(type)
-    const transformer = this.transformers[type.type] ?? this.transformers[this.driver.database.types[type.type]?.deftype!]
-    return transformer ? transformer[method](value) : (miss ?? value)
+    const transformer = this.transformers[type.type] ?? this.transformers[this.driver.database.types[type.type]?.type!]
+    return transformer?.[method] ? transformer[method]!(value) : (miss ?? value)
   }
 
   protected groupObject(_fields: any) {
@@ -560,8 +560,10 @@ export class Builder {
           res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type as Type, k), root))
         }
       }
-      res = converter ? converter.dump(res) : res
-      if (!root) res = this.transform(res, type, 'dump')
+      res = converter?.dump ? converter.dump(res) : res
+      const ancestor = this.driver.database.types[type.type]?.type
+      if (!root && !ancestor) res = this.transform(res, type, 'dump')
+      res = this.dump(res, ancestor ? Type.fromField(ancestor) : undefined, root)
       return res
     }
 
@@ -583,8 +585,10 @@ export class Builder {
     if (Type.isType(type) || isEvalExpr(type)) {
       type = Type.isType(type) ? type : Type.fromTerm(type)
       const converter = this.driver.types[(root && value && type.type === 'json') ? 'json' : type.type]
-      let res = this.transform(value, type, 'load')
-      res = converter ? converter.load(res) : res
+      const ancestor = this.driver.database.types[type.type]?.type
+      let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined, root)
+      res = this.transform(res, type, 'load')
+      res = converter?.load ? converter.load(res) : res
 
       if (!isNullable(res) && type.inner) {
         if (Type.isArray(type)) {
@@ -593,7 +597,7 @@ export class Builder {
           res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k), false))
         }
       }
-      return (type.inner && !Type.isArray(type)) ? unravel(res) : res
+      return (!isNullable(res) && type.inner && !Type.isArray(type)) ? unravel(res) : res
     }
 
     const result = {}
@@ -614,7 +618,7 @@ export class Builder {
    * Convert value from Type to SQL.
    */
   escape(value: any, type?: Field | Field.Type | Type) {
-    type &&= (Type.isType(type) ? type : Type.fromField(type))
+    type &&= Type.fromField(type)
     return this.escapePrimitive(type ? this.dump(value, type) : value, type)
   }
 
