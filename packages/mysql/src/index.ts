@@ -13,60 +13,6 @@ declare module 'mysql' {
 
 const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
-function getIntegerType(length = 4) {
-  if (length <= 1) return 'tinyint'
-  if (length <= 2) return 'smallint'
-  if (length <= 3) return 'mediumint'
-  if (length <= 4) return 'int'
-  return 'bigint'
-}
-
-function getTypeDef({ deftype: type, length, precision, scale }: Field) {
-  switch (type) {
-    case 'float':
-    case 'double':
-    case 'date': return type
-    case 'time': return 'time(3)'
-    case 'timestamp': return 'datetime(3)'
-    case 'boolean': return 'bit'
-    case 'integer':
-      if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
-      return getIntegerType(length)
-    case 'primary':
-    case 'unsigned':
-      if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
-      return `${getIntegerType(length)} unsigned`
-    case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`
-    case 'char': return `char(${length || 255})`
-    case 'string': return (length || 255) > 65536 ? 'longtext' : `varchar(${length || 255})`
-    case 'text': return (length || 255) > 65536 ? 'longtext' : `text(${length || 65535})`
-    case 'binary': return (length || 65537) > 65536 ? 'longblob' : `blob`
-    case 'list': return `text(${length || 65535})`
-    case 'json': return `text(${length || 65535})`
-    default: throw new Error(`unsupported type: ${type}`)
-  }
-}
-
-function isDefUpdated(field: Field, column: ColumnInfo, def: string) {
-  const typename = def.split(/[ (]/)[0]
-  if (typename === 'text') return !column.DATA_TYPE.endsWith('text')
-  if (typename !== column.DATA_TYPE) return true
-  switch (field.deftype) {
-    case 'integer':
-    case 'unsigned':
-    case 'char':
-    case 'string':
-      return !!field.length && !!column.CHARACTER_MAXIMUM_LENGTH && column.CHARACTER_MAXIMUM_LENGTH !== field.length
-    case 'decimal':
-      return column.NUMERIC_PRECISION !== field.precision || column.NUMERIC_SCALE !== field.scale
-    case 'text':
-    case 'list':
-    case 'json':
-      return false
-    default: return false
-  }
-}
-
 function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
@@ -200,9 +146,9 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       if (key === primary && autoInc) {
         def += ' int unsigned not null auto_increment'
       } else {
-        const typedef = getTypeDef(fields[key]!)
+        const typedef = this.getTypeDef(fields[key]!)
         if (column && !shouldUpdate) {
-          shouldUpdate = isDefUpdated(fields[key]!, column, typedef)
+          shouldUpdate = this.isDefUpdated(fields[key]!, column, typedef)
         }
         def += ' ' + typedef
         if (makeArray(primary).includes(key)) {
@@ -527,6 +473,60 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
           .finally(() => conn.release()))
       })
     })
+  }
+
+  private getTypeDef({ deftype: type, length, precision, scale }: Field) {
+    const getIntegerType = (length = 4) => {
+      if (length <= 1) return 'tinyint'
+      if (length <= 2) return 'smallint'
+      if (length <= 3) return 'mediumint'
+      if (length <= 4) return 'int'
+      return 'bigint'
+    }
+
+    switch (type) {
+      case 'float':
+      case 'double':
+      case 'date': return type
+      case 'time': return 'time(3)'
+      case 'timestamp': return 'datetime(3)'
+      case 'boolean': return 'bit'
+      case 'integer':
+        if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+        return getIntegerType(length)
+      case 'primary':
+      case 'unsigned':
+        if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+        return `${getIntegerType(length)} unsigned`
+      case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`
+      case 'char': return `char(${length || 255})`
+      case 'string': return (length || 255) > 65536 ? 'longtext' : `varchar(${length || 255})`
+      case 'text': return (length || 255) > 65536 ? 'longtext' : `text(${length || 65535})`
+      case 'binary': return (length || 65537) > 65536 ? 'longblob' : `blob`
+      case 'list': return `text(${length || 65535})`
+      case 'json': return `text(${length || 65535})`
+      default: throw new Error(`unsupported type: ${type}`)
+    }
+  }
+
+  private isDefUpdated(field: Field, column: ColumnInfo, def: string) {
+    const typename = def.split(/[ (]/)[0]
+    if (typename === 'text') return !column.DATA_TYPE.endsWith('text')
+    if (typename !== column.DATA_TYPE) return true
+    switch (field.deftype) {
+      case 'integer':
+      case 'unsigned':
+      case 'char':
+      case 'string':
+        return !!field.length && !!column.CHARACTER_MAXIMUM_LENGTH && column.CHARACTER_MAXIMUM_LENGTH !== field.length
+      case 'decimal':
+        return column.NUMERIC_PRECISION !== field.precision || column.NUMERIC_SCALE !== field.scale
+      case 'text':
+      case 'list':
+      case 'json':
+        return false
+      default: return false
+    }
   }
 }
 
