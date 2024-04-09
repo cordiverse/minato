@@ -57,65 +57,6 @@ interface QueryTask {
 
 const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
-function getTypeDef(this: PostgresDriver, field: Field & { autoInc?: boolean }) {
-  let { deftype: type, length, precision, scale, autoInc } = field
-  switch (type) {
-    case 'primary':
-    case 'unsigned':
-    case 'integer':
-      length ||= 4
-      if (precision) return `numeric(${precision}, ${scale ?? 0})`
-      else if (length <= 2) return autoInc ? 'smallserial' : 'smallint'
-      else if (length <= 4) return autoInc ? 'serial' : 'integer'
-      else {
-        if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
-        return autoInc ? 'bigserial' : 'bigint'
-      }
-    case 'decimal': return `numeric(${precision ?? 10}, ${scale ?? 0})`
-    case 'float': return 'real'
-    case 'double': return 'double precision'
-    case 'char': return `varchar(${length || 64}) `
-    case 'string': return `varchar(${length || 255})`
-    case 'text': return `text`
-    case 'boolean': return 'boolean'
-    case 'list': return 'text[]'
-    case 'json': return 'jsonb'
-    case 'date': return 'timestamp with time zone'
-    case 'time': return 'time with time zone'
-    case 'timestamp': return 'timestamp with time zone'
-    case 'binary': return 'bytea'
-    default: throw new Error(`unsupported type: ${type}`)
-  }
-}
-
-function isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, def: string) {
-  const typename = def.split(/[ (]/)[0]
-  if (field.autoInc) return false
-  if (['unsigned', 'integer'].includes(field.deftype!)) {
-    if (column.data_type !== typename) return true
-  } else if (typename === 'text[]') {
-    if (column.data_type !== 'ARRAY') return true
-  } else if (Field.date.includes(field.deftype!)) {
-    if (column.data_type !== def) return true
-  } else if (typename === 'varchar') {
-    if (column.data_type !== 'character varying') return true
-  } else if (typename !== column.data_type) return true
-  switch (field.deftype) {
-    case 'integer':
-    case 'unsigned':
-    case 'char':
-    case 'string':
-      return !!field.length && !!column.character_maximum_length && column.character_maximum_length !== field.length
-    case 'decimal':
-      return column.numeric_precision !== field.precision || column.numeric_scale !== field.scale
-    case 'text':
-    case 'list':
-    case 'json':
-      return false
-    default: return false
-  }
-}
-
 function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
@@ -235,9 +176,9 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       const column = columns.find(info => legacy.includes(info.column_name))
       let shouldUpdate = column?.column_name !== key
       const field = Object.assign({ autoInc: primary.includes(key) && table.autoInc }, fields[key]!)
-      const typedef = getTypeDef.call(this, field)
+      const typedef = this.getTypeDef(field)
       if (column && !shouldUpdate) {
-        shouldUpdate = isDefUpdated(field, column, typedef)
+        shouldUpdate = this.isDefUpdated(field, column, typedef)
       }
 
       if (!column) {
@@ -478,6 +419,65 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       await callback(driver)
       await conn.unsafe(`COMMIT`)
     })
+  }
+
+  private getTypeDef(field: Field & { autoInc?: boolean }) {
+    let { deftype: type, length, precision, scale, autoInc } = field
+    switch (type) {
+      case 'primary':
+      case 'unsigned':
+      case 'integer':
+        length ||= 4
+        if (precision) return `numeric(${precision}, ${scale ?? 0})`
+        else if (length <= 2) return autoInc ? 'smallserial' : 'smallint'
+        else if (length <= 4) return autoInc ? 'serial' : 'integer'
+        else {
+          if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+          return autoInc ? 'bigserial' : 'bigint'
+        }
+      case 'decimal': return `numeric(${precision ?? 10}, ${scale ?? 0})`
+      case 'float': return 'real'
+      case 'double': return 'double precision'
+      case 'char': return `varchar(${length || 64}) `
+      case 'string': return `varchar(${length || 255})`
+      case 'text': return `text`
+      case 'boolean': return 'boolean'
+      case 'list': return 'text[]'
+      case 'json': return 'jsonb'
+      case 'date': return 'timestamp with time zone'
+      case 'time': return 'time with time zone'
+      case 'timestamp': return 'timestamp with time zone'
+      case 'binary': return 'bytea'
+      default: throw new Error(`unsupported type: ${type}`)
+    }
+  }
+
+  private isDefUpdated(field: Field & { autoInc?: boolean }, column: ColumnInfo, def: string) {
+    const typename = def.split(/[ (]/)[0]
+    if (field.autoInc) return false
+    if (['unsigned', 'integer'].includes(field.deftype!)) {
+      if (column.data_type !== typename) return true
+    } else if (typename === 'text[]') {
+      if (column.data_type !== 'ARRAY') return true
+    } else if (Field.date.includes(field.deftype!)) {
+      if (column.data_type !== def) return true
+    } else if (typename === 'varchar') {
+      if (column.data_type !== 'character varying') return true
+    } else if (typename !== column.data_type) return true
+    switch (field.deftype) {
+      case 'integer':
+      case 'unsigned':
+      case 'char':
+      case 'string':
+        return !!field.length && !!column.character_maximum_length && column.character_maximum_length !== field.length
+      case 'decimal':
+        return column.numeric_precision !== field.precision || column.numeric_scale !== field.scale
+      case 'text':
+      case 'list':
+      case 'json':
+        return false
+      default: return false
+    }
   }
 }
 
