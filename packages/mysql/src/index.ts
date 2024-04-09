@@ -21,7 +21,7 @@ function getIntegerType(length = 4) {
   return 'bigint'
 }
 
-function getTypeDef({ deftype: type, length, precision, scale }: Field) {
+function getTypeDef(this: MySQLDriver, { deftype: type, length, precision, scale }: Field) {
   switch (type) {
     case 'float':
     case 'double':
@@ -200,7 +200,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       if (key === primary && autoInc) {
         def += ' int unsigned not null auto_increment'
       } else {
-        const typedef = getTypeDef(fields[key]!)
+        const typedef = getTypeDef.call(this, fields[key]!)
         if (column && !shouldUpdate) {
           shouldUpdate = isDefUpdated(fields[key]!, column, typedef)
         }

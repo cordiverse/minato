@@ -57,7 +57,7 @@ interface QueryTask {
 
 const timeRegex = /(\d+):(\d+):(\d+)(\.(\d+))?/
 
-function getTypeDef(field: Field & { autoInc?: boolean }) {
+function getTypeDef(this: PostgresDriver, field: Field & { autoInc?: boolean }) {
   let { deftype: type, length, precision, scale, autoInc } = field
   switch (type) {
     case 'primary':
@@ -235,7 +235,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       const column = columns.find(info => legacy.includes(info.column_name))
       let shouldUpdate = column?.column_name !== key
       const field = Object.assign({ autoInc: primary.includes(key) && table.autoInc }, fields[key]!)
-      const typedef = getTypeDef(field)
+      const typedef = getTypeDef.call(this, field)
       if (column && !shouldUpdate) {
         shouldUpdate = isDefUpdated(field, column, typedef)
       }
