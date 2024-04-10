@@ -1,11 +1,12 @@
 import { Binary, defineProperty, isNullable, mapValues } from 'cosmokit'
 import { Field } from './model.ts'
 import { Eval, isEvalExpr } from './eval.ts'
-import { Keys } from './utils.ts'
+// import { Keys } from './utils.ts'
 
 export interface Type<T = any, N = any> {
   [Type.kType]?: true
-  type: Field.Type<T> | Keys<N, T> | Field.NewType<T>
+  // FIXME
+  type: Field.Type<T> // | Keys<N, T> | Field.NewType<T>
   inner?: T extends (infer I)[] ? Type<I, N> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key], N> } : never
   array?: boolean
 }
@@ -49,9 +50,10 @@ export namespace Type {
     throw new TypeError(`invalid primitive: ${value}`)
   }
 
-  export function fromField<T, N>(field: Type | Field<T> | Field.Type<T> | Keys<N, T> | Field.NewType<T>): Type<T, N> {
+  // FIXME: Type | Field<T> | Field.Type<T> | Keys<N, T> | Field.NewType<T>
+  export function fromField<T, N>(field: any): Type<T, N> {
     if (isType(field)) return field
-    if (typeof field === 'string') return defineProperty({ type: field }, kType, true)
+    if (typeof field === 'string') return defineProperty({ type: field }, kType, true) as never
     else if (field.type) return field.type
     else if (field.expr?.[kType]) return field.expr[kType]
     throw new TypeError(`invalid field: ${field}`)

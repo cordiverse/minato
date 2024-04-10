@@ -16,8 +16,10 @@ declare module 'cordis' {
   }
 
   interface Context {
-    database: Database
-    model: Database
+    [Database.Tables]: Database.Tables
+    [Database.Types]: Database.Types
+    database: Database<this>
+    model: Database<this>
   }
 }
 

@@ -160,7 +160,7 @@ export interface Selection extends Executable.Payload {
 export class Selection<S = any> extends Executable<S, S[]> {
   public tables: Dict<Model> = {}
 
-  constructor(driver: Driver, table: string | Selection | Dict<Selection.Immutable>, query?: Query) {
+  constructor(driver: Driver<any>, table: string | Selection | Dict<Selection.Immutable>, query?: Query) {
     super(driver, {
       type: 'get',
       ref: randomId(),

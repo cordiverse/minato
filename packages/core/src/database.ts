@@ -48,12 +48,25 @@ export namespace Join2 {
 
 const kTransaction = Symbol('transaction')
 
-export class Database<S = any, N = any, C extends Context = Context> extends Service<undefined, C> {
+export namespace Database {
+  export interface Tables {}
+
+  export interface Types {}
+}
+
+export class Database<
+  C extends Context = Context,
+  S extends C[typeof Database.Tables] = C[typeof Database.Tables],
+  N extends C[typeof Database.Types] = C[typeof Database.Types],
+> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
+  static readonly Tables = Symbol('minato.tables')
+  static readonly Types = Symbol('minato.types')
 
-  public tables: { [K in Keys<S>]: Model<S[K]> } = Object.create(null)
-  public drivers: Record<keyof any, Driver> = Object.create(null)
+  // { [K in Keys<S>]: Model<S[K]> }
+  public tables: any = Object.create(null)
+  public drivers: Record<keyof any, any> = Object.create(null)
   public types: Dict<Field.Transform> = Object.create(null)
   public migrating = false
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
@@ -79,7 +92,7 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     }
   }
 
-  private getDriver(table: any) {
+  private getDriver(table: any): Driver<any, C> {
     // const model: Model = this.tables[name]
     // if (model.driver) return this.drivers[model.driver]
     const driver = Object.values(this.drivers)[0]
@@ -189,8 +202,13 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     return type
   }
 
-  define<K extends Exclude<Keys<N>, Field.Type | 'object' | 'array'>>(name: K, field: Field.Definition<N[K], N> | Field.Transform<N[K], any, N>): K
-  define<S>(field: Field.Definition<S, N> | Field.Transform<S, any, N>): Field.NewType<S>
+  // FIXME
+  // define<K extends Exclude<Keys<N>, Field.Type | 'object' | 'array'>>(
+  //   name: K,
+  //   field: Field.Definition<N[K], N> | Field.Transform<N[K], any, N>,
+  // ): K
+
+  // define<T>(field: Field.Definition<T, N> | Field.Transform<T, any, N>): Field.NewType<T>
   define(name: any, field?: any) {
     if (typeof name === 'object') {
       field = name
@@ -212,7 +230,11 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     return name as any
   }
 
-  migrate<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, callback: Model.Migration) {
+  migrate<K extends Keys<S>>(
+    name: K,
+    fields: Field.Extension<S[K], N>,
+    callback: Model.Migration<this>,
+  ) {
     this.extend(name, fields, { callback })
   }
 
@@ -222,8 +244,18 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     return new Selection(this.getDriver(table), table, query)
   }
 
-  join<const U extends Join1.Input<S>>(tables: U, callback?: Join1.Predicate<S, U>, optional?: boolean[]): Selection<Join1.Output<S, U>>
-  join<const U extends Join2.Input<S>>(tables: U, callback?: Join2.Predicate<S, U>, optional?: Dict<boolean, Keys<U>>): Selection<Join2.Output<S, U>>
+  join<const U extends Join1.Input<S>>(
+    tables: U,
+    callback?: Join1.Predicate<S, U>,
+    optional?: boolean[],
+  ): Selection<Join1.Output<S, U>>
+
+  join<const U extends Join2.Input<S>>(
+    tables: U,
+    callback?: Join2.Predicate<S, U>,
+    optional?: Dict<boolean, Keys<U>>,
+  ): Selection<Join2.Output<S, U>>
+
   join(tables: any, query?: any, optional?: any) {
     if (Array.isArray(tables)) {
       const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, this.select(name)])))
@@ -233,7 +265,9 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
       sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
       return this.select(sel)
     } else {
-      const sel = new Selection(this.getDriver(Object.values(tables)[0]), valueMap(tables, (t: TableLike<S>) => typeof t === 'string' ? this.select(t) : t))
+      const sel = new Selection(this.getDriver(Object.values(tables)[0]), valueMap(tables, (t: TableLike<S>) => {
+        return typeof t === 'string' ? this.select(t) : t
+      }))
       if (typeof query === 'function') {
         sel.args[0].having = Eval.and(query(sel.row))
       }
@@ -242,7 +276,11 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     }
   }
 
-  async get<T extends Keys<S>, K extends Keys<S[T]>>(table: T, query: Query<S[T]>, cursor?: Driver.Cursor<K>): Promise<Pick<S[T], K>[]> {
+  async get<T extends Keys<S>, K extends Keys<S[T]>>(
+    table: T,
+    query: Query<S[T]>,
+    cursor?: Driver.Cursor<K>,
+  ): Promise<Pick<S[T], K>[]> {
     return this.select(table, query).execute(cursor)
   }
 
@@ -250,7 +288,11 @@ export class Database<S = any, N = any, C extends Context = Context> extends Ser
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
-  async set<T extends Keys<S>>(table: T, query: Query<S[T]>, update: Row.Computed<S[T], Update<S[T]>>): Promise<Driver.WriteResult> {
+  async set<T extends Keys<S>>(
+    table: T,
+    query: Query<S[T]>,
+    update: Row.Computed<S[T], Update<S[T]>>,
+  ): Promise<Driver.WriteResult> {
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)

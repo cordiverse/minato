@@ -326,7 +326,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     const primaryFields = makeArray(primary)
-    const data = await this.database.get(table, query)
+    const data = await this.database.get(table as never, query)
     for (const row of data) {
       this.#update(sel, primaryFields, updateFields, update, row)
     }
@@ -362,7 +362,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const step = Math.floor(960 / keys.length)
     for (let i = 0; i < data.length; i += step) {
       const chunk = data.slice(i, i + step)
-      const results = await this.database.get(table, {
+      const results = await this.database.get(table as never, {
         $or: chunk.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
       })
       for (const item of chunk) {
