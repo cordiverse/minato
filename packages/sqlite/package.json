@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-sqlite",
-  "version": "4.0.2",
+  "version": "4.1.0",
   "description": "SQLite Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -37,14 +37,14 @@
     "sqlite"
   ],
   "peerDependencies": {
-    "minato": "^3.0.1"
+    "minato": "^3.1.1"
   },
   "devDependencies": {
-    "@minatojs/tests": "^2.0.1"
+    "@minatojs/tests": "^2.1.0"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^5.0.1",
+    "@minatojs/sql-utils": "^5.1.0",
     "@minatojs/sql.js": "^3.1.0",
-    "cosmokit": "^1.5.2"
+    "cosmokit": "^1.6.2"
   }
 }

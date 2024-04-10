@@ -1,6 +1,6 @@
 {
   "name": "minato",
-  "version": "3.0.1",
+  "version": "3.1.1",
   "description": "Type Driven Database Framework",
   "type": "module",
   "main": "lib/index.cjs",
@@ -42,7 +42,7 @@
     "postgres"
   ],
   "dependencies": {
-    "cordis": "^3.13.3",
-    "cosmokit": "^1.5.2"
+    "cordis": "^3.13.4",
+    "cosmokit": "^1.6.2"
   }
 }
