@@ -7,6 +7,7 @@ interface Qux {
   number: number
   value: number
   flag: boolean
+  obj: object
 }
 
 interface Qux2 {
@@ -114,6 +115,38 @@ function MigrationTests(database: Database<Tables>) {
     await expect(database.get('qux2', {})).to.eventually.deep.equal([
       { id: 1, flag: true },
       { id: 2, flag: false },
+    ])
+  })
+
+  it('set json initial', async () => {
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'string(64)',
+    })
+
+    await database.upsert('qux', [
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    database.extend('qux', {
+      obj: {
+        type: 'json',
+        initial: {},
+        nullable: false,
+      }
+    })
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo', obj: {} },
+      { id: 2, text: 'bar', obj: {} },
     ])
   })
 }
