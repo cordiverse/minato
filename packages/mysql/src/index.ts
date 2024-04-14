@@ -55,8 +55,14 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       charset: 'utf8mb4_general_ci',
       multipleStatements: true,
       typeCast: (field, next) => {
+        const { orgName, orgTable } = field.packet
+        const meta = this.database.tables[orgTable]?.fields[orgName]
+
         if (field.type === 'BIT') {
           return Boolean(field.buffer()?.readUint8(0))
+        } else if (meta?.type?.type === 'json') {
+        // for backward compatibility
+          return field.string() || meta.initial
         } else {
           return next()
         }
@@ -133,6 +139,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     const unique = [...table.unique]
     const create: string[] = []
     const update: string[] = []
+    const alterInit = Object.create(null)
 
     // field definitions
     for (const key in fields) {
@@ -159,6 +166,10 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
         // blob, text, geometry or json columns cannot have default values
         if (initial && !typedef.startsWith('text') && !typedef.endsWith('blob')) {
           def += ' default ' + this.sql.escape(initial, fields[key])
+        }
+
+        if (!column && initial && (typedef.startsWith('text') || typedef.endsWith('blob'))) {
+          alterInit[key] = this.sql.escape(initial, fields[key])
         }
       }
 
@@ -213,6 +224,10 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       // https://dev.mysql.com/doc/refman/5.7/en/alter-table.html
       this.logger.info('auto updating table %c', name)
       await this.query(`ALTER TABLE ${escapeId(name)} ${operations.join(', ')}`)
+    }
+
+    if (Object.keys(alterInit).length) {
+      await this.query(`UPDATE ${escapeId(name)} SET ${Object.entries(alterInit).map(([key, val]) => `${escapeId(key)} = ${val}`).join(', ')}`)
     }
 
     // migrate deprecated fields (do not await)
@@ -322,7 +337,11 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   async dropAll() {
     const data = await this._select('information_schema.tables', ['TABLE_NAME'], 'TABLE_SCHEMA = ?', [this.config.database])
     if (!data.length) return
-    await this.query(data.map(({ TABLE_NAME }) => `DROP TABLE ${escapeId(TABLE_NAME)}`).join('; '))
+    await this.query([
+      'SET foreign_key_checks = 0',
+      ...data.map(({ TABLE_NAME }) => `DROP TABLE ${escapeId(TABLE_NAME)}`),
+      'SET foreign_key_checks = 1',
+    ].join('; '))
   }
 
   async stats() {
