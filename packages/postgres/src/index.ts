@@ -77,14 +77,6 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       debug: (_, query, parameters) => {
         this.logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
       },
-      transform: {
-        value: {
-          from: (value, column) => {
-            if (column.type === 20) return Number(value)
-            return value
-          },
-        },
-      },
       ...this.config,
     })
 
@@ -111,6 +103,18 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       types: ['binary'],
       dump: value => value,
       load: value => isNullable(value) ? value : Binary.fromSource(value),
+    })
+
+    this.define<number, number>({
+      types: Field.number as any,
+      dump: value => value,
+      load: value => isNullable(value) ? value : +value,
+    })
+
+    this.define<bigint, string>({
+      types: ['bigint'],
+      dump: value => isNullable(value) ? value : value.toString(),
+      load: value => isNullable(value) ? value : BigInt(value),
     })
   }
 
@@ -435,6 +439,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
           if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
           return autoInc ? 'bigserial' : 'bigint'
         }
+      case 'bigint': return 'bigint'
       case 'decimal': return `numeric(${precision ?? 10}, ${scale ?? 0})`
       case 'float': return 'real'
       case 'double': return 'double precision'

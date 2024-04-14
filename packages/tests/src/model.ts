@@ -1,4 +1,4 @@
-import { valueMap, isNullable, deduplicate } from 'cosmokit'
+import { valueMap, isNullable, deduplicate, omit } from 'cosmokit'
 import { $, Database, Field, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
@@ -8,6 +8,7 @@ interface DType {
   num?: number
   double?: number
   decimal?: number
+  int64?: BigInt
   bool?: boolean
   list?: string[]
   array?: number[]
@@ -77,7 +78,7 @@ interface Tables {
 }
 
 interface Types {
-  bigint: bigint
+  bigint2: bigint
   custom: Custom
   recurx: RecursiveX
   recury: RecursiveY
@@ -100,7 +101,7 @@ function flatten(type: any, prefix) {
 }
 
 function ModelOperations(database: Database<Tables, Types>) {
-  database.define('bigint', {
+  database.define('bigint2', {
     type: 'string',
     dump: value => isNullable(value) ? value : value.toString(),
     load: value => isNullable(value) ? value : BigInt(value),
@@ -162,6 +163,10 @@ function ModelOperations(database: Database<Tables, Types>) {
       scale: 3,
       initial: 12413,
     },
+    int64: {
+      type: 'bigint',
+      initial: 1n,
+    },
     bool: {
       type: 'boolean',
       initial: true,
@@ -184,7 +189,7 @@ function ModelOperations(database: Database<Tables, Types>) {
               type: 'boolean',
               initial: false,
             },
-            bigint: 'bigint',
+            bigint: 'bigint2',
             custom: { type: 'custom' },
             bstr: bstr,
           },
@@ -204,7 +209,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: 'boolean',
       initial: true,
     },
-    'object2.embed.bigint': 'bigint',
+    'object2.embed.bigint': 'bigint2',
     timestamp: {
       type: 'timestamp',
       initial: new Date('1970-01-01 00:00:00'),
@@ -221,7 +226,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       type: 'binary',
       initial: toBinary('initial buffer')
     },
-    bigint: 'bigint',
+    bigint: 'bigint2',
     bnum,
     bnum2: {
       type: 'binary',
@@ -282,7 +287,7 @@ namespace ModelOperations {
     { id: 9, time: new Date('1999-10-01 15:40:00') },
     { id: 10, binary: toBinary('hello') },
     { id: 11, bigint: BigInt(1e63) },
-    { id: 12, decimal: 2.432 },
+    { id: 12, decimal: 2.432, int64: 9223372036854775806n },
     { id: 13, bnum: 114514, bnum2: 12345 },
     { id: 14, object: { embed: { custom: { a: 'abc', b: 123 } } } },
   ]
@@ -317,6 +322,7 @@ namespace ModelOperations {
 
     it('basic', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
+      table.forEach((row, i) => expect(row).to.have.shape(omit(dtypeTable[i], ['date', 'time'])))
       await expect(database.get('dtypes', {})).to.eventually.have.deep.members(table)
 
       await database.remove('dtypes', {})
@@ -413,8 +419,8 @@ namespace ModelOperations {
 
     cast && it('cast newtype', async () => {
       await setup(database, 'dtypes', dtypeTable)
-      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(234n, 'bigint')))).to.eventually.have.length(0)
-      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), 'bigint')))).to.eventually.have.length(1)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(234n, 'bigint2')))).to.eventually.have.length(0)
+      await expect(database.get('dtypes', row => $.eq(row.bigint as any, $.literal(BigInt(1e63), 'bigint2')))).to.eventually.have.length(1)
     })
 
     typeModel && it('$.object encoding', async () => {

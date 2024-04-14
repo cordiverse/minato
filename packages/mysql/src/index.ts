@@ -63,6 +63,8 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
         } else if (meta?.type?.type === 'json') {
         // for backward compatibility
           return field.string() || meta.initial
+        } else if (field.type === 'LONGLONG') {
+          return field.string()
         } else {
           return next()
         }
@@ -111,6 +113,18 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       types: ['binary'],
       dump: value => value,
       load: value => isNullable(value) ? value : Binary.fromSource(value),
+    })
+
+    this.define<number, number>({
+      types: Field.number as any,
+      dump: value => value,
+      load: value => isNullable(value) ? value : +value,
+    })
+
+    this.define<bigint, string>({
+      types: ['bigint'],
+      dump: value => isNullable(value) ? value : value.toString(),
+      load: value => isNullable(value) ? value : BigInt(value),
     })
   }
 
@@ -517,6 +531,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       case 'unsigned':
         if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
         return `${getIntegerType(length)} unsigned`
+      case 'bigint': return getIntegerType(8)
       case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`
       case 'char': return `char(${length || 255})`
       case 'string': return (length || 255) > 65536 ? 'longtext' : `varchar(${length || 255})`

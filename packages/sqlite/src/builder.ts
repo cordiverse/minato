@@ -25,6 +25,13 @@ export class SQLiteBuilder extends Builder {
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
 
+    this.transformers['bigint'] = {
+      encode: value => `cast(${value} as text)`,
+      decode: value => `cast(${value} as integer)`,
+      load: value => isNullable(value) ? value : BigInt(value),
+      dump: value => isNullable(value) ? value : `${value}`,
+    }
+
     this.transformers['binary'] = {
       encode: value => `hex(${value})`,
       decode: value => `unhex(${value})`,

@@ -218,9 +218,10 @@ Eval.number = unary('number', (arg, data) => {
   return value instanceof Date ? Math.floor(value.valueOf() / 1000) : Number(value)
 }, Type.Number)
 
-const unwrapAggr = (expr: any) => {
-  const type = Type.fromTerm(expr)
-  return Type.getInner(type) ?? type
+const unwrapAggr = (expr: any, def?: Type) => {
+  let type = Type.fromTerm(expr)
+  type = Type.getInner(type) ?? type
+  return (def && type.type === 'expr') ? def : type
 }
 
 // aggregation
@@ -236,10 +237,10 @@ Eval.avg = unary('avg', (expr, table) => {
 }, Type.Number)
 Eval.max = unary('max', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x > y ? x : y, -Infinity)
-  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity), (expr) => unwrapAggr(expr))
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity), (expr) => unwrapAggr(expr, Type.Number))
 Eval.min = unary('min', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x < y ? x : y, Infinity)
-  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity), (expr) => unwrapAggr(expr))
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity), (expr) => unwrapAggr(expr, Type.Number))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size, Type.Number)
 defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).length
