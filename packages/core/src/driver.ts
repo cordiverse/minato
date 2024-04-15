@@ -61,7 +61,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
   abstract withTransaction(callback: (driver: this) => Promise<void>): Promise<void>
 
-  public database: Database<C>
+  public database: Database<any, any, C>
   public logger: Logger
   public types: Dict<Driver.Transformer> = Object.create(null)
 

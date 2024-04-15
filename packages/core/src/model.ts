@@ -3,14 +3,12 @@ import { Eval, isEvalExpr } from './eval.ts'
 import { Flatten, Keys, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
-import { Selection } from './selection.ts'
 
 export const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }
 
 export interface Field<T = any> {
-  // FIXME Type<T>
-  type: Field.Type<T> | Type<T>
+  type: Type<T>
   deftype?: Field.Type<T>
   length?: number
   nullable?: boolean
@@ -77,11 +75,8 @@ export namespace Field {
     type: Type<T> | Field<T>['type']
   } & Omit<Field<T>, 'type'>
 
-  // FIXME
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   type MapField<O = any, N = any> = {
-    // [K in keyof O]?: Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>
-    [K in keyof O]?: Field<O[K]> | Shorthand<Type<O[K]>> | Selection.Callback<O, O[K]>
+    [K in keyof O]?: Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>

@@ -54,11 +54,7 @@ export namespace Database {
   export interface Types {}
 }
 
-export class Database<
-  C extends Context = Context,
-  S extends C[typeof Database.Tables] = C[typeof Database.Tables],
-  N extends C[typeof Database.Types] = C[typeof Database.Types],
-> extends Service<undefined, C> {
+export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
   static readonly Tables = Symbol('minato.tables')
@@ -202,13 +198,12 @@ export class Database<
     return type
   }
 
-  // FIXME
-  // define<K extends Exclude<Keys<N>, Field.Type | 'object' | 'array'>>(
-  //   name: K,
-  //   field: Field.Definition<N[K], N> | Field.Transform<N[K], any, N>,
-  // ): K
+  define<K extends Exclude<Keys<N>, Field.Type | 'object' | 'array'>>(
+    name: K,
+    field: Field.Definition<N[K], N> | Field.Transform<N[K], any, N>,
+  ): K
 
-  // define<T>(field: Field.Definition<T, N> | Field.Transform<T, any, N>): Field.NewType<T>
+  define<T>(field: Field.Definition<T, N> | Field.Transform<T, any, N>): Field.NewType<T>
   define(name: any, field?: any) {
     if (typeof name === 'object') {
       field = name

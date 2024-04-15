@@ -18,8 +18,8 @@ declare module 'cordis' {
   interface Context {
     [Database.Tables]: Database.Tables
     [Database.Types]: Database.Types
-    database: Database<this>
-    model: Database<this>
+    database: Database<this[typeof Database.Tables], this[typeof Database.Types], this>
+    model: Database<this[typeof Database.Tables], this[typeof Database.Types], this>
   }
 }
 
