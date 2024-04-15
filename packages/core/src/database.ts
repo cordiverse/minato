@@ -342,18 +342,21 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             let driver = drivers.get(original)
             if (!driver) {
               let session: any
+              let _resolve: (value: any) => void
+              const sessionTask = new Promise((resolve) => _resolve = resolve)
               driver = new Proxy(original, {
                 get: (target, p, receiver) => {
+                  if (p === 'database') return database
                   if (p === 'session') return session
+                  if (p === '_ensureSession') return () => sessionTask
                   return Reflect.get(target, p, receiver)
-                },
-                set: (target, p, value, receiver) => {
-                  if (p === 'session') session = value
-                  return Reflect.set(target, p, value, receiver)
                 },
               })
               drivers.set(original, driver)
-              finalTasks.push(driver.withTransaction(() => initialTask))
+              finalTasks.push(driver.withTransaction((_session) => {
+                _resolve(session = _session)
+                return initialTask
+              }))
             }
             return driver
           }

@@ -411,10 +411,9 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
   }
 
-  async withTransaction(callback: () => Promise<void>) {
+  async withTransaction(callback: (session: any) => Promise<void>) {
     return await this.postgres.begin(async (conn) => {
-      this.session = conn
-      await callback()
+      await callback(conn)
       await conn.unsafe(`COMMIT`)
     })
   }

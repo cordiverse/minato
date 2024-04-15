@@ -228,7 +228,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     }
   }
 
-  #exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
+  _exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
     try {
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
@@ -242,7 +242,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   _all(sql: string, params: any = []) {
-    return this.#exec(sql, params, (stmt) => {
+    return this._exec(sql, params, (stmt) => {
       stmt.bind(params)
       const result: any[] = []
       while (stmt.step()) {
@@ -254,7 +254,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   _get(sql: string, params: any = []) {
-    return this.#exec(sql, params, stmt => stmt.getAsObject(params))
+    return this._exec(sql, params, stmt => stmt.getAsObject(params))
   }
 
   _export() {
@@ -263,7 +263,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   _run(sql: string, params: any = [], callback?: () => any) {
-    this.#exec(sql, params, stmt => stmt.run(params))
+    this._exec(sql, params, stmt => stmt.run(params))
     const result = callback?.()
     return result
   }
@@ -386,11 +386,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     return result
   }
 
-  async withTransaction(callback: (session: this) => Promise<void>) {
-    if (this._transactionTask) await this._transactionTask
+  async withTransaction(callback: () => Promise<void>) {
+    if (this._transactionTask) await this._transactionTask.catch(() => {})
     return this._transactionTask = new Promise<void>((resolve, reject) => {
       this._run('BEGIN TRANSACTION')
-      callback(this).then(
+      callback().then(
         () => resolve(this._run('COMMIT')),
         (e) => (this._run('ROLLBACK'), reject(e)),
       )

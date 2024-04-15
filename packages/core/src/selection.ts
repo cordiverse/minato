@@ -125,6 +125,7 @@ class Executable<S = any, T = any> {
 
   async execute(): Promise<T> {
     await this.driver.database.prepared()
+    await this.driver._ensureSession()
     return this.driver[this.type as any](this, ...this.args)
   }
 }
