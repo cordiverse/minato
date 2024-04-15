@@ -19,11 +19,11 @@ export namespace Driver {
 
   export type Cursor<K extends string = never> = K[] | CursorOptions<K>
 
-  export interface CursorOptions<K> {
+  export interface CursorOptions<K extends string> {
     limit?: number
     offset?: number
     fields?: K[]
-    sort?: Dict<Direction>
+    sort?: Dict<Direction, K>
   }
 
   export interface WriteResult {

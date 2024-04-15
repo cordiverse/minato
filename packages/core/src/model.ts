@@ -136,19 +136,18 @@ export namespace Field {
 export namespace Model {
   export type Migration<D = any> = (database: D) => Promise<void>
 
-  export interface Config<O = {}> {
+  export interface Config<K extends string = string> {
     callback?: Migration
-    // driver?: keyof any
     autoInc: boolean
-    primary: MaybeArray<Keys<O>>
-    unique: MaybeArray<Keys<O>>[]
+    primary: MaybeArray<K>
+    unique: MaybeArray<K>[]
     foreign: {
-      [K in keyof O]?: [string, string]
+      [P in K]?: [string, string]
     }
   }
 }
 
-export interface Model<S> extends Model.Config<S> {}
+export interface Model extends Model.Config {}
 
 export class Model<S = any> {
   fields: Field.Config<S> = {}
@@ -163,7 +162,7 @@ export class Model<S = any> {
     this.foreign = {}
   }
 
-  extend(fields: Field.Extension<S>, config?: Partial<Model.Config<S>>): void
+  extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
     const { primary, autoInc, unique = [] as [], foreign, callback } = config
 

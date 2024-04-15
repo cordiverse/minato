@@ -4,8 +4,17 @@ import { Eval } from './eval.ts'
 export type Values<S> = S[keyof S]
 
 export type Keys<O, T = any> = Values<{
-  [K in keyof O]: O[K] extends T | undefined ? K : never
+  [P in keyof O]: O[P] extends T | undefined ? P : never
 }> & string
+
+export type FlatKeys<O, T = any> = Keys<Flatten<O>, T>
+
+export type FlatPick<O, K extends FlatKeys<O>> = {
+  [P in string & keyof O as K extends P | `${P}.${any}` ? P : never]:
+    | P extends K
+    ? O[P]
+    : FlatPick<O[P], Extract<K extends `${any}.${infer R}` ? R : never, FlatKeys<O[P]>>>
+}
 
 export interface AtomicTypes {
   Number: number
@@ -21,7 +30,7 @@ export interface AtomicTypes {
 }
 
 export type Indexable = string | number
-export type Comparable = string | number | boolean | Date
+export type Comparable = string | number | boolean | bigint | Date
 
 type FlatWrap<S, A extends 0[], P extends string> = { [K in P]?: S }
   // rule out atomic types

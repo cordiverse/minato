@@ -1,6 +1,6 @@
-import { Dict, Intersect, makeArray, mapValues, MaybeArray, omit, valueMap } from 'cosmokit'
+import { Dict, makeArray, mapValues, MaybeArray, omit, valueMap } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { Flatten, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
+import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model } from './model.ts'
 import { Driver } from './driver.ts'
@@ -18,11 +18,9 @@ type TableType<S, T extends TableLike<S>> =
 export namespace Join1 {
   export type Input<S> = readonly Keys<S>[]
 
-  export type Output<S, U extends Input<S>> = Intersect<
-    | U extends readonly (infer K extends Keys<S>)[]
-    ? { [P in K]: TableType<S, P> }
-    : never
-  >
+  export type Output<S, U extends Input<S>> = {
+    [P in U[number]]: TableType<S, P>
+  }
 
   type Parameters<S, U extends Input<S>> =
     | U extends readonly [infer K extends Keys<S>, ...infer R]
@@ -111,7 +109,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await driver.prepare(name)
   }
 
-  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<S[K]>> = {}) {
+  extend<K extends Keys<S>, T extends Field.Extension<S[K], N>>(name: K, fields: T, config: Partial<Model.Config<Keys<T>>> = {}) {
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
@@ -234,22 +232,22 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   select<T>(table: Selection<T>, query?: Query<T>): Selection<T>
-  select<T extends Keys<S>>(table: T, query?: Query<S[T]>): Selection<S[T]>
+  select<K extends Keys<S>>(table: K, query?: Query<S[K]>): Selection<S[K]>
   select(table: any, query?: any) {
     return new Selection(this.getDriver(table), table, query)
   }
 
-  join<const U extends Join1.Input<S>>(
-    tables: U,
-    callback?: Join1.Predicate<S, U>,
+  join<const X extends Join1.Input<S>>(
+    tables: X,
+    callback?: Join1.Predicate<S, X>,
     optional?: boolean[],
-  ): Selection<Join1.Output<S, U>>
+  ): Selection<Join1.Output<S, X>>
 
-  join<const U extends Join2.Input<S>>(
-    tables: U,
-    callback?: Join2.Predicate<S, U>,
-    optional?: Dict<boolean, Keys<U>>,
-  ): Selection<Join2.Output<S, U>>
+  join<X extends Join2.Input<S>>(
+    tables: X,
+    callback?: Join2.Predicate<S, X>,
+    optional?: Dict<boolean, Keys<X>>,
+  ): Selection<Join2.Output<S, X>>
 
   join(tables: any, query?: any, optional?: any) {
     if (Array.isArray(tables)) {
@@ -271,22 +269,22 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
   }
 
-  async get<T extends Keys<S>, K extends Keys<S[T]>>(
-    table: T,
-    query: Query<S[T]>,
-    cursor?: Driver.Cursor<K>,
-  ): Promise<Pick<S[T], K>[]> {
+  async get<K extends Keys<S>, P extends FlatKeys<S[K]> = any>(
+    table: K,
+    query: Query<S[K]>,
+    cursor?: Driver.Cursor<P>,
+  ): Promise<FlatPick<S[K], P>[]> {
     return this.select(table, query).execute(cursor)
   }
 
-  async eval<T extends Keys<S>, U>(table: T, expr: Selection.Callback<S[T], U, true>, query?: Query<S[T]>): Promise<U> {
+  async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T, true>, query?: Query<S[K]>): Promise<T> {
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
-  async set<T extends Keys<S>>(
-    table: T,
-    query: Query<S[T]>,
-    update: Row.Computed<S[T], Update<S[T]>>,
+  async set<K extends Keys<S>>(
+    table: K,
+    query: Query<S[K]>,
+    update: Row.Computed<S[K], Update<S[K]>>,
   ): Promise<Driver.WriteResult> {
     const sel = this.select(table, query)
     if (typeof update === 'function') update = update(sel.row)
@@ -299,12 +297,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return await sel._action('set', update).execute()
   }
 
-  async remove<T extends Keys<S>>(table: T, query: Query<S[T]>): Promise<Driver.WriteResult> {
+  async remove<K extends Keys<S>>(table: K, query: Query<S[K]>): Promise<Driver.WriteResult> {
     const sel = this.select(table, query)
     return await sel._action('remove').execute()
   }
 
-  async create<T extends Keys<S>>(table: T, data: Partial<S[T]>): Promise<S[T]> {
+  async create<K extends Keys<S>>(table: K, data: Partial<S[K]>): Promise<S[K]> {
     const sel = this.select(table)
     const { primary, autoInc } = sel.model
     if (!autoInc) {
@@ -316,10 +314,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('create', sel.model.create(data)).execute()
   }
 
-  async upsert<T extends Keys<S>>(
-    table: T,
-    upsert: Row.Computed<S[T], Update<S[T]>[]>,
-    keys?: MaybeArray<Keys<Flatten<S[T]>, Indexable>>,
+  async upsert<K extends Keys<S>>(
+    table: K,
+    upsert: Row.Computed<S[K], Update<S[K]>[]>,
+    keys?: MaybeArray<FlatKeys<S[K], Indexable>>,
   ): Promise<Driver.WriteResult> {
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
@@ -329,7 +327,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   async withTransaction(callback: (database: this) => Promise<void>): Promise<void>
-  async withTransaction<T extends Keys<S>>(table: T, callback: (database: this) => Promise<void>): Promise<void>
+  async withTransaction<K extends Keys<S>>(table: K, callback: (database: this) => Promise<void>): Promise<void>
   async withTransaction(arg: any, ...args: any[]) {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
     const [table, callback] = typeof arg === 'string' ? [arg, ...args] : [null, arg, ...args]
@@ -352,7 +350,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await Promise.all(drivers.map(driver => driver.stop()))
   }
 
-  async drop<T extends Keys<S>>(table: T) {
+  async drop<K extends Keys<S>>(table: K) {
     await this.getDriver(table).drop(table)
   }
 

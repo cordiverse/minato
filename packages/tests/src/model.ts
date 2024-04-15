@@ -8,7 +8,7 @@ interface DType {
   num?: number
   double?: number
   decimal?: number
-  int64?: BigInt
+  int64?: bigint
   bool?: boolean
   list?: string[]
   array?: number[]

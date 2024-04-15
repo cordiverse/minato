@@ -3,7 +3,7 @@ import { Driver } from './driver.ts'
 import { Eval, executeEval } from './eval.ts'
 import { Model } from './model.ts'
 import { Query } from './query.ts'
-import { Keys, randomId, Row } from './utils.ts'
+import { FlatKeys, FlatPick, Flatten, Keys, randomId, Row } from './utils.ts'
 import { Type } from './type.ts'
 
 declare module './eval.ts' {
@@ -129,10 +129,10 @@ class Executable<S = any, T = any> {
   }
 }
 
-type FieldLike<S = any> = Keys<S> | Selection.Callback<S>
+type FieldLike<S = any> = FlatKeys<S> | Selection.Callback<S>
 
 type FieldType<S, T extends FieldLike<S>> =
-  | T extends Keys<S> ? S[T]
+  | T extends FlatKeys<S> ? Flatten<S>[T]
   : T extends Selection.Callback<S> ? Eval<ReturnType<T>>
   : never
 
@@ -199,12 +199,12 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return this
   }
 
-  groupBy<K extends Keys<S>>(fields: K | K[], query?: Selection.Callback<S, boolean>): Selection<Pick<S, K>>
-  groupBy<K extends Keys<S>, U extends Dict<FieldLike<S>>>(
+  groupBy<K extends FlatKeys<S>>(fields: K | readonly K[], query?: Selection.Callback<S, boolean>): Selection<FlatPick<S, K>>
+  groupBy<K extends FlatKeys<S>, U extends Dict<FieldLike<S>>>(
     fields: K | K[],
     extra?: U,
     query?: Selection.Callback<S, boolean>,
-  ): Selection<Pick<S, K> & FieldMap<S, U>>
+  ): Selection<FlatPick<S, K> & FieldMap<S, U>>
 
   groupBy<K extends Dict<FieldLike<S>>>(fields: K, query?: Selection.Callback<S, boolean>): Selection<FieldMap<S, K>>
   groupBy<K extends Dict<FieldLike<S>>, U extends Dict<FieldLike<S>>>(
@@ -227,7 +227,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return this
   }
 
-  project<K extends Keys<S>>(fields: K | K[]): Selection<Pick<S, K>>
+  project<K extends FlatKeys<S>>(fields: K | readonly K[]): Selection<FlatPick<S, K>>
   project<U extends Dict<FieldLike<S>>>(fields: U): Selection<FieldMap<S, U>>
   project(fields: Keys<S>[] | Dict<FieldLike<S>>) {
     this.args[0].fields = this.resolveFields(fields)
@@ -243,15 +243,15 @@ export class Selection<S = any> extends Executable<S, S[]> {
   evaluate(): Eval.Expr<S[], boolean>
   evaluate(callback?: any): any {
     const selection = new Selection(this.driver, this)
-    if (!callback) callback = (row) => Eval.array(Eval.object(row))
+    if (!callback) callback = (row: any) => Eval.array(Eval.object(row))
     const expr = this.resolveField(callback)
     if (expr['$']) defineProperty(expr, Type.kType, Type.Array(Type.fromTerm(expr)))
     return Eval.exec(selection._action('eval', expr))
   }
 
-  execute<K extends Keys<S> = Keys<S>>(cursor?: Driver.Cursor<K>): Promise<Pick<S, K>[]>
+  execute<K extends FlatKeys<S> = any>(cursor?: Driver.Cursor<K>): Promise<Extract<FlatPick<S, K>, S>[]>
   execute<T>(callback: Selection.Callback<S, T, true>): Promise<T>
-  execute(cursor?: any) {
+  async execute(cursor?: any) {
     if (typeof cursor === 'function') {
       const selection = new Selection(this.driver, this)
       return selection._action('eval', this.resolveField(cursor)).execute()
@@ -269,12 +269,13 @@ export class Selection<S = any> extends Executable<S, S[]> {
         this.orderBy(field as any, cursor.sort[field])
       }
     }
-    if (cursor.fields) {
-      return super.execute().then(
-        rows => rows.map(row => filterKeys(row as any, key => (cursor.fields as string[]).some(k => k === key || k.startsWith(`${key}.`)))),
-      )
-    }
-    return super.execute()
+    const rows = await super.execute()
+    if (!cursor.fields) return rows
+    return rows.map((row) => {
+      return filterKeys(row as any, key => {
+        return (cursor.fields as string[]).some(k => k === key || k.startsWith(`${key}.`))
+      })
+    })
   }
 }
 
