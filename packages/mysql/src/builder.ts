@@ -40,6 +40,13 @@ export class MySQLBuilder extends Builder {
       dump: value => isNullable(value) ? value : value ? 1 : 0,
     }
 
+    this.transformers['bigint'] = {
+      encode: value => `cast(${value} as char)`,
+      decode: value => `cast(${value} as bigint)`,
+      load: value => isNullable(value) ? value : BigInt(value),
+      dump: value => isNullable(value) ? value : `${value}`,
+    }
+
     this.transformers['binary'] = {
       encode: value => `to_base64(${value})`,
       decode: value => `from_base64(${value})`,

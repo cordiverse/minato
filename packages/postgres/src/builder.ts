@@ -99,6 +99,13 @@ export class PostgresBuilder extends Builder {
       load: value => isNullable(value) ? value : +value,
     }
 
+    this.transformers['bigint'] = {
+      encode: value => `cast(${value} as text)`,
+      decode: value => `cast(${value} as bigint)`,
+      load: value => isNullable(value) ? value : BigInt(value),
+      dump: value => isNullable(value) ? value : `${value}`,
+    }
+
     this.transformers['binary'] = {
       encode: value => `encode(${value}, 'base64')`,
       decode: value => `decode(${value}, 'base64')`,

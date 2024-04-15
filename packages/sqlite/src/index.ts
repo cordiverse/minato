@@ -196,16 +196,22 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       load: value => value ? value.split(',') : [],
     })
 
-    this.define<Date, number>({
+    this.define<Date, number | bigint>({
       types: ['date', 'time', 'timestamp'],
       dump: value => isNullable(value) ? value as any : +new Date(value),
-      load: value => isNullable(value) ? value : new Date(value),
+      load: value => isNullable(value) ? value : new Date(Number(value)),
     })
 
     this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : new Uint8Array(value),
       load: value => isNullable(value) ? value : Binary.fromSource(value),
+    })
+
+    this.define<number, number | bigint>({
+      types: Field.number as any,
+      dump: value => value,
+      load: value => isNullable(value) ? value : Number(value),
     })
   }
 
@@ -240,7 +246,8 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       stmt.bind(params)
       const result: any[] = []
       while (stmt.step()) {
-        result.push(stmt.getAsObject())
+        // @ts-ignore
+        result.push(stmt.getAsObject(null, { useBigInt: true }))
       }
       return result
     })
