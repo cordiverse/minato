@@ -1,4 +1,4 @@
-import { Awaitable, Dict, valueMap } from 'cosmokit'
+import { Awaitable, Dict, remove, valueMap } from 'cosmokit'
 import { Context, Logger } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
@@ -72,14 +72,15 @@ export abstract class Driver<T = any, C extends Context = Context> {
     ctx.on('ready', async () => {
       await Promise.resolve()
       await this.start()
-      ctx.model.drivers.default = this
+      ctx.model.drivers.push(this)
       ctx.model.refresh()
-      ctx.set('database', Object.create(ctx.model))
+      const database = Object.create(ctx.model)
+      database._driver = this
+      ctx.set('database', database)
     })
 
     ctx.on('dispose', async () => {
-      ctx.database = null as never
-      delete ctx.model.drivers.default
+      remove(ctx.model.drivers, this)
       await this.stop()
     })
   }

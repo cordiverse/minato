@@ -59,7 +59,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   static readonly Types = Symbol('minato.types')
 
   public tables: Dict<Model> = Object.create(null)
-  public drivers: Record<keyof any, any> = Object.create(null)
+  public drivers: Driver<any, C>[] = []
   public types: Dict<Field.Transform> = Object.create(null)
   public migrating = false
 
@@ -89,8 +89,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   private getDriver(table: string | Selection): Driver<any, C> {
     if (table instanceof Selection) return table.driver as any
     const model: Model = this.tables[table]
-    // if (!model?.driver) throw new Error(`cannot resolve table table "${table}"`)
-    return model?.driver as any ?? Object.values(this.drivers)[0]
+    if (!model) throw new Error(`cannot resolve table "${table}"`)
+    return model.ctx?.get('database')?._driver as any
   }
 
   private async prepare(name: string) {
@@ -112,7 +112,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
-      model.driver = this._driver
     }
     Object.entries(fields).forEach(([key, field]: [string, any]) => {
       const transformer = []
@@ -121,7 +120,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     })
     model.extend(fields, config)
     if (makeArray(model.primary).every(key => key in fields)) {
-      model.driver = this._driver
+      model.ctx = this[Context.origin]
     }
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
@@ -251,24 +250,26 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     optional?: Dict<boolean, Keys<X>>,
   ): Selection<Join2.Output<S, X>>
 
-  join(tables: any, query?: any, optional?: any) {
-    if (Array.isArray(tables)) {
-      const sel = new Selection(this.getDriver(tables[0]), Object.fromEntries(tables.map((name) => [name, this.select(name)])))
-      if (typeof query === 'function') {
-        sel.args[0].having = Eval.and(query(...tables.map(name => sel.row[name])))
-      }
-      sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
-      return this.select(sel)
-    } else {
-      const sel = new Selection(this.getDriver(Object.values(tables)[0] as any), valueMap(tables, (t: TableLike<S>) => {
-        return typeof t === 'string' ? this.select(t) : t
-      }))
-      if (typeof query === 'function') {
-        sel.args[0].having = Eval.and(query(sel.row))
-      }
-      sel.args[0].optional = optional
-      return this.select(sel)
+  join(tables: any, query = (...args: any[]) => Eval.and(), optional?: any) {
+    const oldTables = tables
+    if (Array.isArray(oldTables)) {
+      tables = Object.fromEntries(oldTables.map((name) => [name, this.select(name)]))
     }
+    const sels = valueMap(tables, (t: TableLike<S>) => {
+      return typeof t === 'string' ? this.select(t) : t
+    })
+    if (Object.keys(sels).length === 0) throw new Error('no tables to join')
+    const drivers = new Set(Object.values(sels).map(sel => sel.driver))
+    if (drivers.size !== 1) throw new Error('cannot join tables from different drivers')
+    const sel = new Selection(this.getDriver(Object.values(tables)[0] as any), sels)
+    if (Array.isArray(oldTables)) {
+      sel.args[0].having = Eval.and(query(...oldTables.map(name => sel.row[name])))
+      sel.args[0].optional = Object.fromEntries(oldTables.map((name, index) => [name, optional?.[index]]))
+    } else {
+      sel.args[0].having = Eval.and(query(sel.row))
+      sel.args[0].optional = optional
+    }
+    return this.select(sel)
   }
 
   async get<K extends Keys<S>, P extends FlatKeys<S[K]> = any>(
