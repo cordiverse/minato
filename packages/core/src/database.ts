@@ -58,15 +58,15 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   static readonly Tables = Symbol('minato.tables')
   static readonly Types = Symbol('minato.types')
 
-  // { [K in Keys<S>]: Model<S[K]> }
-  public tables: any = Object.create(null)
+  public tables: Dict<Model> = Object.create(null)
   public drivers: Record<keyof any, any> = Object.create(null)
   public types: Dict<Field.Transform> = Object.create(null)
   public migrating = false
+
+  private _driver: Driver<any, C> | undefined
+  private stashed = new Set<string>()
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   private migrateTasks: Dict<Promise<void>> = Object.create(null)
-
-  private stashed = new Set<string>()
 
   async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
     this.ctx.plugin(driver, args[0] as any)
@@ -86,12 +86,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
   }
 
-  private getDriver(table: any): Driver<any, C> {
-    // const model: Model = this.tables[name]
-    // if (model.driver) return this.drivers[model.driver]
-    const driver = Object.values(this.drivers)[0]
-    if (driver) driver.database = this
-    return driver
+  private getDriver(table: string | Selection): Driver<any, C> {
+    if (table instanceof Selection) return table.driver as any
+    const model: Model = this.tables[table]
+    // if (!model?.driver) throw new Error(`cannot resolve table table "${table}"`)
+    return model?.driver as any ?? Object.values(this.drivers)[0]
   }
 
   private async prepare(name: string) {
@@ -113,7 +112,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
-      // model.driver = config.driver
+      model.driver = this._driver
     }
     Object.entries(fields).forEach(([key, field]: [string, any]) => {
       const transformer = []
@@ -121,6 +120,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (typeof field === 'object') field.transformers = transformer
     })
     model.extend(fields, config)
+    if (makeArray(model.primary).every(key => key in fields)) {
+      model.driver = this._driver
+    }
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
   }
@@ -258,7 +260,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       sel.args[0].optional = Object.fromEntries(tables.map((name, index) => [name, optional?.[index]]))
       return this.select(sel)
     } else {
-      const sel = new Selection(this.getDriver(Object.values(tables)[0]), valueMap(tables, (t: TableLike<S>) => {
+      const sel = new Selection(this.getDriver(Object.values(tables)[0] as any), valueMap(tables, (t: TableLike<S>) => {
         return typeof t === 'string' ? this.select(t) : t
       }))
       if (typeof query === 'function') {
@@ -328,14 +330,15 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
   async withTransaction(callback: (database: this) => Promise<void>) {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
-    let driver: Driver<any, C>
-    let finalTask: Promise<void> | undefined
+    const drivers = new Map<Driver<any, C>, Driver<any, C>>()
+    const finalTasks: Promise<void>[] = []
     const database = new Proxy(this, {
       get: (target, p, receiver) => {
         if (p === kTransaction) return true
         if (p === 'getDriver') {
-          return (name: string) => {
+          return (name: any) => {
             const original = this.getDriver(name)
+            let driver = drivers.get(original)
             if (!driver) {
               let session: any
               driver = new Proxy(original, {
@@ -348,7 +351,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
                   return Reflect.set(target, p, value, receiver)
                 },
               })
-              finalTask = driver.withTransaction(() => initialTask)
+              drivers.set(original, driver)
+              finalTasks.push(driver.withTransaction(() => initialTask))
             }
             return driver
           }
@@ -360,7 +364,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       await Promise.resolve()
       await callback(database)
     })()
-    await initialTask.finally(() => finalTask)
+    await initialTask.finally(() => Promise.all(finalTasks))
   }
 
   async stopAll() {

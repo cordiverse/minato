@@ -74,8 +74,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
       await this.start()
       ctx.model.drivers.default = this
       ctx.model.refresh()
-      const database = Object.create(ctx.model)
-      ctx.database = database
+      ctx.set('database', Object.create(ctx.model))
     })
 
     ctx.on('dispose', async () => {
