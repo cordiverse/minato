@@ -51,7 +51,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   /** synchronize table schema */
   async prepare(table: string, dropKeys?: string[]) {
-    const columns = this.#all(`PRAGMA table_info(${escapeId(table)})`) as SQLiteFieldInfo[]
+    const columns = this._all(`PRAGMA table_info(${escapeId(table)})`) as SQLiteFieldInfo[]
     const model = this.model(table)
     const columnDefs: string[] = []
     const indexDefs: string[] = []
@@ -90,10 +90,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     // index definitions
     if (model.primary && !model.autoInc) {
-      indexDefs.push(`PRIMARY KEY (${this.#joinKeys(makeArray(model.primary))})`)
+      indexDefs.push(`PRIMARY KEY (${this._joinKeys(makeArray(model.primary))})`)
     }
     if (model.unique) {
-      indexDefs.push(...model.unique.map(keys => `UNIQUE (${this.#joinKeys(makeArray(keys))})`))
+      indexDefs.push(...model.unique.map(keys => `UNIQUE (${this._joinKeys(makeArray(keys))})`))
     }
     if (model.foreign) {
       indexDefs.push(...Object.entries(model.foreign).map(([key, value]) => {
@@ -104,7 +104,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     if (!columns.length) {
       this.logger.info('auto creating table %c', table)
-      this.#run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
+      this._run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
     } else if (shouldMigrate) {
       // preserve old columns
       for (const { name, type, notnull, pk, dflt_value: value } of columns) {
@@ -120,19 +120,19 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       const temp = table + '_temp'
       const fields = Object.keys(mapping).map(escapeId).join(', ')
       this.logger.info('auto migrating table %c', table)
-      this.#run(`CREATE TABLE ${escapeId(temp)} (${[...columnDefs, ...indexDefs].join(', ')})`)
+      this._run(`CREATE TABLE ${escapeId(temp)} (${[...columnDefs, ...indexDefs].join(', ')})`)
       try {
-        this.#run(`INSERT INTO ${escapeId(temp)} SELECT ${fields} FROM ${escapeId(table)}`)
-        this.#run(`DROP TABLE ${escapeId(table)}`)
+        this._run(`INSERT INTO ${escapeId(temp)} SELECT ${fields} FROM ${escapeId(table)}`)
+        this._run(`DROP TABLE ${escapeId(table)}`)
       } catch (error) {
-        this.#run(`DROP TABLE ${escapeId(temp)}`)
+        this._run(`DROP TABLE ${escapeId(temp)}`)
         throw error
       }
-      this.#run(`ALTER TABLE ${escapeId(temp)} RENAME TO ${escapeId(table)}`)
+      this._run(`ALTER TABLE ${escapeId(temp)} RENAME TO ${escapeId(table)}`)
     } else if (alter.length) {
       this.logger.info('auto updating table %c', table)
       for (const def of alter) {
-        this.#run(`ALTER TABLE ${escapeId(table)} ${def}`)
+        this._run(`ALTER TABLE ${escapeId(table)} ${def}`)
       }
     }
 
@@ -169,7 +169,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       this.db = new sqlite.Database(this.config.path, buffer)
       if (isBrowser) {
         window.addEventListener('beforeunload', this.beforeUnload = () => {
-          this.#export()
+          this._export()
         })
       }
     }
@@ -215,7 +215,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     })
   }
 
-  #joinKeys(keys?: string[]) {
+  _joinKeys(keys?: string[]) {
     return keys?.length ? keys.map(key => `\`${key}\``).join(', ') : '*'
   }
 
@@ -241,7 +241,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     }
   }
 
-  #all(sql: string, params: any = []) {
+  _all(sql: string, params: any = []) {
     return this.#exec(sql, params, (stmt) => {
       stmt.bind(params)
       const result: any[] = []
@@ -253,38 +253,38 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     })
   }
 
-  #get(sql: string, params: any = []) {
+  _get(sql: string, params: any = []) {
     return this.#exec(sql, params, stmt => stmt.getAsObject(params))
   }
 
-  #export() {
+  _export() {
     const data = this.db.export()
     return writeFile(this.config.path, data)
   }
 
-  #run(sql: string, params: any = [], callback?: () => any) {
+  _run(sql: string, params: any = [], callback?: () => any) {
     this.#exec(sql, params, stmt => stmt.run(params))
     const result = callback?.()
     return result
   }
 
   async drop(table: string) {
-    this.#run(`DROP TABLE ${escapeId(table)}`)
+    this._run(`DROP TABLE ${escapeId(table)}`)
   }
 
   async dropAll() {
     const tables = Object.keys(this.database.tables)
     for (const table of tables) {
-      this.#run(`DROP TABLE ${escapeId(table)}`)
+      this._run(`DROP TABLE ${escapeId(table)}`)
     }
   }
 
   async stats() {
     const stats: Driver.Stats = { size: this.db.size(), tables: {} }
-    const tableNames: { name: string }[] = this.#all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
-    const dbstats: { name: string; size: number }[] = this.#all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
+    const tableNames: { name: string }[] = this._all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
+    const dbstats: { name: string; size: number }[] = this._all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
     tableNames.forEach(tbl => {
-      stats.tables[tbl.name] = this.#get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)
+      stats.tables[tbl.name] = this._get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)
       stats.tables[tbl.name].size = dbstats.find(o => o.name === tbl.name)!.size
     })
     return stats
@@ -294,7 +294,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const { query, table } = sel
     const filter = this.sql.parseQuery(query)
     if (filter === '0') return {}
-    const result = this.#run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this.#get(`SELECT changes() AS count`))
+    const result = this._run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this._get(`SELECT changes() AS count`))
     return { matched: result.count, removed: result.count }
   }
 
@@ -303,7 +303,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const builder = new SQLiteBuilder(this, tables)
     const sql = builder.get(sel)
     if (!sql) return []
-    const rows = this.#all(sql)
+    const rows = this._all(sql)
     return rows.map(row => builder.load(row, model))
   }
 
@@ -311,11 +311,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const builder = new SQLiteBuilder(this, sel.tables)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
-    const { value } = this.#get(`SELECT ${output} AS value FROM ${inner}`)
+    const { value } = this._get(`SELECT ${output} AS value FROM ${inner}`)
     return builder.load(value, expr)
   }
 
-  #update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
+  _update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
     const { ref, table } = sel
     const model = this.model(table)
     executeUpdate(data, update, ref)
@@ -323,7 +323,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const assignment = updateFields.map((key) => `${escapeId(key)} = ?`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
     const filter = this.sql.parseQuery(query)
-    this.#run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key] ?? null))
+    this._run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key] ?? null))
   }
 
   async set(sel: Selection.Mutable, update: {}) {
@@ -335,22 +335,22 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const primaryFields = makeArray(primary)
     const data = await this.database.get(table as never, query)
     for (const row of data) {
-      this.#update(sel, primaryFields, updateFields, update, row)
+      this._update(sel, primaryFields, updateFields, update, row)
     }
     return { matched: data.length }
   }
 
-  #create(table: string, data: {}) {
+  _create(table: string, data: {}) {
     const model = this.model(table)
     data = this.sql.dump(data, model)
     const keys = Object.keys(data)
-    const sql = `INSERT INTO ${escapeId(table)} (${this.#joinKeys(keys)}) VALUES (${Array(keys.length).fill('?').join(', ')})`
-    return this.#run(sql, keys.map(key => data[key] ?? null), () => this.#get(`SELECT last_insert_rowid() AS id`))
+    const sql = `INSERT INTO ${escapeId(table)} (${this._joinKeys(keys)}) VALUES (${Array(keys.length).fill('?').join(', ')})`
+    return this._run(sql, keys.map(key => data[key] ?? null), () => this._get(`SELECT last_insert_rowid() AS id`))
   }
 
   async create(sel: Selection.Mutable, data: {}) {
     const { model, table } = sel
-    const { id } = this.#create(table, data)
+    const { id } = this._create(table, data)
     const { autoInc, primary } = model
     if (!autoInc || Array.isArray(primary)) return data as any
     return { ...data, [primary]: id }
@@ -375,10 +375,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       for (const item of chunk) {
         const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
         if (row) {
-          this.#update(sel, keys, updateFields, item, row)
+          this._update(sel, keys, updateFields, item, row)
           result.matched++
         } else {
-          this.#create(table, executeUpdate(model.create(), item, ref))
+          this._create(table, executeUpdate(model.create(), item, ref))
           result.inserted++
         }
       }
@@ -389,8 +389,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async withTransaction(callback: (session: this) => Promise<void>) {
     if (this._transactionTask) await this._transactionTask
     return this._transactionTask = new Promise<void>((resolve, reject) => {
-      this.#run('BEGIN TRANSACTION')
-      callback(this).then(() => resolve(this.#run('COMMIT')), (e) => (this.#run('ROLLBACK'), reject(e)))
+      this._run('BEGIN TRANSACTION')
+      callback(this).then(
+        () => resolve(this._run('COMMIT')),
+        (e) => (this._run('ROLLBACK'), reject(e)),
+      )
     })
   }
 }

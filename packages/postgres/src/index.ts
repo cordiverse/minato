@@ -411,16 +411,10 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
   }
 
-  async withTransaction(callback: (session: this) => Promise<void>) {
+  async withTransaction(callback: () => Promise<void>) {
     return await this.postgres.begin(async (conn) => {
-      const driver = new Proxy(this, {
-        get(target, p, receiver) {
-          if (p === 'session') return conn
-          else return Reflect.get(target, p, receiver)
-        },
-      })
-
-      await callback(driver)
+      this.session = conn
+      await callback()
       await conn.unsafe(`COMMIT`)
     })
   }

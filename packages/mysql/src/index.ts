@@ -488,22 +488,18 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     return { inserted: records - result.changedRows, matched: result.changedRows, modified: result.affectedRows - records }
   }
 
-  async withTransaction(callback: (session: this) => Promise<void>) {
+  async withTransaction(callback: () => Promise<void>) {
     return new Promise<void>((resolve, reject) => {
       this.pool.getConnection((err, conn) => {
+        this.session = conn
         if (err) {
           this.logger.warn('getConnection failed: ', err)
           return
         }
-        const driver = new Proxy(this, {
-          get(target, p, receiver) {
-            if (p === 'session') return conn
-            else return Reflect.get(target, p, receiver)
-          },
-        })
-        conn.beginTransaction(() => callback(driver)
-          .then(() => conn.commit(() => resolve()), (e) => conn.rollback(() => reject(e)))
-          .finally(() => conn.release()))
+        conn.beginTransaction(() => callback().then(
+          () => conn.commit(() => resolve()),
+          (e) => conn.rollback(() => reject(e)),
+        ).finally(() => conn.release()))
       })
     })
   }

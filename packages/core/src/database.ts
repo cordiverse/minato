@@ -326,22 +326,41 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return await sel._action('upsert', upsert, keys).execute()
   }
 
-  async withTransaction(callback: (database: this) => Promise<void>): Promise<void>
-  async withTransaction<K extends Keys<S>>(table: K, callback: (database: this) => Promise<void>): Promise<void>
-  async withTransaction(arg: any, ...args: any[]) {
+  async withTransaction(callback: (database: this) => Promise<void>) {
     if (this[kTransaction]) throw new Error('nested transactions are not supported')
-    const [table, callback] = typeof arg === 'string' ? [arg, ...args] : [null, arg, ...args]
-    const driver = this.getDriver(table)
-    return await driver.withTransaction(async (session) => {
-      const database = new Proxy(this, {
-        get(target, p, receiver) {
-          if (p === kTransaction) return true
-          else if (p === 'getDriver') return () => session
-          else return Reflect.get(target, p, receiver)
-        },
-      })
-      await callback(database)
+    let driver: Driver<any, C>
+    let finalTask: Promise<void> | undefined
+    const database = new Proxy(this, {
+      get: (target, p, receiver) => {
+        if (p === kTransaction) return true
+        if (p === 'getDriver') {
+          return (name: string) => {
+            const original = this.getDriver(name)
+            if (!driver) {
+              let session: any
+              driver = new Proxy(original, {
+                get: (target, p, receiver) => {
+                  if (p === 'session') return session
+                  return Reflect.get(target, p, receiver)
+                },
+                set: (target, p, value, receiver) => {
+                  if (p === 'session') session = value
+                  return Reflect.set(target, p, value, receiver)
+                },
+              })
+              finalTask = driver.withTransaction(() => initialTask)
+            }
+            return driver
+          }
+        }
+        return Reflect.get(target, p, receiver)
+      },
     })
+    const initialTask = (async () => {
+      await Promise.resolve()
+      await callback(database)
+    })()
+    await initialTask.finally(() => finalTask)
   }
 
   async stopAll() {

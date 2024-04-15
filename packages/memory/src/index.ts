@@ -4,7 +4,7 @@ import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Ru
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
   static name = 'memory'
 
-  #store: Dict<any[]> = {
+  _store: Dict<any[]> = {
     _fields: [],
   }
 
@@ -24,7 +24,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
 
   table(sel: string | Selection.Immutable | Dict<string | Selection.Immutable>, env: any = {}): any[] {
     if (typeof sel === 'string') {
-      return this.#store[sel] ||= []
+      return this._store[sel] ||= []
     }
 
     if (!(sel instanceof Selection)) {
@@ -91,11 +91,11 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
   }
 
   async drop(table: string) {
-    delete this.#store[table]
+    delete this._store[table]
   }
 
   async dropAll() {
-    this.#store = { _fields: [] }
+    this._store = { _fields: [] }
   }
 
   async stats() {
@@ -126,9 +126,9 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
   async remove(sel: Selection.Mutable) {
     const { ref, query, table } = sel
     const data = this.table(table)
-    this.#store[table] = data.filter(row => !executeQuery(row, query, ref))
+    this._store[table] = data.filter(row => !executeQuery(row, query, ref))
     this.$save(table)
-    const count = data.length - this.#store[table].length
+    const count = data.length - this._store[table].length
     return { removed: count, matched: count }
   }
 
@@ -137,10 +137,10 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     const { primary, autoInc } = model
     const store = this.table(table)
     if (!Array.isArray(primary) && autoInc && !(primary in data)) {
-      let meta = this.#store._fields.find(row => row.table === table && row.field === primary)
+      let meta = this._store._fields.find(row => row.table === table && row.field === primary)
       if (!meta) {
         meta = { table, field: primary, autoInc: 0 }
-        this.#store._fields.push(meta)
+        this._store._fields.push(meta)
       }
       meta.autoInc += 1
       data[primary] = meta.autoInc
@@ -185,10 +185,10 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     return res
   }
 
-  async withTransaction(callback: (session: this) => Promise<void>) {
-    const data = clone(this.#store)
-    await callback(this).then(undefined, (e) => {
-      this.#store = data
+  async withTransaction(callback: () => Promise<void>) {
+    const data = clone(this._store)
+    await callback().catch((e) => {
+      this._store = data
       throw e
     })
   }

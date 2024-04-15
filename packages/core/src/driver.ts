@@ -59,7 +59,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract remove(sel: Selection.Mutable): Promise<Driver.WriteResult>
   abstract create(sel: Selection.Mutable, data: any): Promise<any>
   abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
-  abstract withTransaction(callback: (driver: this) => Promise<void>): Promise<void>
+  abstract withTransaction(callback: () => Promise<void>): Promise<void>
 
   public database: Database<any, any, C>
   public logger: Logger
