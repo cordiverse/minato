@@ -115,12 +115,26 @@ export abstract class Driver<T = any, C extends Context = Context> {
     return model
   }
 
-  async migrate(name: string, hooks: MigrationHooks) {
-    const database = Object.create(this.database)
+  protected async migrate(name: string, hooks: MigrationHooks) {
+    const database = new Proxy(this.database, {
+      get: (target, p, receiver) => {
+        if (p === 'migrating') return true
+        if (p === 'getDriver') {
+          return (name: any) => {
+            const driver = Reflect.get(target, p, receiver).call(target, name)
+            return new Proxy(driver, {
+              get: (target, p, receiver) => {
+                if (p === 'database') return database
+                return Reflect.get(target, p, receiver)
+              },
+            })
+          }
+        }
+        return Reflect.get(target, p, receiver)
+      },
+    })
     const model = this.model(name)
-    database.migrating = true
-    if (this.database.migrating) await database.migrateTasks[name]
-    database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
+    await (database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
       return Promise.all([...model.migrations].map(async ([migrate, keys]) => {
         try {
           if (!hooks.before(keys)) return
@@ -130,7 +144,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
           hooks.error(reason)
         }
       }))
-    }).then(hooks.finalize).catch(hooks.error)
+    }).then(hooks.finalize).catch(hooks.error))
   }
 
   define<S, T>(converter: Driver.Transformer<S, T>) {

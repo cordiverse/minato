@@ -217,7 +217,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     ])
 
     const $unset = {}
-    this.migrate(table, {
+    await this.migrate(table, {
       error: this.logger.warn,
       before: () => true,
       after: keys => keys.forEach(key => $unset[key] = ''),

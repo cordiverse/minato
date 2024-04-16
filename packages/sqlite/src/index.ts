@@ -138,7 +138,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     if (dropKeys) return
     dropKeys = []
-    this.migrate(table, {
+    await this.migrate(table, {
       error: this.logger.warn,
       before: keys => keys.every(key => columns.some(({ name }) => name === key)),
       after: keys => dropKeys!.push(...keys),

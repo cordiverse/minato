@@ -61,12 +61,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   public tables: Dict<Model> = Object.create(null)
   public drivers: Driver<any, C>[] = []
   public types: Dict<Field.Transform> = Object.create(null)
-  public migrating = false
+  private migrating = false
 
   private _driver: Driver<any, C> | undefined
   private stashed = new Set<string>()
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
-  private migrateTasks: Dict<Promise<void>> = Object.create(null)
+  public migrateTasks: Dict<Promise<void>> = Object.create(null)
 
   async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
     this.ctx.plugin(driver, args[0] as any)
@@ -80,10 +80,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   async prepared() {
+    if (this.migrating) return
     await Promise.all(Object.values(this.prepareTasks))
-    if (!this.migrating) {
-      await Promise.all(Object.values(this.migrateTasks))
-    }
   }
 
   private getDriver(table: string | Selection): Driver<any, C> {

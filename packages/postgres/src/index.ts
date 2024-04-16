@@ -245,9 +245,8 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       await this.query(`ALTER TABLE ${escapeId(name)} ${operations.join(', ')}`)
     }
 
-    // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
-    this.migrate(name, {
+    await this.migrate(name, {
       error: this.logger.warn,
       before: keys => keys.every(key => columns.some(info => info.column_name === key)),
       after: keys => dropKeys.push(...keys),

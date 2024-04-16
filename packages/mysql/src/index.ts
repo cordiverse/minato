@@ -246,7 +246,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
-    this.migrate(name, {
+    await this.migrate(name, {
       error: this.logger.warn,
       before: keys => keys.every(key => columns.some(info => info.COLUMN_NAME === key)),
       after: keys => dropKeys.push(...keys),
