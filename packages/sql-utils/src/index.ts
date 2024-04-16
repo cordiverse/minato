@@ -65,8 +65,6 @@ export class Builder {
   protected modifiedTable?: string
   protected transformers: Dict<Transformer> = Object.create(null)
 
-  protected readonly _timezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
-
   constructor(protected driver: Driver, tables?: Dict<Model>) {
     this.state.tables = tables
 
@@ -167,13 +165,6 @@ export class Builder {
 
       // typecast
       $literal: ([value, type]) => this.escape(value, type as any),
-      $number: (arg) => {
-        const value = this.parseEval(arg)
-        const type = Type.fromTerm(arg)
-        const res = type.type === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._timezone}', '+0:00'))`
-          : ['timestamp', 'date'].includes(type.type!) ? `unix_timestamp(convert_tz(${value}, '${this._timezone}', '+0:00'))` : `(0+${value})`
-        return this.asEncoded(`ifnull(${res}, 0)`, false)
-      },
 
       // aggregation
       $sum: (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`),

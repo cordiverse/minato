@@ -6,6 +6,7 @@ export interface Compat {
   maria?: boolean
   maria105?: boolean
   mysql57?: boolean
+  timezone?: string
 }
 
 export class MySQLBuilder extends Builder {
@@ -23,15 +24,27 @@ export class MySQLBuilder extends Builder {
     '\\': '\\\\',
   }
 
+  readonly _localTimezone = `+${(new Date()).getTimezoneOffset() / -60}:00`.replace('+-', '-')
+  readonly _dbTimezone: string
+
   prequeries: string[] = []
 
   constructor(protected driver: Driver, tables?: Dict<Model>, private compat: Compat = {}) {
     super(driver, tables)
+    this._dbTimezone = compat.timezone ?? 'SYSTEM'
 
     this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
     this.evalOperators.$min = (expr) => this.createAggr(expr, value => `min(${value})`, undefined, value => `minato_cfunc_min(${value})`)
     this.evalOperators.$max = (expr) => this.createAggr(expr, value => `max(${value})`, undefined, value => `minato_cfunc_max(${value})`)
+
+    this.evalOperators.$number = (arg) => {
+      const value = this.parseEval(arg)
+      const type = Type.fromTerm(arg)
+      const res = type.type === 'time' ? `unix_timestamp(convert_tz(addtime('1970-01-01 00:00:00', ${value}), '${this._localTimezone}', '${this._dbTimezone}'))`
+        : ['timestamp', 'date'].includes(type.type!) ? `unix_timestamp(convert_tz(${value}, '${this._localTimezone}', '${this._dbTimezone}'))` : `(0+${value})`
+      return this.asEncoded(`ifnull(${res}, 0)`, false)
+    }
 
     this.transformers['boolean'] = {
       encode: value => `if(${value}=b'1', 1, 0)`,

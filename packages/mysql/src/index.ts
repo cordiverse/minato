@@ -72,13 +72,15 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       ...this.config,
     })
 
-    const version = Object.values((await this.query(`SELECT version()`))[0])[0] as string
+    const [version, timezone] = Object.values((await this.query(`SELECT version(), @@GLOBAL.time_zone`))[0]) as string[]
     // https://jira.mariadb.org/browse/MDEV-30623
     this._compat.maria = version.includes('MariaDB')
     // https://jira.mariadb.org/browse/MDEV-26506
     this._compat.maria105 = !!version.match(/10.5.\d+-MariaDB/)
     // For json_table
     this._compat.mysql57 = !!version.match(/5.7.\d+/)
+
+    this._compat.timezone = timezone
 
     if (this._compat.mysql57 || this._compat.maria) {
       await this._setupCompatFunctions()
