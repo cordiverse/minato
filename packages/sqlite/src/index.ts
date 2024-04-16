@@ -303,7 +303,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const builder = new SQLiteBuilder(this, tables)
     const sql = builder.get(sel)
     if (!sql) return []
-    const rows = this._all(sql)
+    const rows: any[] = this._all(sql)
     return rows.map(row => builder.load(row, model))
   }
 

@@ -44,8 +44,6 @@ export namespace Join2 {
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
 }
 
-const kTransaction = Symbol('transaction')
-
 export namespace Database {
   export interface Tables {}
 
@@ -57,11 +55,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   static [Service.immediate] = true
   static readonly Tables = Symbol('minato.tables')
   static readonly Types = Symbol('minato.types')
+  static readonly transact = Symbol('minato.transact')
+  static readonly migrate = Symbol('minato.migrate')
 
   public tables: Dict<Model> = Object.create(null)
   public drivers: Driver<any, C>[] = []
   public types: Dict<Field.Transform> = Object.create(null)
-  private migrating = false
 
   private _driver: Driver<any, C> | undefined
   private stashed = new Set<string>()
@@ -80,7 +79,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   async prepared() {
-    if (this.migrating) return
+    if (this[Database.migrate]) return
     await Promise.all(Object.values(this.prepareTasks))
   }
 
@@ -259,7 +258,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (Object.keys(sels).length === 0) throw new Error('no tables to join')
     const drivers = new Set(Object.values(sels).map(sel => sel.driver))
     if (drivers.size !== 1) throw new Error('cannot join tables from different drivers')
-    const sel = new Selection(this.getDriver(Object.values(tables)[0] as any), sels)
+    const sel = new Selection([...drivers][0], sels)
     if (Array.isArray(oldTables)) {
       sel.args[0].having = Eval.and(query(...oldTables.map(name => sel.row[name])))
       sel.args[0].optional = Object.fromEntries(oldTables.map((name, index) => [name, optional?.[index]]))
@@ -327,40 +326,55 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return await sel._action('upsert', upsert, keys).execute()
   }
 
-  async withTransaction(callback: (database: this) => Promise<void>) {
-    if (this[kTransaction]) throw new Error('nested transactions are not supported')
+  makeProxy(marker: any, getDriver?: (driver: Driver<any, C>, database: this) => Driver<any, C>) {
     const drivers = new Map<Driver<any, C>, Driver<any, C>>()
-    const finalTasks: Promise<void>[] = []
     const database = new Proxy(this, {
       get: (target, p, receiver) => {
-        if (p === kTransaction) return true
-        if (p === 'getDriver') {
-          return (name: any) => {
-            const original = this.getDriver(name)
-            let driver = drivers.get(original)
-            if (!driver) {
-              let session: any
-              let _resolve: (value: any) => void
-              const sessionTask = new Promise((resolve) => _resolve = resolve)
-              driver = new Proxy(original, {
-                get: (target, p, receiver) => {
-                  if (p === 'database') return database
-                  if (p === 'session') return session
-                  if (p === '_ensureSession') return () => sessionTask
-                  return Reflect.get(target, p, receiver)
-                },
-              })
-              drivers.set(original, driver)
-              finalTasks.push(driver.withTransaction((_session) => {
-                _resolve(session = _session)
-                return initialTask
-              }))
-            }
-            return driver
+        if (p === marker) return true
+        if (p !== 'getDriver') return Reflect.get(target, p, receiver)
+        return (name: any) => {
+          const original = this.getDriver(name)
+          let driver = drivers.get(original)
+          if (!driver) {
+            driver = getDriver?.(original, database) ?? new Proxy(original, {
+              get: (target, p, receiver) => {
+                if (p === 'database') return database
+                return Reflect.get(target, p, receiver)
+              },
+            })
+            drivers.set(original, driver)
           }
+          return driver
         }
-        return Reflect.get(target, p, receiver)
       },
+    })
+    return database
+  }
+
+  withTransaction(callback: (database: this) => Promise<void>) {
+    return this.transact(callback)
+  }
+
+  async transact(callback: (database: this) => Promise<void>) {
+    if (this[Database.transact]) throw new Error('nested transactions are not supported')
+    const finalTasks: Promise<void>[] = []
+    const database = this.makeProxy(Database.transact, (driver) => {
+      let session: any
+      let _resolve: (value: any) => void
+      const sessionTask = new Promise((resolve) => _resolve = resolve)
+      driver = new Proxy(driver, {
+        get: (target, p, receiver) => {
+          if (p === 'database') return database
+          if (p === 'session') return session
+          if (p === '_ensureSession') return () => sessionTask
+          return Reflect.get(target, p, receiver)
+        },
+      })
+      finalTasks.push(driver.withTransaction((_session) => {
+        _resolve(session = _session)
+        return initialTask
+      }))
+      return driver
     })
     const initialTask = (async () => {
       await Promise.resolve()
@@ -370,16 +384,16 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   async stopAll() {
-    const drivers = Object.values(this.drivers)
-    this.drivers = Object.create(null)
-    await Promise.all(drivers.map(driver => driver.stop()))
+    await Promise.all(this.drivers.splice(0, Infinity).map(driver => driver.stop()))
   }
 
   async drop<K extends Keys<S>>(table: K) {
+    if (this[Database.transact]) throw new Error('cannot drop table in transaction')
     await this.getDriver(table).drop(table)
   }
 
   async dropAll() {
+    if (this[Database.transact]) throw new Error('cannot drop table in transaction')
     await Promise.all(Object.values(this.drivers).map(driver => driver.dropAll()))
   }
 

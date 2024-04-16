@@ -116,23 +116,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
   }
 
   protected async migrate(name: string, hooks: MigrationHooks) {
-    const database = new Proxy(this.database, {
-      get: (target, p, receiver) => {
-        if (p === 'migrating') return true
-        if (p === 'getDriver') {
-          return (name: any) => {
-            const driver = Reflect.get(target, p, receiver).call(target, name)
-            return new Proxy(driver, {
-              get: (target, p, receiver) => {
-                if (p === 'database') return database
-                return Reflect.get(target, p, receiver)
-              },
-            })
-          }
-        }
-        return Reflect.get(target, p, receiver)
-      },
-    })
+    const database = this.database.makeProxy(Database.migrate)
     const model = this.model(name)
     await (database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
       return Promise.all([...model.migrations].map(async ([migrate, keys]) => {
