@@ -411,10 +411,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   }
 
   async withTransaction(callback: (session: any) => Promise<void>) {
-    return await this.postgres.begin(async (conn) => {
-      await callback(conn)
-      await conn.unsafe(`COMMIT`)
-    })
+    return this.postgres.begin((conn) => callback(conn))
   }
 
   private getTypeDef(field: Field & { autoInc?: boolean }) {
