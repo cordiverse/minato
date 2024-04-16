@@ -15,6 +15,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   private builder: Builder = new Builder(this, [])
   private session?: ClientSession
+  private _replSet: boolean = true
   private _createTasks: Dict<Promise<void>> = {}
 
   private connectionStringFromConfig() {
@@ -45,6 +46,10 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       'writeConcern',
     ]))
     this.db = this.client.db(this.config.database)
+
+    await this.client.withSession((session) => session.withTransaction(
+      () => this.db.collection('_fields').findOne({}, { session }),
+    )).catch(() => this._replSet = false)
 
     this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
@@ -217,7 +222,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     ])
 
     const $unset = {}
-    this.migrate(table, {
+    await this.migrate(table, {
       error: this.logger.warn,
       before: () => true,
       after: keys => keys.forEach(key => $unset[key] = ''),
@@ -461,25 +466,15 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     }
   }
 
-  async withTransaction(callback: (session: this) => Promise<void>) {
-    await this.client.withSession(async (session) => {
-      const driver = new Proxy(this, {
-        get(target, p, receiver) {
-          if (p === 'session') return session
-          else return Reflect.get(target, p, receiver)
-        },
-      })
-      await session.withTransaction(async () => callback(driver)).catch(async e => {
-        if (e instanceof MongoError && e.code === 20 && e.message.includes('Transaction numbers')) {
-          this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
+  async withTransaction(callback: (session: any) => Promise<void>) {
+    if (this._replSet) {
+      await this.client.withSession((session) => session.withTransaction(() => callback(session)))
+    } else {
+      this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
 Convert to replicaSet to enable the feature.
 See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
-          await callback(this)
-          return
-        }
-        throw e
-      })
-    })
+      await callback(undefined)
+    }
   }
 }
 

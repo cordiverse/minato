@@ -245,9 +245,8 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       await this.query(`ALTER TABLE ${escapeId(name)} ${operations.join(', ')}`)
     }
 
-    // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
-    this.migrate(name, {
+    await this.migrate(name, {
       error: this.logger.warn,
       before: keys => keys.every(key => columns.some(info => info.column_name === key)),
       after: keys => dropKeys.push(...keys),
@@ -411,18 +410,8 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
   }
 
-  async withTransaction(callback: (session: this) => Promise<void>) {
-    return await this.postgres.begin(async (conn) => {
-      const driver = new Proxy(this, {
-        get(target, p, receiver) {
-          if (p === 'session') return conn
-          else return Reflect.get(target, p, receiver)
-        },
-      })
-
-      await callback(driver)
-      await conn.unsafe(`COMMIT`)
-    })
+  async withTransaction(callback: (session: any) => Promise<void>) {
+    return this.postgres.begin((conn) => callback(conn))
   }
 
   private getTypeDef(field: Field & { autoInc?: boolean }) {

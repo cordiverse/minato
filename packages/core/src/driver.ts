@@ -1,4 +1,4 @@
-import { Awaitable, Dict, valueMap } from 'cosmokit'
+import { Awaitable, Dict, remove, valueMap } from 'cosmokit'
 import { Context, Logger } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
@@ -59,7 +59,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract remove(sel: Selection.Mutable): Promise<Driver.WriteResult>
   abstract create(sel: Selection.Mutable, data: any): Promise<any>
   abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
-  abstract withTransaction(callback: (driver: this) => Promise<void>): Promise<void>
+  abstract withTransaction(callback: (session?: any) => Promise<void>): Promise<void>
 
   public database: Database<any, any, C>
   public logger: Logger
@@ -72,15 +72,15 @@ export abstract class Driver<T = any, C extends Context = Context> {
     ctx.on('ready', async () => {
       await Promise.resolve()
       await this.start()
-      ctx.model.drivers.default = this
+      ctx.model.drivers.push(this)
       ctx.model.refresh()
       const database = Object.create(ctx.model)
-      ctx.database = database
+      database._driver = this
+      ctx.set('database', database)
     })
 
     ctx.on('dispose', async () => {
-      ctx.database = null as never
-      delete ctx.model.drivers.default
+      remove(ctx.model.drivers, this)
       await this.stop()
     })
   }
@@ -115,12 +115,10 @@ export abstract class Driver<T = any, C extends Context = Context> {
     return model
   }
 
-  async migrate(name: string, hooks: MigrationHooks) {
-    const database = Object.create(this.database)
+  protected async migrate(name: string, hooks: MigrationHooks) {
+    const database = this.database.makeProxy(Database.migrate)
     const model = this.model(name)
-    database.migrating = true
-    if (this.database.migrating) await database.migrateTasks[name]
-    database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
+    await (database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
       return Promise.all([...model.migrations].map(async ([migrate, keys]) => {
         try {
           if (!hooks.before(keys)) return
@@ -130,12 +128,14 @@ export abstract class Driver<T = any, C extends Context = Context> {
           hooks.error(reason)
         }
       }))
-    }).then(hooks.finalize).catch(hooks.error)
+    }).then(hooks.finalize).catch(hooks.error))
   }
 
   define<S, T>(converter: Driver.Transformer<S, T>) {
     converter.types.forEach(type => this.types[type] = converter)
   }
+
+  async _ensureSession() {}
 }
 
 export interface MigrationHooks {

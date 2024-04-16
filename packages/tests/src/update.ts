@@ -413,6 +413,13 @@ namespace OrmOperations {
       await expect(database.eval('temp2', row => $.max($.random()))).to.eventually.gt(0).lt(1)
     })
   }
+
+  export const drop = function Drop(database: Database<Tables>) {
+    it('make coverage happy', async () => {
+      // @ts-expect-error
+      await expect(database.drop('unknown')).to.be.rejected
+    })
+  }
 }
 
 export default OrmOperations

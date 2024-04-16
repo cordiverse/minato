@@ -246,7 +246,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
-    this.migrate(name, {
+    await this.migrate(name, {
       error: this.logger.warn,
       before: keys => keys.every(key => columns.some(info => info.COLUMN_NAME === key)),
       after: keys => dropKeys.push(...keys),
@@ -488,22 +488,17 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     return { inserted: records - result.changedRows, matched: result.changedRows, modified: result.affectedRows - records }
   }
 
-  async withTransaction(callback: (session: this) => Promise<void>) {
+  async withTransaction(callback: (session: any) => Promise<void>) {
     return new Promise<void>((resolve, reject) => {
       this.pool.getConnection((err, conn) => {
         if (err) {
           this.logger.warn('getConnection failed: ', err)
           return
         }
-        const driver = new Proxy(this, {
-          get(target, p, receiver) {
-            if (p === 'session') return conn
-            else return Reflect.get(target, p, receiver)
-          },
-        })
-        conn.beginTransaction(() => callback(driver)
-          .then(() => conn.commit(() => resolve()), (e) => conn.rollback(() => reject(e)))
-          .finally(() => conn.release()))
+        conn.beginTransaction(() => callback(conn).then(
+          () => conn.commit(() => resolve()),
+          (e) => conn.rollback(() => reject(e)),
+        ).finally(() => conn.release()))
       })
     })
   }

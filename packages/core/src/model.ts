@@ -1,4 +1,5 @@
 import { Binary, clone, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Context } from 'cordis'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Flatten, Keys, unravel } from './utils.ts'
 import { Type } from './type.ts'
@@ -150,6 +151,7 @@ export namespace Model {
 export interface Model extends Model.Config {}
 
 export class Model<S = any> {
+  ctx?: Context
   fields: Field.Config<S> = {}
   migrations = new Map<Model.Migration, string[]>()
 
