@@ -354,7 +354,10 @@ namespace OrmOperations {
 
   export const stats = function Stats(database: Database<Tables>) {
     it('basic support', async () => {
-      await expect(database.stats()).to.eventually.ok
+      const stats = await database.stats()
+      expect(stats.size).to.be.a('number')
+      expect(stats.tables['temp2'].count).to.be.a('number')
+      expect(stats.tables['temp2'].size).to.be.a('number')
     })
   }
 
