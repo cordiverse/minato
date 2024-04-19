@@ -136,6 +136,19 @@ namespace ObjectOperations {
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
 
+    it('using subquery', async () => {
+      const table = await setup(database)
+      table[0].meta = { a: '0', embed: { b: 114 } }
+      table[1].meta = { a: '1', embed: { b: 514, c: 'world' } }
+      await expect(database.set('object', row => $.eq(row.id, database.select('object', '0').evaluate(r => $.max(r.id))), {
+        meta: { a: { $: 'id' }, embed: { b: 114 } },
+      })).eventually.fulfilled
+      await expect(database.set('object', row => $.eq(row.id, database.select('object', '1').evaluate(r => $.max(r.id))), {
+        meta: { a: { $: 'id' }, 'embed.b': 514 },
+      })).eventually.fulfilled
+      await expect(database.get('object', {})).to.eventually.deep.equal(table)
+    })
+
     it('nested property', async () => {
       const table = await setup(database)
       table[0].meta = { a: '0', embed: { b: 114, c: 'hello' } }
