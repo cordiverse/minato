@@ -1,4 +1,4 @@
-import { clone, Dict, makeArray, noop, omit, pick, valueMap } from 'cosmokit'
+import { clone, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
 import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection, z } from 'minato'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
@@ -61,7 +61,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       }
       let index = row
       if (fields) {
-        index = valueMap(groupFields!, (expr) => executeEval({ ...env, [ref]: row }, expr))
+        index = mapValues(groupFields!, (expr) => executeEval({ ...env, [ref]: row }, expr))
       }
       let branch = branches.find((branch) => {
         if (!group || !groupFields) return false

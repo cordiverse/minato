@@ -1,4 +1,4 @@
-import { defineProperty, isNullable, valueMap } from 'cosmokit'
+import { defineProperty, isNullable, mapValues } from 'cosmokit'
 import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils.ts'
 import { Type } from './type.ts'
 import { Field } from './model.ts'
@@ -258,7 +258,7 @@ defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(ta
   ? table.map(data => executeAggr(expr, data)).length
   : Array.from(executeEval(table, expr)).length, Type.Number))
 
-operators.$object = (field, table) => valueMap(field, value => executeAggr(value, table))
+operators.$object = (field, table) => mapValues(field, value => executeAggr(value, table))
 Eval.object = (fields: any) => {
   if (fields.$model) {
     const modelFields: [string, Field][] = Object.entries(fields.$model.fields)
@@ -267,9 +267,9 @@ Eval.object = (fields: any) => {
       .filter(([, field]) => !field.deprecated)
       .filter(([path]) => path.startsWith(prefix))
       .map(([k]) => [k.slice(prefix.length), fields[k.slice(prefix.length)]]))
-    return Eval('object', fields, Type.Object(valueMap(fields, (value) => Type.fromTerm(value))))
+    return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value))))
   }
-  return Eval('object', fields, Type.Object(valueMap(fields, (value) => Type.fromTerm(value)))) as any
+  return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value)))) as any
 }
 
 Eval.array = unary('array', (expr, table) => Array.isArray(table)

@@ -1,4 +1,4 @@
-import { defineProperty, Dict, filterKeys, valueMap } from 'cosmokit'
+import { defineProperty, Dict, filterKeys, mapValues } from 'cosmokit'
 import { Driver } from './driver.ts'
 import { Eval, executeEval } from './eval.ts'
 import { Model } from './model.ts'
@@ -119,7 +119,7 @@ class Executable<S = any, T = any> {
       })
       return Object.fromEntries(entries)
     } else {
-      return valueMap(fields, field => this.resolveField(field))
+      return mapValues(fields, field => this.resolveField(field))
     }
   }
 

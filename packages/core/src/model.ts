@@ -1,4 +1,4 @@
-import { Binary, clone, isNullable, makeArray, MaybeArray, valueMap } from 'cosmokit'
+import { Binary, clone, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, isEvalExpr } from './eval.ts'
 import { Flatten, Keys, unravel } from './utils.ts'
@@ -312,7 +312,7 @@ export class Model<S = any> {
   getType(): Type<S>
   getType(key: string): Type | undefined
   getType(key?: string): Type | undefined {
-    this.type ??= Type.Object(valueMap(this.fields!, field => Type.fromField(field!))) as any
+    this.type ??= Type.Object(mapValues(this.fields!, field => Type.fromField(field!))) as any
     return key ? Type.getInner(this.type, key) : this.type
   }
 }
