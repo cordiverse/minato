@@ -1,5 +1,5 @@
-import { Binary, deepEqual, Dict, difference, isNullable, makeArray } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
+import { Binary, deepEqual, Dict, difference, isNullable, makeArray, mapValues } from 'cosmokit'
+import { Driver, Eval, executeUpdate, Field, hasSubquery, isEvalExpr, Selection, z } from 'minato'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -9,6 +9,15 @@ import enUS from './locales/en-US.yml'
 import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
 import { pathToFileURL } from 'node:url'
+
+function getValue(obj: any, path: string) {
+  if (path.includes('.')) {
+    const index = path.indexOf('.')
+    return getValue(obj[path.slice(0, index)] ?? {}, path.slice(index + 1))
+  } else {
+    return obj[path]
+  }
+}
 
 function getTypeDef({ deftype: type }: Field) {
   switch (type) {
@@ -333,11 +342,25 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     const primaryFields = makeArray(primary)
-    const data = await this.database.get(table as never, query)
-    for (const row of data) {
-      this._update(sel, primaryFields, updateFields, update, row)
+    if ((Object.keys(query).length === 1 && query.$expr) || hasSubquery(sel.query) || Object.values(update).some(x => hasSubquery(x))) {
+      const sel2 = this.database.select(table as never, query)
+      sel2.tables[sel.ref] = sel2.table[sel2.ref]
+      delete sel2.table[sel2.ref]
+      sel2.ref = sel.ref
+      const project = mapValues(update as any, (value, key) => () => (isEvalExpr(value) ? value : Eval.literal(value, model.getType(key))))
+      const rawUpsert = await sel2.project({ ...project, ...Object.fromEntries(primaryFields.map(x => [x, x])) } as any).execute()
+      const upsert = rawUpsert.map(row => ({
+        ...mapValues(update, (_, key) => getValue(row, key)),
+        ...Object.fromEntries(primaryFields.map(x => [x, getValue(row, x)])),
+      }))
+      return this.database.upsert(table, upsert)
+    } else {
+      const data = await this.database.get(table as never, query)
+      for (const row of data) {
+        this._update(sel, primaryFields, updateFields, update, row)
+      }
+      return { matched: data.length }
     }
-    return { matched: data.length }
   }
 
   _create(table: string, data: {}) {

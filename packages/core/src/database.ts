@@ -1,4 +1,4 @@
-import { Dict, makeArray, mapValues, MaybeArray, omit, valueMap } from 'cosmokit'
+import { defineProperty, Dict, makeArray, mapValues, MaybeArray, omit, valueMap } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
 import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
@@ -117,7 +117,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     })
     model.extend(fields, config)
     if (makeArray(model.primary).every(key => key in fields)) {
-      model.ctx = this[Context.origin]
+      defineProperty(model, 'ctx', this[Context.origin])
     }
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)

@@ -7,6 +7,18 @@ export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
+export function hasSubquery(value: any): boolean {
+  if (!isEvalExpr(value)) return false
+  return Object.entries(value).filter(([k]) => k.startsWith('$')).some(([k, v]) => {
+    if (isNullable(v) || isComparable(v)) return false
+    if (k === '$exec') return true
+    if (isEvalExpr(v)) return hasSubquery(v)
+    if (Array.isArray(v)) return v.some(x => hasSubquery(x))
+    if (typeof v === 'object') return Object.values(v).some(x => hasSubquery(x))
+    return false
+  })
+}
+
 export type Uneval<U, A extends boolean> =
   | U extends number ? Eval.Term<number, A>
   : U extends string ? Eval.Term<string, A>
@@ -41,9 +53,9 @@ export namespace Eval {
   export type Binary<S, R> = <T extends S, A extends boolean>(x: Term<T, A>, y: Term<T, A>) => Expr<R, A>
   export type Multi<S, R> = <T extends S, A extends boolean>(...args: Term<T, A>[]) => Expr<R, A>
 
-  export interface Aggr<S, R> {
-    <T extends S>(value: Term<T, false>): Expr<R, true>
-    <T extends S, A extends boolean>(value: Array<T, A>): Expr<R, A>
+  export interface Aggr<S> {
+    <T extends S>(value: Term<T, false>): Expr<T, true>
+    <T extends S, A extends boolean>(value: Array<T, A>): Expr<T, A>
   }
 
   export interface Branch<T, A extends boolean> {
@@ -105,14 +117,14 @@ export namespace Eval {
     not: Unary<boolean, boolean>
 
     // typecast
-    literal<T>(value: T, type?: Field.Type<T> | Field.NewType<T> | string): Expr<T, false>
+    literal<T>(value: T, type?: Type<T> | Field.Type<T> | Field.NewType<T> | string): Expr<T, false>
     number: Unary<any, number>
 
     // aggregation / json
-    sum: Aggr<number, number>
-    avg: Aggr<number, number>
-    max: Aggr<number, number> & Aggr<Date, Date>
-    min: Aggr<number, number> & Aggr<Date, Date>
+    sum: Aggr<number>
+    avg: Aggr<number>
+    max: Aggr<Comparable>
+    min: Aggr<Comparable>
     count(value: Any<false>): Expr<number, true>
     length(value: Any<false>): Expr<number, true>
     size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>

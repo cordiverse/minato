@@ -128,8 +128,7 @@ export class Builder {
       $random: (arg, group) => ({ $rand: {} }),
 
       $literal: (arg, group) => {
-        const converter = this.driver.types[arg[1] as any]
-        return converter ? converter.dump(arg[0]) : arg[0]
+        return { $literal: this.dump(arg[0], arg[1] ? Type.fromField(arg[1]) : undefined) }
       },
       $number: (arg, group) => {
         const value = this.eval(arg, group)
@@ -381,8 +380,8 @@ export class Builder {
     return predecessor.select(sel)
   }
 
-  public select(sel: Selection.Immutable) {
-    const { table, query } = sel
+  public select(sel: Selection.Immutable, update?: any) {
+    const { model, table, query } = sel
     if (typeof table === 'string') {
       this.table = table
       this.refVirtualKeys[sel.ref] = this.virtualKey = (sel.driver as MongoDriver).getVirtualKey(table)!
@@ -438,6 +437,16 @@ export class Builder {
         this.pipeline.push({ $group }, ...this.flushLookups(), { $project })
       }
       this.evalKey = $
+    } else if (sel.type === 'set') {
+      const $set = valueMap(update, (expr, key) => this.eval(isEvalExpr(expr) ? expr : Eval.literal(expr, model.getType(key))))
+      this.pipeline.push(...this.flushLookups(), { $set }, {
+        $merge: {
+          into: table,
+          on: '_id',
+          whenMatched: 'replace',
+          whenNotMatched: 'discard',
+        },
+      })
     }
     return this
   }
