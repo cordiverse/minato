@@ -90,6 +90,7 @@ export class Builder {
   public evalKey?: string
   private refTables: string[] = []
   private refVirtualKeys: Dict<string> = {}
+  private joinTables: Dict<string> = {}
   public aggrDefault: any
 
   private evalOperators: EvalOperators
@@ -102,6 +103,12 @@ export class Builder {
         if (typeof arg === 'string') {
           this.walkedKeys.push(this.getActualKey(arg))
           return this.recursivePrefix + this.getActualKey(arg)
+        }
+        const [joinRoot, ...rest] = (arg[1] as string).split('.')
+        if (this.tables.includes(`${arg[0]}.${joinRoot}`)) {
+          return this.recursivePrefix + rest.join('.')
+        } else if (`${arg[0]}.${joinRoot}` in this.joinTables) {
+          return `$$${this.joinTables[`${arg[0]}.${joinRoot}`]}.` + rest.join('.')
         } else if (this.tables.includes(arg[0])) {
           this.walkedKeys.push(this.getActualKey(arg[1]))
           return this.recursivePrefix + this.getActualKey(arg[1])
@@ -377,6 +384,7 @@ export class Builder {
   protected createSubquery(sel: Selection.Immutable) {
     const predecessor = new Builder(this.driver, Object.keys(sel.tables))
     predecessor.refTables = [...this.refTables, ...this.tables]
+    predecessor.joinTables = { ...this.joinTables }
     predecessor.refVirtualKeys = this.refVirtualKeys
     return predecessor.select(sel)
   }
@@ -392,7 +400,8 @@ export class Builder {
       this.table = predecessor.table
       this.pipeline.push(...predecessor.flushLookups(), ...predecessor.pipeline)
     } else {
-      for (const [name, subtable] of Object.entries(table)) {
+      const refs: Dict<string> = {}
+      Object.entries(table).forEach(([name, subtable], i) => {
         const predecessor = this.createSubquery(subtable)
         if (!predecessor) return
         if (!this.table) {
@@ -400,22 +409,35 @@ export class Builder {
           this.pipeline.push(...predecessor.flushLookups(), ...predecessor.pipeline, {
             $replaceRoot: { newRoot: { [name]: '$$ROOT' } },
           })
-          continue
+          refs[name] = subtable.ref
+          return
+        }
+        if (sel.args[0].having['$and'].length && i === Object.keys(table).length - 1) {
+          const thisTables = this.tables, thisJoinedTables = this.joinTables
+          this.tables = [...this.tables, `${sel.ref}.${name}`]
+          this.joinTables = {
+            ...this.joinTables,
+            [`${sel.ref}.${name}`]: sel.ref,
+            ...Object.fromEntries(Object.entries(refs).map(([name, ref]) => [`${sel.ref}.${name}`, ref])),
+          }
+          const $expr = this.eval(sel.args[0].having['$and'][0])
+          predecessor.pipeline.push(...this.flushLookups(), { $match: { $expr } })
+          this.tables = thisTables
+          this.joinTables = thisJoinedTables
         }
         const $lookup = {
           from: predecessor.table,
           as: name,
+          let: Object.fromEntries(Object.entries(refs).map(([name, ref]) => [ref, `$$ROOT.${name}`])),
           pipeline: predecessor.pipeline,
         }
         const $unwind = {
           path: `$${name}`,
+          preserveNullAndEmptyArrays: !!sel.args[0].optional?.[name],
         }
         this.pipeline.push({ $lookup }, { $unwind })
-      }
-      if (sel.args[0].having['$and'].length) {
-        const $expr = this.eval(sel.args[0].having)
-        this.pipeline.push(...this.flushLookups(), { $match: { $expr } })
-      }
+        refs[name] = subtable.ref
+      })
     }
 
     // where

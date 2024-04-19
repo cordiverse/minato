@@ -287,6 +287,24 @@ namespace SelectionTests {
       ).to.eventually.have.length(2)
     })
 
+    it('left join', async () => {
+      await expect(database
+        .join(['foo', 'bar'], (foo, bar) => $.eq(foo.value, bar.value), [false, true])
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          foo: { value: 0, id: 1 },
+          bar: { uid: 1, pid: 1, value: 0, id: 1 },
+        },
+        {
+          foo: { value: 0, id: 1 },
+          bar: { uid: 1, pid: 2, value: 0, id: 3 },
+        },
+        { foo: { value: 2, id: 2 }, bar: {} },
+        { foo: { value: 2, id: 3 }, bar: {} },
+      ])
+    })
+
     it('group', async () => {
       await expect(database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('foo', { count: row => $.sum(row.bar.uid) })
@@ -323,9 +341,9 @@ namespace SelectionTests {
           t1: database.select('bar').where(row => $.gt(row.pid, 1)),
           t2: database.select('bar').where(row => $.gt(row.uid, 1)),
           t3: database.select('bar').where(row => $.gt(row.id, 4)),
-        }, ({ t1, t2, t3 }) => $.gt($.add(t1.id, t2.id, t3.id), 0))
+        }, ({ t1, t2, t3 }) => $.gt($.add(t1.id, t2.id, t3.id), 14))
         .execute()
-      ).to.eventually.have.length(8)
+      ).to.eventually.have.length(4)
     })
 
     it('aggregate', async () => {
@@ -440,6 +458,21 @@ namespace SelectionTests {
         .join(['foo', 'bar'], (foo, bar) => $.lt(foo.value, sel(foo.id)))
         .execute()
       ).to.eventually.have.length(6)
+    })
+
+    it('selections', async () => {
+      const w = x => database.join(['bar', 'foo']).evaluate(row => $.add($.count(row.bar.id), -6, x))
+      await expect(database
+        .join({
+          t1: database.select('bar').where(row => $.gt(w(row.pid), 1)),
+          t2: database.select('bar').where(row => $.gt(row.uid, 1)),
+          t3: database.select('bar').where(row => $.gt(row.id, w(4))),
+        }, ({ t1, t2, t3 }) => $.gt($.add(t1.id, t2.id, w(t3.id)), 14))
+        .project({
+          val: row => $.add(row.t1.id, row.t2.id, w(row.t3.id)),
+        })
+        .execute()
+      ).to.eventually.have.length(4)
     })
 
     it('access from join', async () => {
