@@ -43,6 +43,7 @@ export namespace Type {
     else if (typeof value === 'number') return Number as any
     else if (typeof value === 'string') return String as any
     else if (typeof value === 'boolean') return Boolean as any
+    else if (typeof value === 'bigint') return fromField('bigint' as any)
     else if (value instanceof Date) return fromField('timestamp' as any)
     else if (Binary.is(value)) return fromField('binary' as any)
     else if (globalThis.Array.isArray(value)) return Array(value.length ? fromPrimitive(value[0]) : undefined) as any

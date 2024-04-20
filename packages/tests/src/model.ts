@@ -1,4 +1,4 @@
-import { valueMap, isNullable, deduplicate, omit } from 'cosmokit'
+import { mapValues, isNullable, deduplicate, omit } from 'cosmokit'
 import { $, Database, Field, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
@@ -434,7 +434,7 @@ namespace ModelOperations {
         .project({
           obj: row => $.object(row)
         })
-        .project(valueMap(database.tables['dtypes'].fields as any, (field, key) => row => row.obj[key]))
+        .project(mapValues(database.tables['dtypes'].fields as any, (field, key) => row => row.obj[key]))
         .execute()
       ).to.eventually.have.deep.members(table)
     })
@@ -543,7 +543,7 @@ namespace ModelOperations {
         .project({
           obj: row => $.object(row)
         })
-        .project(valueMap(database.tables['dobjects'].fields as any, (field, key) => row => row.obj[key]))
+        .project(mapValues(database.tables['dobjects'].fields as any, (field, key) => row => row.obj[key]))
         .execute()
       ).to.eventually.have.deep.members(table)
     })

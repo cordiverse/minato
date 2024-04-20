@@ -535,6 +535,17 @@ namespace SelectionTests {
           { x: [{ id: 3 }, { id: 4 }] },
         ])
     })
+
+    it('return aggregate', async () => {
+      await expect(database.select('foo')
+        .project({ x: row => database.select('bar', r => $.eq(r.pid, row.id)).evaluate(r => $.max(r.value)) })
+        .execute()
+      ).to.eventually.have.shape([
+        { x: 1 },
+        { x: 0 },
+        { x: 1 },
+      ])
+    })
   }
 }
 

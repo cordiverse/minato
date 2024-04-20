@@ -405,7 +405,8 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       const escaped = escapeId(field)
       return `${escaped} = ${builder.toUpdateExpr(data, field, fields[field], false)}`
     }).join(', ')
-    const result = await this.query(`UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`)
+    const sql = [...builder.prequeries, `UPDATE ${escapeId(table)} ${ref} SET ${update} WHERE ${filter}`].join('; ')
+    const result = await this.query(sql)
     return { matched: result.affectedRows, modified: result.changedRows }
   }
 

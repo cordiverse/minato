@@ -1,4 +1,4 @@
-import { Dict, isNullable, mapValues, valueMap } from 'cosmokit'
+import { Dict, isNullable, mapValues } from 'cosmokit'
 import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
@@ -113,7 +113,7 @@ export class Builder {
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
-      $object: (arg, group) => valueMap(arg as any, x => this.transformEvalExpr(x)),
+      $object: (arg, group) => mapValues(arg as any, x => this.transformEvalExpr(x)),
 
       $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
 
@@ -128,8 +128,7 @@ export class Builder {
       $random: (arg, group) => ({ $rand: {} }),
 
       $literal: (arg, group) => {
-        const converter = this.driver.types[arg[1] as any]
-        return converter ? converter.dump(arg[0]) : arg[0]
+        return { $literal: this.dump(arg[0], arg[1] ? Type.fromField(arg[1]) : undefined) }
       },
       $number: (arg, group) => {
         const value = this.eval(arg, group)
@@ -209,7 +208,7 @@ export class Builder {
       if (this.evalOperators[key]) {
         return this.evalOperators[key](expr[key], group)
       } else if (key?.startsWith('$') && Eval[key.slice(1)]) {
-        return valueMap(expr, (value) => {
+        return mapValues(expr, (value) => {
           if (Array.isArray(value)) {
             return value.map(val => this.eval(val, group))
           } else {
@@ -362,7 +361,7 @@ export class Builder {
       stages.push(...this.flushLookups(), ...groupStages, { $project })
       $group['_id'] = unravel($group['_id'])
     } else if (fields) {
-      const $project = valueMap(fields, (expr) => this.eval(expr))
+      const $project = mapValues(fields, (expr) => this.eval(expr))
       $project._id = 0
       stages.push(...this.flushLookups(), { $project })
     } else {
@@ -381,8 +380,8 @@ export class Builder {
     return predecessor.select(sel)
   }
 
-  public select(sel: Selection.Immutable) {
-    const { table, query } = sel
+  public select(sel: Selection.Immutable, update?: any) {
+    const { model, table, query } = sel
     if (typeof table === 'string') {
       this.table = table
       this.refVirtualKeys[sel.ref] = this.virtualKey = (sel.driver as MongoDriver).getVirtualKey(table)!
@@ -438,6 +437,16 @@ export class Builder {
         this.pipeline.push({ $group }, ...this.flushLookups(), { $project })
       }
       this.evalKey = $
+    } else if (sel.type === 'set') {
+      const $set = mapValues(update, (expr, key) => this.eval(isEvalExpr(expr) ? expr : Eval.literal(expr, model.getType(key))))
+      this.pipeline.push(...this.flushLookups(), { $set }, {
+        $merge: {
+          into: table,
+          on: '_id',
+          whenMatched: 'replace',
+          whenNotMatched: 'discard',
+        },
+      })
     }
     return this
   }
