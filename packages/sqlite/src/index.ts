@@ -250,20 +250,21 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     }
   }
 
-  _all(sql: string, params: any = []) {
+  _all(sql: string, params: any = [], config?: { useBigInt: boolean }) {
     return this._exec(sql, params, (stmt) => {
       stmt.bind(params)
       const result: any[] = []
       while (stmt.step()) {
         // @ts-ignore
-        result.push(stmt.getAsObject(null, { useBigInt: true }))
+        result.push(stmt.getAsObject(null, config))
       }
       return result
     })
   }
 
-  _get(sql: string, params: any = []) {
-    return this._exec(sql, params, stmt => stmt.getAsObject(params))
+  _get(sql: string, params: any = [], config?: { useBigInt: boolean }) {
+    // @ts-ignore
+    return this._exec(sql, params, stmt => stmt.getAsObject(params, config))
   }
 
   _export() {
@@ -312,7 +313,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const builder = new SQLiteBuilder(this, tables)
     const sql = builder.get(sel)
     if (!sql) return []
-    const rows: any[] = this._all(sql)
+    const rows: any[] = this._all(sql, [], { useBigInt: true })
     return rows.map(row => builder.load(row, model))
   }
 
@@ -320,7 +321,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const builder = new SQLiteBuilder(this, sel.tables)
     const inner = builder.get(sel.table as Selection, true, true)
     const output = builder.parseEval(expr, false)
-    const { value } = this._get(`SELECT ${output} AS value FROM ${inner}`)
+    const { value } = this._get(`SELECT ${output} AS value FROM ${inner}`, [], { useBigInt: true })
     return builder.load(value, expr)
   }
 
