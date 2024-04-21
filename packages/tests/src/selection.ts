@@ -285,6 +285,11 @@ namespace SelectionTests {
         .join(['foo', 'bar'], (foo, bar) => $.eq(foo.value, bar.value))
         .execute()
       ).to.eventually.have.length(2)
+
+      await expect(database.select('foo')
+        .join('bar', database.select('bar'), (foo, bar) => $.eq(foo.value, bar.value))
+        .execute()
+      ).to.eventually.have.length(2)
     })
 
     it('left join', async () => {
@@ -321,6 +326,30 @@ namespace SelectionTests {
         { bar: { uid: 2, pid: 1, value: 1, id: 5 }, foo: {} },
         { bar: { uid: 2, pid: 1, value: 1, id: 6 }, foo: {} },
       ])
+
+      await expect(database.select('foo')
+        .join('bar', database.select('bar'), (foo, bar) => $.eq(foo.value, bar.value), true)
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          value: 0, id: 1,
+          bar: { uid: 1, pid: 1, value: 0, id: 1 },
+        },
+        {
+          value: 0, id: 1,
+          bar: { uid: 1, pid: 2, value: 0, id: 3 },
+        },
+        { value: 2, id: 2, bar: {} },
+        { value: 2, id: 3, bar: {} },
+      ])
+    })
+
+    it('duplicate', async () => {
+      await expect(database.select('foo')
+        .project(['value'])
+        .join('bar', database.select('bar'), (foo, bar) => $.eq(foo.value, bar.uid))
+        .execute()
+      ).to.eventually.have.length(4)
     })
 
     it('group', async () => {
@@ -360,6 +389,12 @@ namespace SelectionTests {
           t2: database.select('bar').where(row => $.gt(row.uid, 1)),
           t3: database.select('bar').where(row => $.gt(row.id, 4)),
         }, ({ t1, t2, t3 }) => $.gt($.add(t1.id, t2.id, t3.id), 14))
+        .execute()
+      ).to.eventually.have.length(4)
+
+      await expect(database.select('bar').where(row => $.gt(row.pid, 1))
+        .join('t2', database.select('bar').where(row => $.gt(row.uid, 1)))
+        .join('t3', database.select('bar').where(row => $.gt(row.id, 4)), (self, t3) => $.gt($.add(self.id, self.t2.id, t3.id), 14))
         .execute()
       ).to.eventually.have.length(4)
     })

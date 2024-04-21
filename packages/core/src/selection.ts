@@ -235,6 +235,26 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return new Selection(this.driver, this)
   }
 
+  join<K extends string, U>(
+    name: K,
+    selection: Selection<U>,
+    callback: (self: Row<S>, other: Row<U>) => Eval.Expr<boolean> = () => Eval.and(),
+    optional: boolean = false,
+  ): Selection<S & { [P in K]: U}> {
+    const fields = Object.fromEntries(Object.entries(this.model.fields)
+      .filter(([, field]) => !field!.deprecated)
+      .map(([key]) => [key, (row) => key.split('.').reduce((r, k) => r[k], row[this.ref])]))
+    if (optional) {
+      return this.driver.database
+        .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]), { [this.ref]: false, [name]: true })
+        .project({ ...fields, [name]: name }) as any
+    } else {
+      return this.driver.database
+        .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]))
+        .project({ ...fields, [name]: name }) as any
+    }
+  }
+
   _action(type: Executable.Action, ...args: any[]) {
     return new Executable(this.driver, { ...this, type, args })
   }
@@ -277,6 +297,14 @@ export class Selection<S = any> extends Executable<S, S[]> {
         return (cursor.fields as string[]).some(k => k === key || k.startsWith(`${key}.`))
       })
     })
+  }
+
+  format(result = {}) {
+    result['ref'] = this.ref
+    if (typeof this.table === 'string') result['table'] = this.table
+    else if (this.table instanceof Selection) result['table'] = this.table.format()
+    else result['table'] = mapValues(this.table, (v: any) => v.format())
+    return result
   }
 }
 
