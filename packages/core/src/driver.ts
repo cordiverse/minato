@@ -105,7 +105,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
     for (const key in table) {
       const submodel = this.model(table[key])
       for (const field in submodel.fields) {
-        if (submodel.fields[field]!.deprecated) continue
+        if (submodel.fields[field]!.deprecated || submodel.fields[field]!.relation) continue
         model.fields[`${key}.${field}`] = {
           expr: Eval('', [table[key].ref, field], Type.fromField(submodel.fields[field]!)),
           type: Type.fromField(submodel.fields[field]!),

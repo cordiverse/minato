@@ -174,8 +174,8 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     // field definitions
     for (const key in fields) {
-      const { deprecated, initial, nullable = true } = fields[key]!
-      if (deprecated) continue
+      const { deprecated, initial, nullable = true, relation } = fields[key]!
+      if (deprecated || relation) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.column_name))
       let shouldUpdate = column?.column_name !== key
@@ -324,7 +324,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const builder = new PostgresBuilder(this, sel.tables)
     const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return {}
-    const { count } = await this.query(`DELETE FROM ${sel.table} WHERE ${query}`)
+    const { count } = await this.query(`DELETE FROM ${builder.escapeId(sel.table)} WHERE ${query}`)
     return { matched: count, removed: count }
   }
 

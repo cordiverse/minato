@@ -264,7 +264,7 @@ Eval.object = (fields: any) => {
     const modelFields: [string, Field][] = Object.entries(fields.$model.fields)
     const prefix: string = fields.$prefix
     fields = Object.fromEntries(modelFields
-      .filter(([, field]) => !field.deprecated)
+      .filter(([, field]) => !field.deprecated && !field.relation)
       .filter(([path]) => path.startsWith(prefix))
       .map(([k]) => [k.slice(prefix.length), fields[k.slice(prefix.length)]]))
     return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value))))

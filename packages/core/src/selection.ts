@@ -242,7 +242,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     optional: boolean = false,
   ): Selection<S & { [P in K]: U}> {
     const fields = Object.fromEntries(Object.entries(this.model.fields)
-      .filter(([, field]) => !field!.deprecated)
+      .filter(([, field]) => !field!.deprecated && !field!.relation)
       .map(([key]) => [key, (row) => key.split('.').reduce((r, k) => r[k], row[this.ref])]))
     if (optional) {
       return this.driver.database

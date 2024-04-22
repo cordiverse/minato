@@ -7,6 +7,7 @@ import Migration from './migration'
 import Selection from './selection'
 import Json from './json'
 import Transaction from './transaction'
+import Relation from './relation'
 import './setup'
 
 const Keywords = ['name']
@@ -70,6 +71,7 @@ namespace Tests {
   export const migration = Migration
   export const json = Json
   export const transaction = Transaction
+  export const relation = Relation
 }
 
 export default createUnit(Tests, true)

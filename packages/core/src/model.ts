@@ -5,8 +5,11 @@ import { Flatten, Keys, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 
-export const Primary = Symbol('Primary')
+const Primary = Symbol('Primary')
 export type Primary = (string | number) & { [Primary]: true }
+
+const Relation = Symbol('minato.relation')
+export type Relation<T = object> = T & { [Relation]: true }
 
 export interface Field<T = any> {
   type: Type<T>
@@ -19,6 +22,7 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
+  relation?: Field.Relation
   transformers?: Driver.Transformer[]
 }
 
@@ -89,6 +93,14 @@ export namespace Field {
     [K in keyof O]?: Field<O[K]>
   }
 
+  export interface Relation<K extends string = string> {
+    type: 'oneToOne' | 'oneToMany' | 'manyToOne' | 'manyToMany'
+    table: string
+    field?: string
+    references: string[]
+    fields: K[]
+  }
+
   const regexp = /^(\w+)(?:\((.+)\))?$/
 
   export function parse(source: string | Parsable): Field {
@@ -145,6 +157,9 @@ export namespace Model {
     foreign: {
       [P in K]?: [string, string]
     }
+    relation: {
+      [P in K]?: Field.Relation<K>
+    }
   }
 }
 
@@ -166,7 +181,7 @@ export class Model<S = any> {
 
   extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
-    const { primary, autoInc, unique = [] as [], foreign, callback } = config
+    const { primary, autoInc, unique = [] as [], foreign, callback, relation } = config
 
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
@@ -178,6 +193,9 @@ export class Model<S = any> {
     for (const key in fields) {
       this.fields[key] = Field.parse(fields[key])
       this.fields[key].deprecated = !!callback
+      if (relation?.[key]) {
+        this.fields[key].relation = relation[key]
+      }
     }
 
     if (typeof this.primary === 'string' && this.fields[this.primary]?.deftype === 'primary') {
@@ -300,8 +318,8 @@ export class Model<S = any> {
     const result = {} as S
     const keys = makeArray(this.primary)
     for (const key in this.fields) {
-      const { initial, deprecated } = this.fields[key]!
-      if (deprecated) continue
+      const { initial, deprecated, relation } = this.fields[key]!
+      if (deprecated || relation) continue
       if (!keys.includes(key) && !isNullable(initial)) {
         result[key] = clone(initial)
       }

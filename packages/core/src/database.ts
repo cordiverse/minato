@@ -2,7 +2,7 @@ import { defineProperty, Dict, makeArray, mapValues, MaybeArray, omit } from 'co
 import { Context, Service, Spread } from 'cordis'
 import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
-import { Field, Model } from './model.ts'
+import { Field, Model, Relation } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
@@ -42,6 +42,12 @@ export namespace Join2 {
   }
 
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
+}
+
+type UnArray<T> = T extends (infer I)[] ? I : T
+
+type Include<S> = boolean | {
+  [P in Keys<S, Relation>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
 }
 
 export namespace Database {
@@ -119,6 +125,35 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (makeArray(model.primary).every(key => key in fields)) {
       defineProperty(model, 'ctx', this[Context.origin])
     }
+    Object.entries(config.relation ?? {}).forEach(([key, relation]: [string, Field.Relation]) => {
+      if (relation.type !== 'manyToMany') return
+      const tableName = [name, relation.table].sort().join('__') + '__relation'
+      if (this.tables[tableName]) return
+      const fields = relation.fields.map(x => [`${name}_${x}`, model.fields[x]?.deftype])
+      const references = relation.references.map((x, i) => [`${relation.table}_${x}`, fields[i][1]])
+      this.extend(tableName as any, {
+        id: 'unsigned',
+        ...Object.fromEntries([...fields, ...references]),
+        [name]: 'expr',
+        [relation.table]: 'expr',
+      }, {
+        autoInc: true,
+        relation: {
+          [name]: {
+            type: 'manyToOne',
+            table: name,
+            fields: fields.map(x => x[0]),
+            references: relation.references,
+          },
+          [relation.table]: {
+            type: 'manyToOne',
+            table: relation.table,
+            fields: references.map(x => x[0]),
+            references: relation.fields,
+          },
+        } as any,
+      })
+    })
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
   }
@@ -230,9 +265,53 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   select<T>(table: Selection<T>, query?: Query<T>): Selection<T>
-  select<K extends Keys<S>>(table: K, query?: Query<S[K]>): Selection<S[K]>
-  select(table: any, query?: any) {
-    return new Selection(this.getDriver(table), table, query)
+  select<K extends Keys<S>, R extends Include<S[K]>>(
+    table: K,
+    query?: Query<S[K]>,
+    relations?: R
+  ): Selection<S[K]>
+
+  select(table: any, query?: any, relations?: any) {
+    // if (typeof table === 'string') console.log('>select', table, relations)
+    if (relations && typeof relations === 'object') {
+      if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
+      const fields = this.tables[table].fields
+      const extraFields: string[] = []
+      let sel = new Selection(this.getDriver(table), table, query)
+      for (const key in relations) {
+        if (!relations[key]) continue
+        const relation = fields[key]!.relation!
+        if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
+          sel = sel.join(key, this.select(relation.table as any, {}, relations[key]), (self, other) => Eval.and(
+            ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
+          ), true)
+        } else if (relation.type === 'oneToMany') {
+          sel = sel.join(key, this.select(relation.table as any, {}, relations[key]), (self, other) => Eval.and(
+            ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
+          ), true).groupBy([
+            ...Object.entries(fields).filter(([, field]) => !field!.deprecated && !field!.relation).map(([k]) => k),
+            ...extraFields,
+          ], {
+            [key]: row => Eval.array(row[key]),
+          })
+        } else if (relation.type === 'manyToMany') {
+          const tableName = [table, relation.table].sort().join('__') + '__relation'
+          const references = relation.fields.map(x => `${table}_${x}`)
+          sel = sel.join(key, this.select(tableName as any, {}, { [relation.table]: relations[key] } as any), (self, other) => Eval.and(
+            ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
+          ), true).groupBy([
+            ...Object.entries(fields).filter(([, field]) => !field!.deprecated && !field!.relation).map(([k]) => k),
+            ...extraFields,
+          ], {
+            [key]: row => Eval.array(row[key][relation.table]),
+          })
+        }
+        extraFields.push(key)
+      }
+      return sel
+    } else {
+      return new Selection(this.getDriver(table), table, query)
+    }
   }
 
   join<const X extends Join1.Input<S>>(
@@ -307,6 +386,31 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   async create<K extends Keys<S>>(table: K, data: Partial<S[K]>): Promise<S[K]> {
+    const tasks: any[] = []
+    for (const key in data) {
+      if (data[key] && this.tables[table].fields[key]?.relation) {
+        const relation = this.tables[table].fields[key].relation
+        if (['oneToOne', 'manyToOne'].includes(relation.type)) {
+          const mergedData = { ...data[key] }
+          for (const k in relation.fields) {
+            mergedData[relation.references[k]] = data[relation.fields[k]]
+          }
+          tasks.push([relation.table, mergedData])
+        }
+        data = omit(data, key as any) as any
+      }
+    }
+
+    if (tasks.length) {
+      const action = this[Database.transact] ? <T>(callback: (database: this) => T) => callback(this) : this.transact.bind(this)
+      return action(async (database) => {
+        for (const [table, data] of tasks) {
+          await database.create(table, data)
+        }
+        return database.create(table, data)
+      })
+    }
+
     const sel = this.select(table)
     const { primary, autoInc } = sel.model
     if (!autoInc) {
@@ -359,7 +463,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return this.transact(callback)
   }
 
-  async transact(callback: (database: this) => Promise<void>) {
+  async transact<T>(callback: (database: this) => Promise<T>) {
     if (this[Database.transact]) throw new Error('nested transactions are not supported')
     const finalTasks: Promise<void>[] = []
     const database = this.makeProxy(Database.transact, (driver) => {
@@ -376,15 +480,15 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       })
       finalTasks.push(driver.withTransaction((_session) => {
         _resolve(session = _session)
-        return initialTask
+        return initialTask as any
       }))
       return driver
     })
     const initialTask = (async () => {
       await Promise.resolve()
-      await callback(database)
+      return await callback(database)
     })()
-    await initialTask.finally(() => Promise.all(finalTasks))
+    return await initialTask.finally(() => Promise.all(finalTasks))
   }
 
   async stopAll() {
