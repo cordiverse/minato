@@ -1,4 +1,4 @@
-import { clone, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
+import { clone, deepEqual, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
 import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
@@ -72,7 +72,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       let branch = branches.find((branch) => {
         if (!group || !groupFields) return false
         for (const key in groupFields) {
-          if (branch.index[key] !== index[key]) return false
+          if (!deepEqual(branch.index[key], index[key])) return false
         }
         return true
       })

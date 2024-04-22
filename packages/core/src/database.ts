@@ -1,8 +1,8 @@
 import { defineProperty, Dict, makeArray, mapValues, MaybeArray, omit } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
+import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
 import { Selection } from './selection.ts'
-import { Field, Model, Relation } from './model.ts'
+import { Field, Model, Relation, RelationMark } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
@@ -46,8 +46,12 @@ export namespace Join2 {
 
 type UnArray<T> = T extends (infer I)[] ? I : T
 
+type ReverseKeys<O, T = any> = Values<{
+  [P in keyof O]: T extends O[P] ? P : never
+}> & string
+
 type Include<S> = boolean | {
-  [P in Keys<S, Relation>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
+  [P in ReverseKeys<S, RelationMark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
 }
 
 export namespace Database {

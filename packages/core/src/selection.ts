@@ -298,14 +298,6 @@ export class Selection<S = any> extends Executable<S, S[]> {
       })
     })
   }
-
-  format(result = {}) {
-    result['ref'] = this.ref
-    if (typeof this.table === 'string') result['table'] = this.table
-    else if (this.table instanceof Selection) result['table'] = this.table.format()
-    else result['table'] = mapValues(this.table, (v: any) => v.format())
-    return result
-  }
 }
 
 export function executeSort(data: any[], modifier: Modifier, name: string) {

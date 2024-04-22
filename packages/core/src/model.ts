@@ -5,14 +5,12 @@ import { Flatten, Keys, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 
-const Primary = Symbol('Primary')
+const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
 
 const Relation = Symbol('minato.relation')
-export type Relation<T = object> = T & { [Relation]: true }
-export namespace Relation {
-
-}
+export type RelationMark<T = any> = { [Relation]: T }
+export type Relation<T = object> = Partial<T> | RelationMark<T>
 
 export interface Field<T = any> {
   type: Type<T>
@@ -89,7 +87,7 @@ export namespace Field {
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
 
-  const NewType = Symbol('newtype')
+  const NewType = Symbol('minato.newtype')
   export type NewType<T> = string & { [NewType]: T }
 
   export type Config<O = any> = {
@@ -318,7 +316,7 @@ export class Model<S = any> {
         this.format(value, strict, key + '.', result)
       }
     })
-    return prefix === '' ? this.resolveModel(result) : result
+    return (strict && prefix === '') ? this.resolveModel(result) : result
   }
 
   parse(source: object, strict = true, prefix = '', result = {} as S) {
@@ -353,7 +351,7 @@ export class Model<S = any> {
         }
       }
     }
-    return prefix === '' ? this.resolveModel(result) : result
+    return (strict && prefix === '') ? this.resolveModel(result) : result
   }
 
   create(data?: {}) {

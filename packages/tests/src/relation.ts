@@ -1,4 +1,4 @@
-import { $, Database, Keys, Relation } from 'minato'
+import { $, Database, Relation } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
 import { isNullable } from 'cosmokit'
@@ -11,7 +11,6 @@ interface User {
 }
 
 interface Profile {
-  // id: number
   name?: string
   userId: number
   user?: Relation<User>
