@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Builder } from './builder'
 
@@ -111,8 +111,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const virtualKey = this.getVirtualKey(table)
     for (const key in fields) {
       if (virtualKey === key) continue
-      const { initial, legacy = [], deprecated } = fields[key]!
-      if (deprecated) continue
+      const { initial, legacy = [] } = fields[key]!
+      if (!Field.available(fields[key])) continue
       const filter = { [key]: { $exists: false } }
       for (const oldKey of legacy) {
         bulk

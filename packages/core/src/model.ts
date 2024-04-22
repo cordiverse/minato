@@ -10,6 +10,9 @@ export type Primary = (string | number) & { [Primary]: true }
 
 const Relation = Symbol('minato.relation')
 export type Relation<T = object> = T & { [Relation]: true }
+export namespace Relation {
+
+}
 
 export interface Field<T = any> {
   type: Type<T>
@@ -93,12 +96,41 @@ export namespace Field {
     [K in keyof O]?: Field<O[K]>
   }
 
+  export interface RelationDefinition<K extends string = string> {
+    type: 'oneToOne' | 'oneToMany' | 'manyToOne' | 'manyToMany'
+    target: [string, string]
+    references: MaybeArray<string>
+    fields: MaybeArray<K>
+  }
+
   export interface Relation<K extends string = string> {
     type: 'oneToOne' | 'oneToMany' | 'manyToOne' | 'manyToMany'
     table: string
-    field?: string
     references: string[]
     fields: K[]
+  }
+
+  export namespace Relation {
+
+    export function parse(def: RelationDefinition): Relation {
+      return {
+        type: def.type,
+        table: def.target[0],
+        fields: makeArray(def.fields),
+        references: makeArray(def.references),
+      }
+    }
+
+    export function inverse(relation: Relation, table: string): Relation {
+      return {
+        type: relation.type === 'oneToMany' ? 'manyToOne'
+          : relation.type === 'manyToOne' ? 'oneToMany'
+            : relation.type,
+        table,
+        fields: relation.references,
+        references: relation.fields,
+      }
+    }
   }
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
@@ -144,6 +176,10 @@ export namespace Field {
     }
     return initial
   }
+
+  export function available(field?: Field) {
+    return field && !field.deprecated && !field.relation
+  }
 }
 
 export namespace Model {
@@ -158,9 +194,10 @@ export namespace Model {
       [P in K]?: [string, string]
     }
     relation: {
-      [P in K]?: Field.Relation<K>
+      [P in K]?: Field.RelationDefinition<K>
     }
   }
+
 }
 
 export interface Model extends Model.Config {}
@@ -181,7 +218,7 @@ export class Model<S = any> {
 
   extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
-    const { primary, autoInc, unique = [] as [], foreign, callback, relation } = config
+    const { primary, autoInc, unique = [] as [], foreign, callback, relation = {} } = config
 
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
@@ -196,6 +233,11 @@ export class Model<S = any> {
       if (relation?.[key]) {
         this.fields[key].relation = relation[key]
       }
+    }
+
+    for (const key in relation) {
+      if (!this.fields[key]) this.fields[key] = Field.parse('expr')
+      this.fields[key].relation = relation[key]
     }
 
     if (typeof this.primary === 'string' && this.fields[this.primary]?.deftype === 'primary') {
@@ -318,8 +360,8 @@ export class Model<S = any> {
     const result = {} as S
     const keys = makeArray(this.primary)
     for (const key in this.fields) {
-      const { initial, deprecated, relation } = this.fields[key]!
-      if (deprecated || relation) continue
+      if (!Field.available(this.fields[key])) continue
+      const { initial } = this.fields[key]!
       if (!keys.includes(key) && !isNullable(initial)) {
         result[key] = clone(initial)
       }

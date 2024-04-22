@@ -159,8 +159,8 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     // field definitions
     for (const key in fields) {
-      const { deprecated, initial, nullable = true, relation } = fields[key]!
-      if (deprecated || relation) continue
+      const { initial, nullable = true } = fields[key]!
+      if (!Field.available(fields[key])) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.COLUMN_NAME))
       let shouldUpdate = column?.COLUMN_NAME !== key
@@ -442,7 +442,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.fields).filter(key => !model.fields[key]?.deprecated)
+    const initFields = Object.keys(model.fields).filter(key => Field.available(model.fields[key]))
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]

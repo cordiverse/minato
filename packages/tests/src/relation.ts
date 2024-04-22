@@ -11,7 +11,7 @@ interface User {
 }
 
 interface Profile {
-  id: number
+  // id: number
   name?: string
   userId: number
   user?: Relation<User>
@@ -53,39 +53,22 @@ function RelationTests(database: Database<Tables>) {
   database.extend('user', {
     id: 'unsigned',
     value: 'integer',
-    profile: 'expr',
-    posts: 'expr',
   }, {
     autoInc: true,
-    relation: {
-      profile: {
-        type: 'oneToOne',
-        table: 'profile',
-        fields: ['id'],
-        references: ['userId'],
-      },
-      posts: {
-        type: 'oneToMany',
-        table: 'post',
-        fields: ['id'],
-        references: ['authorId'],
-      }
-    }
   })
 
   database.extend('profile', {
-    id: 'unsigned',
     name: 'string',
     userId: 'unsigned',
     user: 'expr',
   }, {
-    autoInc: true,
+    primary: ['userId'],
     relation: {
       user: {
         type: 'oneToOne',
-        table: 'user',
-        fields: ['userId'],
-        references: ['id'],
+        target: ['user', 'profile'],
+        fields: 'userId',
+        references: 'id',
       },
     }
   })
@@ -95,28 +78,14 @@ function RelationTests(database: Database<Tables>) {
     content: 'string',
     authorId: 'unsigned',
     author: 'expr',
-    tags: 'expr',
-    _tags: 'expr',
   }, {
     autoInc: true,
     relation: {
       author: {
         type: 'manyToOne',
-        table: 'user',
-        fields: ['authorId'],
-        references: ['id'],
-      },
-      tags: {
-        type: 'manyToMany',
-        table: 'tag',
-        fields: ['id'],
-        references: ['id'],
-      },
-      _tags: {
-        type: 'oneToMany',
-        table: 'post2tag',
-        fields: ['id'],
-        references: ['postId'],
+        target: ['user', 'posts'],
+        fields: 'authorId',
+        references: 'id',
       },
     }
   })
@@ -125,21 +94,14 @@ function RelationTests(database: Database<Tables>) {
     id: 'unsigned',
     name: 'string',
     posts: 'expr',
-    _posts: 'expr',
   }, {
     autoInc: true,
     relation: {
       posts: {
         type: 'manyToMany',
-        table: 'post',
-        fields: ['id'],
-        references: ['id'],
-      },
-      _posts: {
-        type: 'oneToMany',
-        table: 'post2tag',
-        fields: ['id'],
-        references: ['tagId'],
+        target: ['post', 'tags'],
+        fields: 'id',
+        references: 'id',
       },
     }
   })
@@ -151,20 +113,19 @@ function RelationTests(database: Database<Tables>) {
     post: 'expr',
     tag: 'expr',
   }, {
-    autoInc: true,
-    // primary: ['postId', 'tagId'],
+    primary: ['postId', 'tagId'],
     relation: {
       post: {
         type: 'manyToOne',
-        table: 'post',
-        fields: ['postId'],
-        references: ['id'],
+        target: ['post', '_tags'],
+        fields: 'postId',
+        references: 'id',
       },
       tag: {
         type: 'manyToOne',
-        table: 'tag',
-        fields: ['tagId'],
-        references: ['id'],
+        target: ['tag', '_posts'],
+        fields: 'tagId',
+        references: 'id',
       },
     }
   })
@@ -178,9 +139,9 @@ namespace RelationTests {
   ]
 
   const profileTable: Profile[] = [
-    { id: 1, userId: 1, name: 'Apple' },
-    { id: 2, userId: 2, name: 'Banana' },
-    { id: 3, userId: 3, name: 'Cat' },
+    { userId: 1, name: 'Apple' },
+    { userId: 2, name: 'Banana' },
+    { userId: 3, name: 'Cat' },
   ]
 
   const postTable: Post[] = [
@@ -286,9 +247,9 @@ namespace RelationTests {
         post_id: x.postId,
         tag_id: x.tagId,
       })))
+
       // explicit manyToMany
-      // console.dir(await database.select('post', {}, { _tags: { tag: { _posts: { post: true } } } }).execute(), { depth: 10 })
-      // console.dir(await database.select('post', {}, { tags: { posts: true } }).execute(), { depth: 10 })
+      await expect(database.select('post', {}, { _tags: { tag: { _posts: { post: true } } } }).execute()).to.eventually.be.fulfilled
 
       await expect(database.select('post', {}, { tags: { posts: true } }).execute()).to.eventually.have.shape(
         posts.map(post => ({
@@ -310,13 +271,32 @@ namespace RelationTests {
 
   export function create(database: Database<Tables>) {
     it('basic support', async () => {
-      const users = await setup(database, 'user', userTable)
-      const profiles = await setup(database, 'profile', profileTable)
-      const posts = await setup(database, 'post', postTable)
+      await setup(database, 'user', [])
+      await setup(database, 'profile', [])
+      await setup(database, 'post', [])
+
+      for (const profile of profileTable) {
+        await database.create('profile', {
+          ...profile,
+          user: {
+            ...userTable.find(user => profile.userId === user.id),
+            posts: postTable.filter(post => post.authorId === profile.userId),
+          },
+        })
+      }
 
       await expect(database.select('profile', {}, { user: true }).execute()).to.eventually.have.shape(
-        profiles.map(x => ({
-          ...x, user: nm(users.find(p => p.id === x.id))
+        profileTable.map(profile => ({
+          ...profile,
+          user: nm(userTable.find(user => user.id === profile.userId)),
+        }))
+      )
+
+      await expect(database.select('user', {}, { profile: true, posts: true }).execute()).to.eventually.have.shape(
+        userTable.map(user => ({
+          ...user,
+          profile: nm(profileTable.find(profile => profile.userId === user.id)),
+          posts: nm(postTable.filter(post => post.authorId === user.id)),
         }))
       )
     })

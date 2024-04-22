@@ -70,7 +70,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     // field definitions
     for (const key in model.fields) {
-      if (model.fields[key]!.deprecated) {
+      if (!Field.available(model.fields[key])) {
         if (dropKeys?.includes(key)) shouldMigrate = true
         continue
       }

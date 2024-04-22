@@ -1,7 +1,7 @@
 import { defineProperty, Dict, filterKeys, mapValues } from 'cosmokit'
 import { Driver } from './driver.ts'
 import { Eval, executeEval } from './eval.ts'
-import { Model } from './model.ts'
+import { Field, Model } from './model.ts'
 import { Query } from './query.ts'
 import { FlatKeys, FlatPick, Flatten, Keys, randomId, Row } from './utils.ts'
 import { Type } from './type.ts'
@@ -242,7 +242,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     optional: boolean = false,
   ): Selection<S & { [P in K]: U}> {
     const fields = Object.fromEntries(Object.entries(this.model.fields)
-      .filter(([, field]) => !field!.deprecated && !field!.relation)
+      .filter(([, field]) => Field.available(field))
       .map(([key]) => [key, (row) => key.split('.').reduce((r, k) => r[k], row[this.ref])]))
     if (optional) {
       return this.driver.database

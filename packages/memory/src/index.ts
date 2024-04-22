@@ -1,5 +1,5 @@
 import { clone, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
   static name = 'memory'
@@ -62,7 +62,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     for (let row of executeSort(data, args[0], ref)) {
       row = model.format(row, false)
       for (const key in model.fields) {
-        if (model.fields[key]!.deprecated) continue
+        if (!Field.available(model.fields[key])) continue
         row[key] ??= null
       }
       let index = row

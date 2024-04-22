@@ -509,7 +509,7 @@ export class Builder {
     const encodedMap: Dict<boolean> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
-      .filter(([, field]) => !field!.deprecated)
+      .filter(([, field]) => Field.available(field))
       .map(([key, field]) => [key, field!.expr ? field!.expr : Eval('', [ref, key], Type.fromField(field!))]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
