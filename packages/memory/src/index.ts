@@ -105,7 +105,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
   }
 
   async stats() {
-    return { tables: valueMap(this._store, (rows, name) => ({ name, count: rows.length, size: 0 })), size: 0 }
+    return { tables: mapValues(this._store, (rows, name) => ({ name, count: rows.length, size: 0 })), size: 0 }
   }
 
   async get(sel: Selection.Immutable) {

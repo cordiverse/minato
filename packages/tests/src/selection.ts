@@ -303,6 +303,24 @@ namespace SelectionTests {
         { foo: { value: 2, id: 2 }, bar: {} },
         { foo: { value: 2, id: 3 }, bar: {} },
       ])
+
+      await expect(database
+        .join(['foo', 'bar'], (foo, bar) => $.eq(foo.value, bar.value), [true, false])
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          bar: { uid: 1, pid: 1, value: 0, id: 1 },
+          foo: { value: 0, id: 1 },
+        },
+        { bar: { uid: 1, pid: 1, value: 1, id: 2 }, foo: {} },
+        {
+          bar: { uid: 1, pid: 2, value: 0, id: 3 },
+          foo: { value: 0, id: 1 },
+        },
+        { bar: { uid: 1, pid: 3, value: 1, id: 4 }, foo: {} },
+        { bar: { uid: 2, pid: 1, value: 1, id: 5 }, foo: {} },
+        { bar: { uid: 2, pid: 1, value: 1, id: 6 }, foo: {} },
+      ])
     })
 
     it('group', async () => {
