@@ -38,7 +38,7 @@ function isSubsetOf(subset, superset, cmp, contains, ordered) {
   });
 }
 
-export = (({ Assertion }) => {
+export default (({ Assertion }) => {
   function checkShape(expect, actual, path, ordered) {
     if (actual === expect || Number.isNaN(expect) && Number.isNaN(actual)) return
 

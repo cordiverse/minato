@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Query, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Builder } from './builder'
 
@@ -302,17 +302,20 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   async get(sel: Selection.Immutable) {
     const transformer = new Builder(this, Object.keys(sel.tables)).select(sel)
     if (!transformer) return []
-    this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
+    this.logPipeline(transformer.table, transformer.pipeline)
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
-      .toArray().then(rows => rows.map(row => this.builder.load(row, sel.model)))
+      .toArray().then(rows => {
+        // console.dir(rows, { depth: 8 })
+        return rows.map(row => this.builder.load(row, sel.model))
+      })
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
     const transformer = new Builder(this, Object.keys(sel.tables)).select(sel)
     if (!transformer) return
-    this.logger.debug('%s %s', transformer.table, JSON.stringify(transformer.pipeline))
+    this.logPipeline(transformer.table, transformer.pipeline)
     const res = await this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
@@ -322,25 +325,33 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   async set(sel: Selection.Mutable, update: {}) {
     const { query, table, model } = sel
-    const filter = this.transformQuery(sel, query, table)
-    if (!filter) return {}
-    const coll = this.db.collection(table)
+    if (hasSubquery(sel.query) || Object.values(update).some(x => hasSubquery(x))) {
+      const transformer = new Builder(this, Object.keys(sel.tables)).select(sel, update)!
+      await this.db.collection(transformer.table)
+        .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
+        .toArray()
+      return {} // result not available
+    } else {
+      const filter = this.transformQuery(sel, query, table)
+      if (!filter) return {}
+      const coll = this.db.collection(table)
 
-    const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-    const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
-      (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
-    const $unset = Object.entries($set)
-      .filter(([_, value]) => typeof value === 'object')
-      .map(([key, _]) => key)
-    const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
+      const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
+      const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
+        (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
+      const $unset = Object.entries($set)
+        .filter(([_, value]) => typeof value === 'object')
+        .map(([key, _]) => key)
+      const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, '$' + key]))
 
-    const result = await coll.updateMany(filter, [
-      ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
-      ...$unset.length ? [{ $unset }] : [],
-      { $set },
-      ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
-    ], { session: this.session })
-    return { matched: result.matchedCount, modified: result.modifiedCount }
+      const result = await coll.updateMany(filter, [
+        ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
+        ...$unset.length ? [{ $unset }] : [],
+        { $set },
+        ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
+      ], { session: this.session })
+      return { matched: result.matchedCount, modified: result.modifiedCount }
+    }
   }
 
   async remove(sel: Selection.Mutable) {
@@ -475,6 +486,10 @@ Convert to replicaSet to enable the feature.
 See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
       await callback(undefined)
     }
+  }
+
+  logPipeline(table: string, pipeline: any) {
+    this.logger.debug('%s %s', table, JSON.stringify(pipeline, (_, value) => typeof value === 'bigint' ? `${value}n` : value))
   }
 }
 

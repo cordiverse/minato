@@ -118,8 +118,7 @@ export class MySQLBuilder extends Builder {
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded(encoded === this.isEncoded() && !pure ? value : encoded
-      ? (this.compat.maria ? `json_extract(json_object('v', ${this.transform(value, type, 'encode')}), '$.v')`
-        : `cast(${this.transform(value, type, 'encode')} as json)`)
+      ? `json_extract(json_object('v', ${this.transform(value, type, 'encode')}), '$.v')`
       : this.transform(`json_unquote(${value})`, type, 'decode'), pure ? undefined : encoded)
   }
 

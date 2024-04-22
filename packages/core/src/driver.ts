@@ -1,4 +1,4 @@
-import { Awaitable, Dict, remove, valueMap } from 'cosmokit'
+import { Awaitable, Dict, mapValues, remove } from 'cosmokit'
 import { Context, Logger } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
@@ -95,7 +95,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
     if (table instanceof Selection) {
       if (!table.args[0].fields) return table.model
       const model = new Model('temp')
-      model.fields = valueMap(table.args[0].fields, (expr, key) => ({
+      model.fields = mapValues(table.args[0].fields, (expr, key) => ({
         type: Type.fromTerm(expr),
       }))
       return model

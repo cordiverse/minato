@@ -209,6 +209,16 @@ namespace OrmOperations {
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
     })
 
+    it('using expressions in query', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      table[1].num = table[1].id * 2
+      table[2].num = table[2].id * 2
+      await database.set('temp2', row => $.in(row.id, [table[1].id, table[2].id, 99]), row => ({
+        num: $.multiply(2, row.id),
+      }))
+      await expect(database.get('temp2', {})).to.eventually.have.shape(table)
+    })
+
     it('enormous field', async () => {
       const row = await database.create('temp2', {})
       row.bigtext = Array(1000000).fill('a').join('')
@@ -354,7 +364,10 @@ namespace OrmOperations {
 
   export const stats = function Stats(database: Database<Tables>) {
     it('basic support', async () => {
-      await expect(database.stats()).to.eventually.ok
+      const stats = await database.stats()
+      expect(stats.size).to.be.a('number')
+      expect(stats.tables['temp2'].count).to.be.a('number')
+      expect(stats.tables['temp2'].size).to.be.a('number')
     })
   }
 
@@ -418,6 +431,20 @@ namespace OrmOperations {
     it('make coverage happy', async () => {
       // @ts-expect-error
       await expect(database.drop('unknown')).to.be.rejected
+    })
+  }
+
+  export function subquery(database: Database<Tables>) {
+    it('set query', async () => {
+      await setup(database, 'temp2', barTable)
+      await database.set('temp2', row => $.eq(row.text, database.select('temp2', r => $.eq(r.id, 2)).evaluate(r => $.max(r.text))), { text: 'ok' })
+      await expect(database.get('temp2', 2)).to.eventually.have.shape([{ text: 'ok' }])
+    })
+
+    it('set update', async () => {
+      const table = await setup(database, 'temp2', barTable)
+      await database.set('temp2', 1, row => ({ text: database.select('temp2', r => $.eq(r.id, $.add(1, row.id))).evaluate(r => $.max(r.text)) }))
+      await expect(database.get('temp2', 1)).to.eventually.have.shape([{ text: table[1].text }])
     })
   }
 }

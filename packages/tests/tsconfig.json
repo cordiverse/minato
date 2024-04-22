@@ -4,8 +4,8 @@
     "outDir": "lib",
     "rootDir": "src",
     "types": [
-      "@types/mocha",
-      "@types/node",
+      "mocha",
+      "node",
     ],
   },
   "include": [
