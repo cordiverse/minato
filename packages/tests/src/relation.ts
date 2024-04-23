@@ -242,7 +242,7 @@ namespace RelationTests {
       const posts = await setup(database, 'post', postTable)
       const tags = await setup(database, 'tag', tagTable)
       const post2tags = await setup(database, 'post2tag', post2TagTable)
-      const re = await setup(database, 'post__tag__relation' as any, post2TagTable.map(x => ({
+      const re = await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable.map(x => ({
         post_id: x.postId,
         tag_id: x.tagId,
       })))

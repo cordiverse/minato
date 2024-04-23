@@ -8,11 +8,11 @@ import { Driver } from './driver.ts'
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
 
-const Relation = Symbol('minato.relation')
-export type Relation<T = object> = Partial<T> & Relation.Mark<T>
+export type Relation<T = object> = Partial<T> & Relation.Mark
 
 export namespace Relation {
-  export type Mark<T = any> = { [Relation]: T }
+  const Mark = Symbol('minato.relation')
+  export type Mark = { [Mark]: true }
 
   type UnArray<T> = T extends (infer I)[] ? I : T
 
@@ -20,14 +20,22 @@ export namespace Relation {
     [P in Keys<S, Mark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
   }
 
-  export type UnRelation<S> = S
+  export type Create<S> = S
     | (S extends Values<AtomicTypes> ? never
-    : S extends Relation<(infer T)[]> ? UnRelation<T>[]
-    : S extends Relation<infer T> ? UnRelation<T>
+    : S extends Relation<(infer T)[]> ? Create<T>[]
+    : S extends Relation<infer T> ? Create<T>
     : S extends any[] ? never
     : string extends keyof S ? never
-    : S extends object ? { [K in keyof S]: UnRelation<S[K]> }
+    : S extends object ? { [K in keyof S]: Create<S[K]> }
     : never)
+
+  export function buildAssociationTable(...tables: [string, string]) {
+    return '_' + tables.sort().join('To')
+  }
+
+  export function buildAssociationKey(key: string, table: string) {
+    return `${table}_${key}`
+  }
 }
 
 export interface Field<T = any> {

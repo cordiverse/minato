@@ -129,11 +129,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
 
       if (relation.type !== 'manyToMany') return
-      const tableName = [name, relation.table].sort().join('__') + '__relation'
-      if (this.tables[tableName]) return
-      const fields = relation.fields.map(x => [`${name}_${x}`, model.fields[x]?.deftype] as const)
-      const references = relation.references.map((x, i) => [`${relation.table}_${x}`, fields[i][1]] as const)
-      this.extend(tableName as any, {
+      const assocTable = Relation.buildAssociationTable(relation.table, name)
+      if (this.tables[assocTable]) return
+      const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]?.deftype] as const)
+      const references = relation.references.map((x, i) => [Relation.buildAssociationKey(x, relation.table), fields[i][1]] as const)
+      this.extend(assocTable as any, {
         ...Object.fromEntries([...fields, ...references]),
         [name]: 'expr',
         [relation.table]: 'expr',
@@ -295,9 +295,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             [key]: row => Eval.array(row[key]),
           })
         } else if (relation.type === 'manyToMany') {
-          const tableName = [table, relation.table].sort().join('__') + '__relation'
-          const references = relation.fields.map(x => `${table}_${x}`)
-          sel = sel.join(key, this.select(tableName as any, {}, { [relation.table]: relations[key] } as any), (self, other) => Eval.and(
+          const assocTable = Relation.buildAssociationTable(relation.table, table)
+          const references = relation.fields.map(x => Relation.buildAssociationKey(x, table))
+          sel = sel.join(key, this.select(assocTable as any, {}, { [relation.table]: relations[key] } as any), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
           ), true).groupBy([
             ...Object.entries(fields).filter(([, field]) => Field.available(field)).map(([k]) => k),
@@ -385,7 +385,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return await sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: Relation.UnRelation<S[K]>): Promise<S[K]>
+  async create<K extends Keys<S>>(table: K, data: Partial<Relation.Create<S[K]>>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const tasks: any[] = []
     for (const key in data) {
