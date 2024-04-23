@@ -1,8 +1,8 @@
 import { defineProperty, Dict, makeArray, mapValues, MaybeArray, omit } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
+import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
-import { Field, Model, Relation, RelationMark } from './model.ts'
+import { Field, Model, Relation } from './model.ts'
 import { Driver } from './driver.ts'
 import { Eval, Update } from './eval.ts'
 import { Query } from './query.ts'
@@ -42,16 +42,6 @@ export namespace Join2 {
   }
 
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
-}
-
-type UnArray<T> = T extends (infer I)[] ? I : T
-
-type ReverseKeys<O, T = any> = Values<{
-  [P in keyof O]: T extends O[P] ? P : never
-}> & string
-
-type Include<S> = boolean | {
-  [P in ReverseKeys<S, RelationMark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
 }
 
 export namespace Database {
@@ -276,7 +266,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   select<T>(table: Selection<T>, query?: Query<T>): Selection<T>
-  select<K extends Keys<S>, R extends Include<S[K]>>(
+  select<K extends Keys<S>, R extends Relation.Include<S[K]>>(
     table: K,
     query?: Query<S[K]>,
     relations?: R
@@ -395,11 +385,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return await sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: Partial<S[K]>): Promise<S[K]> {
+  async create<K extends Keys<S>>(table: K, data: Relation.UnRelation<S[K]>): Promise<S[K]>
+  async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const tasks: any[] = []
     for (const key in data) {
       if (data[key] && this.tables[table].fields[key]?.relation) {
-        const relation = this.tables[table].fields[key].relation!
+        const relation = this.tables[table].fields[key].relation
         if (relation.type === 'oneToOne') {
           const mergedData = { ...data[key] }
           for (const k in relation.fields) {

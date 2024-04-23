@@ -1,7 +1,7 @@
 import { Binary, clone, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, isEvalExpr } from './eval.ts'
-import { Flatten, Keys, unravel } from './utils.ts'
+import { AtomicTypes, Flatten, Keys, unravel, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 
@@ -9,8 +9,26 @@ const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
 
 const Relation = Symbol('minato.relation')
-export type RelationMark<T = any> = { [Relation]: T }
-export type Relation<T = object> = Partial<T> | RelationMark<T>
+export type Relation<T = object> = Partial<T> & Relation.Mark<T>
+
+export namespace Relation {
+  export type Mark<T = any> = { [Relation]: T }
+
+  type UnArray<T> = T extends (infer I)[] ? I : T
+
+  export type Include<S> = boolean | {
+    [P in Keys<S, Mark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
+  }
+
+  export type UnRelation<S> = S
+    | (S extends Values<AtomicTypes> ? never
+    : S extends Relation<(infer T)[]> ? UnRelation<T>[]
+    : S extends Relation<infer T> ? UnRelation<T>
+    : S extends any[] ? never
+    : string extends keyof S ? never
+    : S extends object ? { [K in keyof S]: UnRelation<S[K]> }
+    : never)
+}
 
 export interface Field<T = any> {
   type: Type<T>

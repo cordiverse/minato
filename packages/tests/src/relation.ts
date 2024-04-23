@@ -1,4 +1,4 @@
-import { $, Database, Relation } from 'minato'
+import { Database, Relation } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
 import { isNullable } from 'cosmokit'
@@ -278,7 +278,7 @@ namespace RelationTests {
         await database.create('profile', {
           ...profile,
           user: {
-            ...userTable.find(user => profile.userId === user.id),
+            ...userTable.find(user => profile.userId === user.id)!,
             posts: postTable.filter(post => post.authorId === profile.userId),
           },
         })
