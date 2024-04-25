@@ -324,7 +324,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const builder = new PostgresBuilder(this, sel.tables)
     const query = builder.parseQuery(sel.query)
     if (query === 'FALSE') return {}
-    const { count } = await this.query(`DELETE FROM ${sel.table} WHERE ${query}`)
+    const { count } = await this.query(`DELETE FROM ${builder.escapeId(sel.table)} WHERE ${query}`)
     return { matched: count, removed: count }
   }
 
