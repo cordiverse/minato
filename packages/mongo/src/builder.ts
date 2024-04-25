@@ -261,19 +261,22 @@ export class Builder {
       for (const type of aggrKeys) {
         if (!expr[type]) continue
         const key = this.createKey()
-        const value = this.transformAggr(expr[type])
         this.aggrDefault = 0
         if (type === '$count') {
+          const value = this.transformAggr(expr[type])
           group![key] = { $addToSet: value }
           return { $size: '$' + key }
         } else if (type === '$length') {
+          const value = this.transformAggr(expr[type])
           group![key] = { $push: value }
           return { $size: '$' + key }
         } else if (type === '$array') {
+          const value = this.transformAggr(expr[type][0])
           this.aggrDefault = []
           group![key] = { $push: value }
           return '$' + key
         } else {
+          const value = this.transformAggr(expr[type])
           group![key] = { [type]: value }
           return '$' + key
         }
@@ -480,15 +483,7 @@ export class Builder {
 
     const converter = this.driver.types[type?.type]
     let res = value
-
-    if (!isNullable(res) && type.inner) {
-      if (Type.isArray(type)) {
-        res = res.map(x => this.dump(x, Type.getInner(type)!))
-      } else {
-        res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type, k)))
-      }
-    }
-
+    res = Type.transform(res, type, (value, type) => this.dump(value, type))
     res = converter?.dump ? converter.dump(res) : res
     const ancestor = this.driver.database.types[type.type]?.type
     res = this.dump(res, ancestor ? Type.fromField(ancestor) : undefined)
@@ -504,14 +499,7 @@ export class Builder {
       const ancestor = this.driver.database.types[type.type]?.type
       let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined)
       res = converter?.load ? converter.load(res) : res
-
-      if (!isNullable(res) && type.inner) {
-        if (Type.isArray(type)) {
-          res = res.map(x => this.load(x, Type.getInner(type as Type)))
-        } else {
-          res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k)))
-        }
-      }
+      res = Type.transform(res, type, (value, type) => this.load(value, type))
       return res
     }
 

@@ -165,9 +165,7 @@ namespace RelationTests {
 
 
   function nm(l: any) {
-    if (Array.isArray(l)) return l.length ? l : [{}]
-    else if (isNullable(l)) return {}
-    else return l
+    return l
   }
 
   export function query(database: Database<Tables>) {

@@ -1,4 +1,4 @@
-import { Intersect } from 'cosmokit'
+import { Intersect, isNullable } from 'cosmokit'
 import { Eval } from './eval.ts'
 
 export type Values<S> = S[keyof S]
@@ -90,4 +90,13 @@ export function unravel(source: object, init?: (value) => any) {
     node[segments[0]] = source[key]
   }
   return result
+}
+
+export function isEmpty(value: any) {
+  if (isNullable(value)) return true
+  if (typeof value !== 'object') return false
+  for (const key in value) {
+    if (!isNullable(value[key])) return false
+  }
+  return true
 }

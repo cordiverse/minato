@@ -292,7 +292,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             ...Object.entries(fields).filter(([, field]) => Field.available(field)).map(([k]) => k),
             ...extraFields,
           ], {
-            [key]: row => Eval.array(row[key]),
+            [key]: row => Eval.array(row[key], true),
           })
         } else if (relation.type === 'manyToMany') {
           const assocTable = Relation.buildAssociationTable(relation.table, table)
@@ -303,7 +303,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             ...Object.entries(fields).filter(([, field]) => Field.available(field)).map(([k]) => k),
             ...extraFields,
           ], {
-            [key]: row => Eval.array(row[key][relation.table]),
+            [key]: row => Eval.array(row[key][relation.table], true),
           })
         }
         extraFields.push(key)
@@ -375,6 +375,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (primary.some(key => key in update)) {
       throw new TypeError(`cannot modify primary key`)
     }
+
+    const relations = Object.entries(sel.model.fields).filter(([, field]) => field!.relation)
+    if (relations.length) {
+      // process relations
+      // const realUpdate = omit(update, relations.map(([key]) => key) as any) as any
+    }
+
     update = sel.model.format(update)
     if (Object.keys(update).length === 0) return {}
     return await sel._action('set', update).execute()
@@ -587,5 +594,84 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       Object.assign(stats.tables, tables)
     }))
     return stats
+  }
+
+  private async processRelationUpdate<K extends Keys<S>, P extends Keys<S[K], Relation>>(table: K, row: S[K], key: P, update: Relation.Update<S[K][P]>) {
+    const tasks: any[] = []
+    const relation = this.tables[table].fields[key]!.relation!
+    // if (relation.type === 'manyToMany') {
+    // const tableName = Relation.buildManyToManyTable(table, relation.table)
+    // const fields = relation.fields.map(x => Relation.buildManyToManyKey(x, table))
+    // const relateds = await this.get(relation.table, Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])))
+    // }
+    if (update.create) {
+      const data = makeArray(update.create).map(r => {
+        const data = { ...r }
+        for (const k in relation.fields) {
+          data[relation.references[k]] = row[relation.fields[k]]
+        }
+        return data
+      })
+      tasks.push(this.insertMany(relation.table as any, data))
+    }
+    if (update.set) {
+      if (relation.type === 'oneToMany') {
+        tasks.push([
+          'set',
+          relation.table,
+          Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+          update.set,
+        ])
+      } else if (relation.type === 'manyToMany') {
+        ;
+      }
+    }
+    if (update.remove) {
+      if (relation.type === 'oneToMany') {
+        tasks.push(this.remove(
+          relation.table as any,
+          (r: any) => ({
+            ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+            ...(typeof update.remove === 'function' ? update.remove(r) : update.remove),
+          }) as any,
+        ))
+      } else if (relation.type === 'manyToMany') {
+        throw new Error('remove for manyToMany relation is not supported')
+      }
+    }
+    if (update.connect) {
+      if (relation.type === 'oneToMany') {
+        ;
+      } else if (relation.type === 'manyToMany') {
+        const tableName = Relation.buildAssociationTable(table, relation.table)
+        const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
+        const references = relation.references.map(x => Relation.buildAssociationKey(x, table))
+        tasks.push(async () => {
+          const rels = await this.get(relation.table as any, update.connect as any)
+          await this.insertMany(tableName as any, rels.map(r => ({
+            ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
+            ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i]]])),
+          })) as any)
+        })
+      }
+    }
+    if (update.disconnect) {
+      if (relation.type === 'oneToMany') {
+        throw new Error('disconnect for oneToMany relation is not supported')
+      } else if (relation.type === 'manyToMany') {
+        const tableName = Relation.buildAssociationTable(table, relation.table)
+        const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
+        // const task = async () => {
+
+        // }
+        tasks.push(this.remove(
+          tableName as any,
+          (r: any) => ({
+            ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
+            ...(typeof update.disconnect === 'function' ? update.disconnect(r) : update.disconnect),
+          }) as any,
+        ))
+      }
+    }
   }
 }

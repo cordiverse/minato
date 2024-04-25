@@ -1,5 +1,5 @@
 import { defineProperty, isNullable, mapValues } from 'cosmokit'
-import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils.ts'
+import { Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row } from './utils.ts'
 import { Type } from './type.ts'
 import { Field } from './model.ts'
 
@@ -132,7 +132,7 @@ export namespace Eval {
 
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
     object<T extends any>(row: Row<T>): Expr<T, false>
-    array<T>(value: Expr<T, false>): Expr<T[], true>
+    array<T>(value: Expr<T, false>, _ignoreNull?: boolean): Expr<T[], true>
   }
 }
 
@@ -272,9 +272,13 @@ Eval.object = (fields: any) => {
   return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value)))) as any
 }
 
-Eval.array = unary('array', (expr, table) => Array.isArray(table)
-  ? table.map(data => executeAggr(expr, data))
-  : Array.from(executeEval(table, expr)), (expr) => Type.Array(Type.fromTerm(expr)))
+Eval.array = multary('array', ([expr, ignoreNull], table) => Array.isArray(table)
+  ? table.map(data => executeAggr(expr, data)).filter(x => !ignoreNull || !isEmpty(x))
+  : Array.from(executeEval(table, expr)).filter(x => !ignoreNull || !isEmpty(x)), (expr, ignoreNull = false) => {
+  const type = Type.Array(Type.fromTerm(expr))
+  type.relation = ignoreNull
+  return type
+})
 
 Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
 

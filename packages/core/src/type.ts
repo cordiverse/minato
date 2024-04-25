@@ -1,6 +1,7 @@
 import { Binary, defineProperty, isNullable, mapValues } from 'cosmokit'
 import { Field } from './model.ts'
 import { Eval, isEvalExpr } from './eval.ts'
+import { isEmpty } from './utils.ts'
 // import { Keys } from './utils.ts'
 
 export interface Type<T = any, N = any> {
@@ -9,6 +10,7 @@ export interface Type<T = any, N = any> {
   type: Field.Type<T> // | Keys<N, T> | Field.NewType<T>
   inner?: T extends (infer I)[] ? Type<I, N> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key], N> } : never
   array?: boolean
+  relation?: boolean
 }
 
 export namespace Type {
@@ -83,5 +85,16 @@ export namespace Type {
       .filter(([k]) => k.startsWith(`${key}.`))
       .map(([k, v]) => [k.slice(key.length + 1), v]),
     ))
+  }
+
+  export function transform(value: any, type: Type, callback: (value: any, type?: Type) => any) {
+    if (!isNullable(value) && type?.inner) {
+      if (Type.isArray(type)) {
+        return (value as any[]).map(x => callback(x, Type.getInner(type))).filter(x => !type.relation || !isEmpty(x))
+      } else {
+        return mapValues(value, (x, k) => callback(x, Type.getInner(type, k)))
+      }
+    }
+    return value
   }
 }

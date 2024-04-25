@@ -1,4 +1,4 @@
-import { Dict, isNullable, mapValues } from 'cosmokit'
+import { Dict, isNullable } from 'cosmokit'
 import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
@@ -176,7 +176,7 @@ export class Builder {
         : this.asEncoded(`if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false)),
 
       $object: (fields) => this.groupObject(fields),
-      $array: (expr) => this.groupArray(this.transform(this.parseEval(expr, false), expr, 'encode')),
+      $array: ([expr]) => this.groupArray(this.transform(this.parseEval(expr, false), expr, 'encode')),
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
@@ -549,14 +549,7 @@ export class Builder {
       const converter = (type.inner || type.type === 'json') ? (root ? this.driver.types['json'] : undefined) : this.driver.types[type.type]
       if (type.inner || type.type === 'json') root = false
       let res = value
-
-      if (!isNullable(res) && type.inner) {
-        if (Type.isArray(type)) {
-          res = res.map(x => this.dump(x, Type.getInner(type as Type), root))
-        } else {
-          res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type as Type, k), root))
-        }
-      }
+      res = Type.transform(res, type, (value, type) => this.dump(value, type, root))
       res = converter?.dump ? converter.dump(res) : res
       const ancestor = this.driver.database.types[type.type]?.type
       if (!root && !ancestor) res = this.transform(res, type, 'dump')
@@ -586,14 +579,7 @@ export class Builder {
       let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined, root)
       res = this.transform(res, type, 'load')
       res = converter?.load ? converter.load(res) : res
-
-      if (!isNullable(res) && type.inner) {
-        if (Type.isArray(type)) {
-          res = res.map(x => this.load(x, Type.getInner(type as Type), false))
-        } else {
-          res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k), false))
-        }
-      }
+      res = Type.transform(res, type, (value, type) => this.load(value, type, false))
       return (!isNullable(res) && type.inner && !Type.isArray(type)) ? unravel(res) : res
     }
 

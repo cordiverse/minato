@@ -1,9 +1,11 @@
 import { Binary, clone, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
-import { Eval, isEvalExpr } from './eval.ts'
-import { AtomicTypes, Flatten, Keys, unravel, Values } from './utils.ts'
+import { Eval, Update as EvalUpdate, isEvalExpr } from './eval.ts'
+import { AtomicTypes, Flatten, Keys, Row, unravel, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
+import { Query } from './query.ts'
+import { Selection } from './selection.ts'
 
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
@@ -28,6 +30,14 @@ export namespace Relation {
     : string extends keyof S ? never
     : S extends object ? { [K in keyof S]: Create<S[K]> }
     : never)
+
+  export interface Update<S> {
+    create?: MaybeArray<Create<S>>
+    set?: Row.Computed<S, EvalUpdate<S>>
+    remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+    connect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+    disconnect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+  }
 
   export function buildAssociationTable(...tables: [string, string]) {
     return '_' + tables.sort().join('To')
