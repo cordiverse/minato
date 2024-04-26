@@ -32,7 +32,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     }
 
     const { ref, query, table, args, model } = sel
-    const { fields, group, having } = sel.args[0]
+    const { fields, group, having, optional = {} } = sel.args[0]
 
     let data: any[]
 
@@ -42,9 +42,15 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
         if (!entries.length) return []
         const [[name, rows], ...tail] = entries
         if (!tail.length) return rows.map(row => ({ [name]: row }))
-        return rows.flatMap(row => catesian(tail).map(tail => ({ ...tail, [name]: row })))
+        return rows.flatMap(row => {
+          let res = catesian(tail).map(tail => ({ ...tail, [name]: row }))
+          if (Object.keys(table).length === tail.length + 1) {
+            res = res.map(row => ({ ...env, [ref]: row })).filter(data => executeEval(data, having)).map(x => x[ref])
+          }
+          return !optional[tail[0]?.[0]] || res.length ? res : [{ [name]: row }]
+        })
       }
-      data = catesian(entries).map(x => ({ ...env, [ref]: x })).filter(data => executeEval(data, having)).map(x => x[ref])
+      data = catesian(entries)
     } else {
       data = this.table(table, env).filter(row => executeQuery(row, query, ref, env))
     }

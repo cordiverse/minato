@@ -483,15 +483,21 @@ export class Builder {
       if (!prefix) return
     } else {
       this.state.innerTables = Object.fromEntries(Object.values(table).map(t => [t.ref, t.model]))
-      const joins: string[] = Object.entries(table).map(([key, table]) => {
+      const joins: [string, string][] = Object.entries(table).map(([key, table]) => {
         const restore = this.saveState({ tables: { ...table.tables } })
         const t = `${this.get(table, true, false, false)} AS ${this.escapeId(table.ref)}`
         restore()
-        return t
+        return [key, t]
       })
 
-      // the leading space is to prevent from being parsed as bracketed and added ref
-      prefix = ' ' + joins[0] + joins.slice(1, -1).map(join => ` JOIN ${join} ON ${this.$true}`).join(' ') + ` JOIN ` + joins.at(-1)
+      prefix = [
+        // the leading space is to prevent from being parsed as bracketed and added ref
+        ' ',
+        joins[0][1],
+        ...joins.slice(1, -1).map(([key, join]) => `${args[0].optional?.[key] ? 'LEFT' : ''} JOIN ${join} ON ${this.$true}`),
+        `${args[0].optional?.[joins.at(-1)![0]] ? 'LEFT ' : ''}JOIN`,
+        joins.at(-1)![1],
+      ].join(' ')
       const filter = this.parseEval(args[0].having)
       prefix += ` ON ${filter}`
     }

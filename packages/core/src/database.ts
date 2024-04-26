@@ -244,12 +244,16 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (Array.isArray(oldTables)) {
       tables = Object.fromEntries(oldTables.map((name) => [name, this.select(name)]))
     }
-    const sels = mapValues(tables, (t: TableLike<S>) => {
+    let sels = mapValues(tables, (t: TableLike<S>) => {
       return typeof t === 'string' ? this.select(t) : t
     })
     if (Object.keys(sels).length === 0) throw new Error('no tables to join')
     const drivers = new Set(Object.values(sels).map(sel => sel.driver))
     if (drivers.size !== 1) throw new Error('cannot join tables from different drivers')
+    if (Object.keys(sels).length === 2 && (optional?.[0] || optional?.[Object.keys(sels)[0]])) {
+      if (optional[1] || optional[Object.keys(sels)[1]]) throw new Error('full join is not supported')
+      sels = Object.fromEntries(Object.entries(sels).reverse())
+    }
     const sel = new Selection([...drivers][0], sels)
     if (Array.isArray(oldTables)) {
       sel.args[0].having = Eval.and(query(...oldTables.map(name => sel.row[name])))
