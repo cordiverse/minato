@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "MongoDB Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -38,10 +38,10 @@
     "mongodb"
   ],
   "devDependencies": {
-    "@minatojs/tests": "^2.1.0"
+    "@minatojs/tests": "^2.2.0"
   },
   "peerDependencies": {
-    "minato": "^3.1.1"
+    "minato": "^3.2.0"
   },
   "dependencies": {
     "cosmokit": "^1.6.2",
