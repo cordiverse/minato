@@ -44,17 +44,9 @@ export namespace Join2 {
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
 }
 
-export namespace Database {
-  export interface Tables {}
-
-  export interface Types {}
-}
-
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
-  static readonly Tables = Symbol('minato.tables')
-  static readonly Types = Symbol('minato.types')
   static readonly transact = Symbol('minato.transact')
   static readonly migrate = Symbol('minato.migrate')
 
