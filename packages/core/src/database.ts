@@ -45,17 +45,9 @@ export namespace Join2 {
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
 }
 
-export namespace Database {
-  export interface Tables {}
-
-  export interface Types {}
-}
-
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
-  static readonly Tables = Symbol('minato.tables')
-  static readonly Types = Symbol('minato.types')
   static readonly transact = Symbol('minato.transact')
   static readonly migrate = Symbol('minato.migrate')
 
@@ -274,8 +266,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   ): Selection<S[K]>
 
   select(table: any, query?: any, relations?: any) {
-    const rawquery = typeof query === 'function' ? query : () => query
     let sel = new Selection(this.getDriver(table), table, query)
+    if (typeof table !== 'string') return sel
+    const rawquery = typeof query === 'function' ? query : () => query
     const fields = this.tables[table].fields
     for (const key in sel.query) {
       if (fields[key]?.relation && !relations?.[key]) {
@@ -321,9 +314,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel
   }
 
-  private processRelationQuery(query: Relation.QueryExpr<any>) {
+  private processRelationQuery<S>(query: Relation.QueryExpr<S>, row: Row<S>) {
     const result: Query.FieldExpr = { $and: [] }
-    if (result)
   }
 
   join<const X extends Join1.Input<S>>(

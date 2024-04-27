@@ -137,8 +137,8 @@ export class MySQLBuilder extends Builder {
     return this.asEncoded(`ifnull(${res}, json_array())`, true)
   }
 
-  protected parseSelection(sel: Selection) {
-    if (!this.compat.maria && !this.compat.mysql57) return super.parseSelection(sel)
+  protected parseSelection(sel: Selection, inline: boolean = false) {
+    if (!this.compat.maria && !this.compat.mysql57) return super.parseSelection(sel, inline)
     const { args: [expr], ref, table, tables } = sel
     const restore = this.saveState({ wrappedSubquery: true, tables })
     const inner = this.get(table as Selection, true, true) as string

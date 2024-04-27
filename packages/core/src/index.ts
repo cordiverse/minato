@@ -17,13 +17,28 @@ declare module 'cordis' {
   }
 
   interface Context {
-    [Database.Tables]: Database.Tables
-    [Database.Types]: Database.Types
-    database: Database<this[typeof Database.Tables], this[typeof Database.Types], this>
-    model: Database<this[typeof Database.Tables], this[typeof Database.Types], this>
+    [Types]: Types
+    [Tables]: Tables
+    [Context.Minato]: Context.Minato<this>
+    [Context.Database]: Context.Database<this>
+    model: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Minato]
+    database: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Database]
+  }
+
+  namespace Context {
+    const Minato: unique symbol
+    const Database: unique symbol
+    interface Minato<C extends Context = Context> {}
+    interface Database<C extends Context = Context> {}
   }
 }
 
 export { Logger, Schema, Schema as z } from 'cordis'
+
+export const Types = Symbol('minato.types')
+export interface Types {}
+
+export const Tables = Symbol('minato.tables')
+export interface Tables {}
 
 export default Database

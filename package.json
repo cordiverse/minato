@@ -22,7 +22,7 @@
     "test:html": "shx rm -rf coverage && c8 -r html yarn test"
   },
   "devDependencies": {
-    "@cordisjs/eslint-config": "^1.0.4",
+    "@cordisjs/eslint-config": "^1.1.1",
     "@types/mocha": "^9.1.1",
     "@types/node": "^20.11.30",
     "c8": "^7.14.0",

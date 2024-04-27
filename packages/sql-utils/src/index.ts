@@ -194,6 +194,8 @@ export class Builder {
     if (Array.isArray(value)) {
       if (!value.length) return notStr ? this.$true : this.$false
       return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+    } else if (value.$exec) {
+      return `${key}${notStr} in ${this.parseSelection(value.$exec, true)}`
     } else {
       const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
       return notStr ? this.logicalNot(res) : res
@@ -244,13 +246,13 @@ export class Builder {
     return `NOT(${condition})`
   }
 
-  protected parseSelection(sel: Selection) {
+  protected parseSelection(sel: Selection, inline = false) {
     const { args: [expr], ref, table, tables } = sel
     const restore = this.saveState({ tables })
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
     restore()
-    if (!(sel.args[0] as any).$) {
+    if (inline || !(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
       return `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
