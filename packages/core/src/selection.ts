@@ -85,7 +85,10 @@ class Executable<S = any, T = any> {
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>
   protected resolveQuery(query: Query<S> = {}): any {
-    if (typeof query === 'function') return { $expr: query(this.row) }
+    if (typeof query === 'function') {
+      const expr = query(this.row)
+      return expr['$expr'] ? expr : { $expr: expr }
+    }
     if (Array.isArray(query) || query instanceof RegExp || ['string', 'number'].includes(typeof query)) {
       const { primary } = this.model
       if (Array.isArray(primary)) {

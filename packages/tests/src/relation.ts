@@ -1,4 +1,4 @@
-import { Database, Relation } from 'minato'
+import { $, Database, Relation } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
 import { isNullable } from 'cosmokit'
@@ -18,6 +18,7 @@ interface Profile {
 
 interface Post {
   id: number
+  score?: number
   authorId?: number
   author?: Relation<User>
   content?: string
@@ -74,6 +75,7 @@ function RelationTests(database: Database<Tables>) {
 
   database.extend('post', {
     id: 'unsigned',
+    score: 'unsigned',
     content: 'string',
     authorId: 'unsigned',
     author: 'expr',
@@ -174,14 +176,13 @@ namespace RelationTests {
       const profiles = await setup(database, 'profile', profileTable)
       const posts = await setup(database, 'post', postTable)
 
-      await expect(database.select('profile', {}, { user: true }).execute()).to.eventually.have.shape(
+      await expect(database.get('profile', {}, ['user'])).to.eventually.have.shape(
         profiles.map(profile => ({
-          ...profile,
           user: nm(users.find(user => user.id === profile.userId)),
         }))
       )
 
-      await expect(database.select('user', {}, { profile: true, posts: true }).execute()).to.eventually.have.shape(
+      await expect(database.get('user', {}, ['id', 'value', 'profile', 'posts'])).to.eventually.have.shape(
         users.map(user => ({
           ...user,
           profile: nm(profiles.find(profile => profile.userId === user.id)),
@@ -232,6 +233,11 @@ namespace RelationTests {
           }
         }))
       )
+
+      it('query on relation', async () => {
+
+      })
+
     })
 
     it('manyToMany', async () => {
@@ -296,6 +302,129 @@ namespace RelationTests {
           posts: nm(postTable.filter(post => post.authorId === user.id)),
         }))
       )
+    })
+  }
+
+  export function modify(database: Database<Tables>) {
+    it('oneToOne/manyToOne', async () => {
+      const users = await setup(database, 'user', userTable)
+      const profiles = await setup(database, 'profile', profileTable)
+      await setup(database, 'post', postTable)
+
+      profiles.splice(2, 1)
+      await database.set('user', 3, {
+        profile: null,
+      })
+      await expect(database.get('profile', {})).to.eventually.have.deep.members(profiles)
+
+      profiles.push(database.tables['profile'].create({ userId: 3, name: 'Reborn' }))
+      await database.set('user', 3, {
+        profile: {
+          name: 'Reborn',
+        },
+      })
+      await expect(database.get('profile', {})).to.eventually.have.deep.members(profiles)
+
+      users[0].value = 99
+      await database.set('post', 1, {
+        author: {
+          value: 99,
+        },
+      })
+      await expect(database.get('user', {})).to.eventually.have.deep.members(users)
+
+      profiles.splice(2, 1)
+      await database.set('user', 3, {
+        profile: null,
+      })
+      await expect(database.get('profile', {})).to.eventually.have.deep.members(profiles)
+    })
+
+    it('create oneToMany', async () => {
+      await setup(database, 'user', userTable)
+      await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+
+      posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post1' }))
+      posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post2' }))
+      await database.set('user', 2, {
+        posts: {
+          $create: [
+            { content: 'post1' },
+            { content: 'post2' },
+          ],
+        },
+      })
+      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+
+      posts.push(database.tables['post'].create({ id: 101, authorId: 1, content: 'post101' }))
+      await database.set('user', 1, row => ({
+        value: 99,
+        posts: {
+          $create: { id: $.add(row.id, 100), content: 'post101' }
+        },
+      }))
+      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+    })
+
+    it('set oneToMany', async () => {
+      await setup(database, 'user', userTable)
+      await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+
+      posts[0].score = 2
+      posts[1].score = 3
+      await database.set('user', 1, row => ({
+        posts: {
+          $set: r => ({
+            score: $.add(row.id, r.id),
+          })
+        },
+      }))
+
+      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+    })
+
+    it('delete oneToMany', async () => {
+      await setup(database, 'user', userTable)
+      await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+
+      posts.splice(0, 1)
+      await database.set('user', {}, row => ({
+        posts: {
+          $remove: r => $.eq(r.id, row.id)
+        },
+      }))
+      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+    })
+
+    it('connect/disconnect manyToMany', async () => {
+      const users = await setup(database, 'user', userTable)
+      const profiles = await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+      const tags = await setup(database, 'tag', tagTable)
+      const post2tags = await setup(database, 'post2tag', post2TagTable)
+      const re = await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable.map(x => ({
+        post_id: x.postId,
+        tag_id: x.tagId,
+      })))
+
+      await database.set('post', 2, row => ({
+        tags: {
+          $disconnect: {}
+        },
+      }))
+      // await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+
+      await database.set('post', 2, row => ({
+        tags: {
+          $connect: { id: 1 }
+        },
+      }))
+
+      console.dir(await database.select('post', {}, { tags: true }).execute(), { depth: 10 })
+      console.log(posts)
     })
   }
 }
