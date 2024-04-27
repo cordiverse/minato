@@ -225,13 +225,13 @@ export class PostgresBuilder extends Builder {
     return this.asEncoded(`coalesce(jsonb_agg(${value}), '[]'::jsonb)`, true)
   }
 
-  protected parseSelection(sel: Selection) {
+  protected parseSelection(sel: Selection, inline: boolean = false) {
     const { args: [expr], ref, table, tables } = sel
     const restore = this.saveState({ tables })
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
     restore()
-    if (!(sel.args[0] as any).$) {
+    if (inline || !(sel.args[0] as any).$) {
       return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
       return `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
