@@ -16,6 +16,12 @@ export namespace Relation {
     [P in Keys<S, Mark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
   }
 
+  export type QueryExpr<S> = {
+    $every: Query.Expr<Flatten<S>>
+    $some: Query.Expr<Flatten<S>>
+    $none: Query.Expr<Flatten<S>>
+  }
+
   export type Create<S> = S
     | (S extends Values<AtomicTypes> ? never
     : S extends Relation<(infer T)[]> ? Create<T>[]
@@ -33,7 +39,7 @@ export namespace Relation {
     $disconnect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
   }
 
-  export type _Update<S> = EvalUpdate<S>
+  export type UpdateInner<S> = EvalUpdate<S>
     | (S extends Values<AtomicTypes> ? never
     : S extends Relation<(infer T)[]> ? UpdateExpr<T> | Create<T>[]
     : S extends Relation<infer T> ? Create<T>
@@ -42,7 +48,7 @@ export namespace Relation {
     : S extends object ? { [K in keyof S]?: Update<S[K]> }
     : never)
 
-  export type Update<S> = {[K in keyof S]?: _Update<S[K]> }
+  export type Update<S> = {[K in keyof S]?: UpdateInner<S[K]> }
 
   export function buildAssociationTable(...tables: [string, string]) {
     return '_' + tables.sort().join('To')

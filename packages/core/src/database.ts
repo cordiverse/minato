@@ -274,11 +274,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   ): Selection<S[K]>
 
   select(table: any, query?: any, relations?: any) {
+    const rawquery = typeof query === 'function' ? query : () => query
+    let sel = new Selection(this.getDriver(table), table, query)
+    const fields = this.tables[table].fields
+    for (const key in sel.query) {
+      if (fields[key]?.relation && !relations?.[key]) {
+        (relations ??= {})[key] = true
+      }
+    }
     if (relations && typeof relations === 'object') {
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
-      const fields = this.tables[table].fields
       const extraFields: string[] = []
-      let sel = new Selection(this.getDriver(table), table, query)
       for (const key in relations) {
         if (!relations[key] || !fields[key]!.relation) continue
         const relation = fields[key]!.relation
@@ -289,7 +295,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         } else if (relation.type === 'oneToMany') {
           sel = sel.join(key, this.select(relation.table as any, {}, relations[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
-          ), true).groupBy([
+          ), true)
+          const relquery = rawquery(sel.ref)[key]
+          sel = sel.groupBy([
             ...Object.entries(fields).filter(([, field]) => Field.available(field)).map(([k]) => k),
             ...extraFields,
           ], {
@@ -309,10 +317,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         }
         extraFields.push(key)
       }
-      return sel
-    } else {
-      return new Selection(this.getDriver(table), table, query)
     }
+    return sel
+  }
+
+  private processRelationQuery(query: Relation.QueryExpr<any>) {
+    const result: Query.FieldExpr = { $and: [] }
+    if (result)
   }
 
   join<const X extends Join1.Input<S>>(
@@ -699,7 +710,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       } else if (relation.type === 'manyToMany') {
         const tableName = Relation.buildAssociationTable(table, relation.table)
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
-        const rels = await session.get(relation.table as any, update.$disconnect as any)
+        // const rels = await session.get(relation.table as any, update.$disconnect as any)
         await session.remove(
           tableName as any,
           (r: any) => ({

@@ -1,6 +1,6 @@
 import { defineProperty, Dict, filterKeys, mapValues } from 'cosmokit'
 import { Driver } from './driver.ts'
-import { Eval, executeEval } from './eval.ts'
+import { Eval, executeEval, isEvalExpr } from './eval.ts'
 import { Field, Model } from './model.ts'
 import { Query } from './query.ts'
 import { FlatKeys, FlatPick, Flatten, Keys, randomId, Row } from './utils.ts'
@@ -87,7 +87,7 @@ class Executable<S = any, T = any> {
   protected resolveQuery(query: Query<S> = {}): any {
     if (typeof query === 'function') {
       const expr = query(this.row)
-      return expr['$expr'] ? expr : { $expr: expr }
+      return expr['$expr'] ? expr : isEvalExpr(expr) ? { $expr: expr } : expr
     }
     if (Array.isArray(query) || query instanceof RegExp || ['string', 'number'].includes(typeof query)) {
       const { primary } = this.model
