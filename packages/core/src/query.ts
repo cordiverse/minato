@@ -61,7 +61,7 @@ export namespace Query {
 
   export type FieldQuery<T = any> = FieldExpr<T> | Shorthand<T>
 
-  export type Callback<T = any> = (row: Row<T>) => Query.Expr<Flatten<T>>
+  export type Callback<T = any> = (row: Row<T>) => Expr<Flatten<T>>
 
   export type Expr<T = any> = LogicalExpr<T> & {
     [K in keyof T]?: null | (T[K] extends Relation<infer I> | undefined ? I extends any[] ? FieldQuery<T[K]> : Query<I> : FieldQuery<T[K]>)

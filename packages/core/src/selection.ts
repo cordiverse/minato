@@ -263,8 +263,8 @@ export class Selection<S = any> extends Executable<S, S[]> {
   }
 
   evaluate<T>(callback: Selection.Callback<S, T, true>): Eval.Expr<T, true>
-  evaluate<K extends Keys<S>>(field: K): Eval.Expr<S[K][], boolean>
-  evaluate<K extends Keys<S>>(field: K[]): Eval.Expr<any[][], boolean>
+  evaluate<K extends Keys<S>>(field: K): Eval.Expr<S[K][], false>
+  evaluate<K extends Keys<S>>(field: K[]): Eval.Expr<any[][], false>
   evaluate(): Eval.Expr<S[], boolean>
   evaluate(callback?: any): any {
     const selection = new Selection(this.driver, this)

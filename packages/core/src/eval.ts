@@ -308,7 +308,7 @@ Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(
 export { Eval as $ }
 
 type MapUneval<S> = {
-  [K in keyof S]?: null | Uneval<Exclude<S[K], undefined>, false>
+  [K in keyof S]?: null | Uneval<Exclude<S[K], undefined>, boolean>
 }
 
 export type Update<T = any> = MapUneval<Flatten<T>>

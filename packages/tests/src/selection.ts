@@ -443,10 +443,6 @@ namespace SelectionTests {
     })
   }
 
-  interface SubqueryOptions {
-    objectMemberQuery?: boolean
-  }
-
   export function subquery(database: Database<Tables>) {
     it('select', async () => {
       await expect(database.select('foo')

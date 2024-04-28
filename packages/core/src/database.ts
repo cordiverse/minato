@@ -267,11 +267,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   select(table: any, query?: any, relations?: any) {
     let sel = new Selection(this.getDriver(table), table, query)
     if (typeof table !== 'string') return sel
-    const disableJoin = relations === null
+    const whereOnly = relations === null
     const rawquery = typeof query === 'function' ? query : () => query
-    const fields = this.tables[table].fields
+    const modelFields = this.tables[table].fields
     for (const key in sel.query) {
-      if (fields[key]?.relation && !relations?.[key]) {
+      if (modelFields[key]?.relation && !relations?.[key]) {
         (relations ??= {})[key] = true
       }
     }
@@ -280,127 +280,45 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
       const extraFields: string[] = []
       for (const key in relations) {
-        if (!relations[key] || !fields[key]?.relation) continue
-        const relation = fields[key]!.relation
+        if (!relations[key] || !modelFields[key]?.relation) continue
+        const relation = modelFields[key]!.relation
         if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
-          if (!disableJoin) {
-            sel = sel.join(key, this.select(relation.table as any, {}, relations[key]), (self, other) => Eval.and(
-              ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
-            ), true)
-          }
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table as any, {}, relations[key]), (self, other) => Eval.and(
+            ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
+          ), true)
           const relquery = rawquery(sel.row)[key]
           if (relquery) sel = sel.where(this.processRelationQuery(table as any, sel.row as any, key as any, relquery))
         } else if (relation.type === 'oneToMany') {
-          if (!disableJoin) {
-            sel = sel.join(key, this.select(relation.table as any, {}, relations[key]), (self, other) => Eval.and(
-              ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
-            ), true)
-          }
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table as any, {}, relations[key]), (self, other) => Eval.and(
+            ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
+          ), true)
           const relquery = rawquery(sel.row)[key]
           if (relquery) sel = sel.where(this.processRelationQuery(table as any, sel.row as any, key as any, relquery))
-          if (!disableJoin) {
-            sel = sel.groupBy([
-              ...Object.entries(fields).filter(([, field]) => Field.available(field)).map(([k]) => k),
-              ...extraFields,
-            ], {
-              [key]: row => Eval.array(row[key], true),
-            })
-          }
+          sel = whereOnly ? sel : sel.groupBy([
+            ...Object.entries(modelFields).filter(([, field]) => Field.available(field)).map(([k]) => k),
+            ...extraFields,
+          ], {
+            [key]: row => Eval.array(row[key], true),
+          })
         } else if (relation.type === 'manyToMany') {
           const assocTable = Relation.buildAssociationTable(relation.table, table)
           const references = relation.fields.map(x => Relation.buildAssociationKey(x, table))
-          if (!disableJoin) {
-            sel = sel.join(key, this.select(assocTable as any, {}, { [relation.table]: relations[key] } as any), (self, other) => Eval.and(
-              ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
-            ), true)
-          }
+          sel = whereOnly ? sel : sel.join(key, this.select(assocTable as any, {}, { [relation.table]: relations[key] } as any), (self, other) => Eval.and(
+            ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
+          ), true)
           const relquery = rawquery(sel.row)[key]
           if (relquery) sel = sel.where(this.processRelationQuery(table as any, sel.row as any, key as any, relquery))
-          if (!disableJoin) {
-            sel = sel.groupBy([
-              ...Object.entries(fields).filter(([, field]) => Field.available(field)).map(([k]) => k),
-              ...extraFields,
-            ], {
-              [key]: row => Eval.array(row[key][relation.table], true),
-            })
-          }
+          sel = whereOnly ? sel : sel.groupBy([
+            ...Object.entries(modelFields).filter(([, field]) => Field.available(field)).map(([k]) => k),
+            ...extraFields,
+          ], {
+            [key]: row => Eval.array(row[key][relation.table], true),
+          })
         }
         extraFields.push(key)
       }
     }
     return sel
-  }
-
-  private processRelationQuery<K extends Keys<S>, P extends Keys<S[K], Relation>>(table: K, row: Row<S[K]>, key: P, query: Relation.QueryExpr<S>) {
-    const relation = this.tables[table].fields[key]!.relation!
-    if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
-      return {
-        $expr: Eval.in(
-          relation.fields.map(x => row[x]) as any,
-          this.select(relation.table as any, query).evaluate(relation.references as any),
-        ),
-      }
-    } else if (relation.type === 'oneToMany') {
-      const result: any = { $expr: { $and: [] } }
-      if (query.$some) {
-        result.$expr.$and.push(Eval.in(
-          relation.fields.map(x => row[x]) as any,
-          this.select(relation.table as any, query.$some).evaluate(relation.references as any),
-        ))
-      }
-      if (query.$none) {
-        result.$expr.$and.push(Eval.nin(
-          relation.fields.map(x => row[x]) as any,
-          this.select(relation.table as any, query.$none).evaluate(relation.references as any),
-        ))
-      }
-      if (query.$every) {
-        result.$expr.$and.push(Eval.nin(
-          relation.fields.map(x => row[x]) as any,
-          // How can we negate a Query
-          this.select(relation.table as any, Eval.not(query.$every as any)).evaluate(relation.references as any),
-        ))
-      }
-      return result
-    } else if (relation.type === 'manyToMany') {
-      const tableName = Relation.buildAssociationTable(table, relation.table)
-      const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
-      const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
-
-      // return {
-      //   $expr: Eval.in(
-      //     relation.fields.map(x => row[x]) as any,
-      //     relTable,
-      //   ),
-      // }
-
-      const result: any = { $expr: { $and: [] } }
-      if (query.$some) {
-        const innerTable = this.select(relation.table as any, query.$some).evaluate(relation.references as any)
-        const relTable = this.select(tableName as any, r => Eval.in(references.map(x => r[x]) as any, innerTable as any)).evaluate(fields as any)
-        result.$expr.$and.push(Eval.in(
-          relation.fields.map(x => row[x]) as any,
-          relTable,
-        ))
-      }
-      if (query.$none) {
-        const innerTable = this.select(relation.table as any, query.$none).evaluate(relation.references as any)
-        const relTable = this.select(tableName as any, r => Eval.in(references.map(x => r[x]) as any, innerTable as any)).evaluate(fields as any)
-        result.$expr.$and.push(Eval.nin(
-          relation.fields.map(x => row[x]) as any,
-          relTable,
-        ))
-      }
-      if (query.$every) {
-        const innerTable = this.select(relation.table as any, Eval.not(query.$every as any)).evaluate(relation.references as any)
-        const relTable = this.select(tableName as any, r => Eval.in(references.map(x => r[x]) as any, innerTable as any)).evaluate(fields as any)
-        result.$expr.$and.push(Eval.nin(
-          relation.fields.map(x => row[x]) as any,
-          relTable,
-        ))
-      }
-      return result
-    }
   }
 
   join<const X extends Join1.Input<S>>(
@@ -472,33 +390,31 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       .map(([key, field]) => [key, field!.relation!] as const)
     if (relations.length) {
       return await this.ensureTransaction(async (database) => {
-        const queryRows = await database.get(table, query)
+        const rows = await database.get(table, query)
         let realUpdate = omit(update, relations.map(([key]) => key) as any) as any
         realUpdate = sel.model.format(realUpdate)
         const result = Object.keys(realUpdate).length === 0 ? {} : await sel._action('set', realUpdate).execute()
         for (const [key, relation] of relations) {
           if (relation.type === 'oneToOne') {
             if (update[key] === null) {
-              await Promise.all(queryRows.map(row => database.remove(
-                relation.table as any,
+              await Promise.all(rows.map(row => database.remove(relation.table as any,
                 Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])) as any,
               )))
             } else {
-              await database.upsert(relation.table as any, queryRows.map(row => ({
+              await database.upsert(relation.table as any, rows.map(row => ({
                 ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
                 ...rawupdate(row as any)[key],
               })), relation.references as any)
             }
           } else if (relation.type === 'manyToOne') {
-            await database.upsert(relation.table as any, queryRows.map(row => ({
+            await database.upsert(relation.table as any, rows.map(row => ({
               ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
               ...rawupdate(row as any)[key],
             })), relation.references as any)
           } else if (relation.type === 'oneToMany' || relation.type === 'manyToMany') {
-            await Promise.all(queryRows.map(row => this.processRelationUpdate(table, row as any, key as any, rawupdate(row as any)[key])))
+            await Promise.all(rows.map(row => this.processRelationUpdate(table, row as any, key as any, rawupdate(row as any)[key])))
           }
         }
-        // queryRows = await database.get(table, queryRows)
         return result
       })
     }
@@ -594,10 +510,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
               return mergedData
             })
 
-            ;(tasks[relation.table] ??= {
-              table: relation.table,
-              upsert: [],
-            }).upsert.push(...mergedData)
+            ;(tasks[relation.table] ??= { table: relation.table, upsert: [] }).upsert.push(...mergedData)
           } else {
             throw new Error(`field ${key} with ${relation.type} relation can not be used in create`)
           }
@@ -608,8 +521,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     })
 
     if (Object.keys(tasks).length) {
-      const action = this[Database.transact] ? <T>(callback: (database: this) => T) => callback(this) : this.transact.bind(this)
-      return action(async (database) => {
+      return this.ensureTransaction(async (database) => {
         for (const { table, upsert, keys } of Object.values(tasks)) {
           await database.insertMany(table as any, upsert, keys as any)
         }
@@ -722,18 +634,68 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return stats
   }
 
+  private processRelationQuery<K extends Keys<S>, P extends Keys<S[K], Relation>>(table: K, row: Row<S[K]>, key: P, query: Relation.QueryExpr<S>) {
+    const relation = this.tables[table].fields[key]!.relation!
+    const result: any = { $expr: { $and: [] } }
+    if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
+      result.$expr.$and.push(Eval.in(
+        relation.fields.map(x => row[x]) as any,
+        this.select(relation.table as any, query).evaluate(relation.references as any),
+      ))
+    } else if (relation.type === 'oneToMany') {
+      if (query.$some) {
+        result.$expr.$and.push(Eval.in(
+          relation.fields.map(x => row[x]) as any,
+          this.select(relation.table as any, query.$some).evaluate(relation.references as any),
+        ))
+      }
+      if (query.$none) {
+        result.$expr.$and.push(Eval.nin(
+          relation.fields.map(x => row[x]) as any,
+          this.select(relation.table as any, query.$none).evaluate(relation.references as any),
+        ))
+      }
+      if (query.$every) {
+        result.$expr.$and.push(Eval.nin(
+          relation.fields.map(x => row[x]) as any,
+          this.select(relation.table as any, Eval.not(query.$every as any)).evaluate(relation.references as any),
+        ))
+      }
+    } else if (relation.type === 'manyToMany') {
+      const assocTable = Relation.buildAssociationTable(table, relation.table)
+      const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
+      const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
+      if (query.$some) {
+        const innerTable = this.select(relation.table as any, query.$some).evaluate(relation.references as any)
+        const relTable = this.select(assocTable as any, r => Eval.in(references.map(x => r[x]) as any, innerTable)).evaluate(fields as any)
+        result.$expr.$and.push(Eval.in(relation.fields.map(x => row[x]) as any, relTable))
+      }
+      if (query.$none) {
+        const innerTable = this.select(relation.table as any, query.$none).evaluate(relation.references as any)
+        const relTable = this.select(assocTable as any, r => Eval.in(references.map(x => r[x]) as any, innerTable)).evaluate(fields as any)
+        result.$expr.$and.push(Eval.nin(relation.fields.map(x => row[x]) as any, relTable))
+      }
+      if (query.$every) {
+        const innerTable = this.select(relation.table as any, Eval.not(query.$every as any)).evaluate(relation.references as any)
+        const relTable = this.select(assocTable as any, r => Eval.in(references.map(x => r[x]) as any, innerTable as any)).evaluate(fields as any)
+        result.$expr.$and.push(Eval.nin(relation.fields.map(x => row[x]) as any, relTable))
+      }
+    }
+    return result
+  }
+
   private async processRelationUpdate<K extends Keys<S>, P extends Keys<S[K], Relation>>(table: K, row: S[K], key: P, update: Relation.Modifier<S[K][P]>) {
     const session: this = this
     const relation = this.tables[table].fields[key]!.relation!
     if (update.$create) {
-      const data = makeArray(update.$create).map((r: any) => {
+      const upsert = makeArray(update.$create).map((r: any) => {
         const data = { ...r }
         for (const k in relation.fields) {
           data[relation.references[k]] = row[relation.fields[k]]
         }
         return data
       })
-      await session.insertMany(relation.table as any, data)
+      await session.insertMany(relation.table as any, upsert)
     }
     if (update.$set) {
       if (relation.type === 'oneToMany') {
@@ -747,13 +709,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
     if (update.$remove) {
       if (relation.type === 'oneToMany') {
-        await session.remove(relation.table as any,
-          (r: any) => ({
-            $expr: true,
-            ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
-            ...(typeof update.$remove === 'function' ? { $expr: update.$remove(r) } : update.$remove),
-          }) as any,
-        )
+        await session.remove(relation.table as any, (r: any) => ({
+          $expr: true,
+          ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+          ...(typeof update.$remove === 'function' ? { $expr: update.$remove(r) } : update.$remove),
+        }) as any)
       } else if (relation.type === 'manyToMany') {
         throw new Error('remove for manyToMany relation is not supported')
       }
@@ -762,11 +722,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (relation.type === 'oneToMany') {
         throw new Error('connect for oneToMany relation is not supported')
       } else if (relation.type === 'manyToMany') {
-        const tableName = Relation.buildAssociationTable(table, relation.table)
+        const assocTable = Relation.buildAssociationTable(table, relation.table)
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
         const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
         const rels = await session.get(relation.table as any, update.$connect as any)
-        await session.insertMany(tableName as any, rels.map(r => ({
+        await session.insertMany(assocTable as any, rels.map(r => ({
           ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
           ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i]]])),
         })) as any)
@@ -776,31 +736,18 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (relation.type === 'oneToMany') {
         throw new Error('disconnect for oneToMany relation is not supported')
       } else if (relation.type === 'manyToMany') {
-        const tableName = Relation.buildAssociationTable(table, relation.table)
+        const assocTable = Relation.buildAssociationTable(table, relation.table)
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
         const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
 
-        const rels = await session.select(
-            tableName as any,
-            {
-              ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
-              [relation.table]: update.$disconnect,
-            } as any,
-            null,
-        ).execute()
-        await session.remove(tableName as any, r => Eval.in(
+        const rels = await session.select(assocTable as any, {
+          ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
+          [relation.table]: update.$disconnect,
+        } as any, null).execute()
+        await session.remove(assocTable as any, r => Eval.in(
           [...fields.map(x => r[x]), ...references.map(x => r[x])] as any,
           rels.map(r => [...fields.map(x => r[x]), ...references.map(x => r[x])]),
         ))
-
-        // mongo does not support delete aggr
-        // await session.remove(
-        //   tableName as any,
-        //   {
-        //     ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
-        //     [relation.table]: update.$disconnect,
-        //   } as any,
-        // )
       }
     }
   }

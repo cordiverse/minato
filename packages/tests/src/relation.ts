@@ -553,7 +553,6 @@ namespace RelationTests {
           })
         }),
       }))
-
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
 
