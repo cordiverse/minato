@@ -115,9 +115,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (makeArray(model.primary).every(key => key in fields)) {
       defineProperty(model, 'ctx', this[Context.origin])
     }
-    Object.entries(config.relation ?? {}).forEach(([key, def]: [string, Field.RelationDefinition]) => {
-      const relation = Field.Relation.parse(def)
-      const inverse = Field.Relation.inverse(relation, name)
+    Object.entries(fields).forEach(([key, def]: [string, Relation.Definition]) => {
+      if (!Relation.Type.includes(def.type)) return
+      const relation = Relation.parse(def), inverse = Relation.inverse(relation, name)
       if (!this.tables[relation.table]) throw new Error(`relation table ${relation.table} does not exist`)
       ;(model.fields[key] ??= Field.parse('expr')).relation = relation
       if (def.target[1]) {
@@ -131,24 +131,20 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       const references = relation.references.map((x, i) => [Relation.buildAssociationKey(x, relation.table), fields[i][1]] as const)
       this.extend(assocTable as any, {
         ...Object.fromEntries([...fields, ...references]),
-        [name]: 'expr',
-        [relation.table]: 'expr',
+        [name]: {
+          type: 'manyToOne',
+          target: [name],
+          fields: fields.map(x => x[0]),
+          references: relation.references,
+        },
+        [relation.table]: {
+          type: 'manyToOne',
+          target: [relation.table],
+          fields: references.map(x => x[0]),
+          references: relation.fields,
+        },
       } as any, {
         primary: [...fields.map(x => x[0]), ...references.map(x => x[0])],
-        relation: {
-          [name]: {
-            type: 'manyToOne',
-            target: [name],
-            fields: fields.map(x => x[0]),
-            references: relation.references,
-          },
-          [relation.table]: {
-            type: 'manyToOne',
-            target: [relation.table],
-            fields: references.map(x => x[0]),
-            references: relation.fields,
-          },
-        } as any,
       })
     })
     this.prepareTasks[name] = this.prepare(name)
@@ -491,7 +487,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     else {
-      const buildKey = (relation: Field.Relation) => [relation.table, ...relation.references].join('__')
+      const buildKey = (relation: Relation.Config) => [relation.table, ...relation.references].join('__')
       const tasks: Dict<{
         table: string
         upsert: any[]
@@ -632,7 +628,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return stats
   }
 
-  private processRelationQuery<K extends Keys<S>, P extends Keys<S[K], Relation>>(table: K, row: Row<S[K]>, key: P, query: Relation.QueryExpr<S>) {
+  private processRelationQuery<K extends Keys<S>, P extends Keys<S[K], Relation>>(table: K, row: Row<S[K]>, key: P, query: Query.FieldExpr) {
     const relation = this.tables[table].fields[key]!.relation!
     const result: any = { $expr: { $and: [] } }
     if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
@@ -665,12 +661,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
       if (query.$some) {
         const innerTable = this.select(relation.table as any, query.$some).evaluate(relation.references as any)
-        const relTable = this.select(assocTable as any, r => Eval.in(references.map(x => r[x]) as any, innerTable)).evaluate(fields as any)
+        const relTable = this.select(assocTable as any, r => Eval.in(references.map(x => r[x]) as any, innerTable as any)).evaluate(fields as any)
         result.$expr.$and.push(Eval.in(relation.fields.map(x => row[x]) as any, relTable))
       }
       if (query.$none) {
         const innerTable = this.select(relation.table as any, query.$none).evaluate(relation.references as any)
-        const relTable = this.select(assocTable as any, r => Eval.in(references.map(x => r[x]) as any, innerTable)).evaluate(fields as any)
+        const relTable = this.select(assocTable as any, r => Eval.in(references.map(x => r[x]) as any, innerTable as any)).evaluate(fields as any)
         result.$expr.$and.push(Eval.nin(relation.fields.map(x => row[x]) as any, relTable))
       }
       if (query.$every) {

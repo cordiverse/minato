@@ -1,7 +1,7 @@
 import { Binary, clone, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, isEvalExpr, Update } from './eval.ts'
-import { AtomicTypes, Flatten, Keys, Row, unravel, Values } from './utils.ts'
+import { AtomicTypes, FlatKeys, Flatten, Keys, Row, unravel, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 import { Query } from './query.ts'
@@ -16,16 +16,27 @@ export namespace Relation {
   const Mark = Symbol('minato.relation')
   export type Mark = { [Mark]: true }
 
+  export const Type = ['oneToOne', 'oneToMany', 'manyToOne', 'manyToMany'] as const
+  export type Type = typeof Type[number]
+
+  export interface Config<K extends string = string> {
+    type: Type
+    table: string
+    references: string[]
+    fields: K[]
+  }
+
+  export interface Definition<K extends string = string> {
+    type: Type
+    target: [string, string]
+    references: MaybeArray<string>
+    fields: MaybeArray<K>
+  }
+
   type UnArray<T> = T extends (infer I)[] ? I : T
 
   export type Include<S> = boolean | {
     [P in Keys<S, Mark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
-  }
-
-  export type QueryExpr<S> = {
-    $every: Query.Expr<Flatten<S>>
-    $some: Query.Expr<Flatten<S>>
-    $none: Query.Expr<Flatten<S>>
   }
 
   export type Create<S> = S
@@ -52,6 +63,26 @@ export namespace Relation {
   export function buildAssociationKey(key: string, table: string) {
     return `${table}_${key}`
   }
+
+  export function parse(def: Definition): Config {
+    return {
+      type: def.type,
+      table: def.target[0],
+      fields: makeArray(def.fields),
+      references: makeArray(def.references),
+    }
+  }
+
+  export function inverse(relation: Config, table: string): Config {
+    return {
+      type: relation.type === 'oneToMany' ? 'manyToOne'
+        : relation.type === 'manyToOne' ? 'oneToMany'
+          : relation.type,
+      table,
+      fields: relation.references,
+      references: relation.fields,
+    }
+  }
 }
 
 export interface Field<T = any> {
@@ -65,7 +96,7 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
-  relation?: Field.Relation
+  relation?: Relation.Config
   transformers?: Driver.Transformer[]
 }
 
@@ -78,6 +109,7 @@ export namespace Field {
 
   export type Type<T = any> =
     | T extends Primary ? 'primary'
+    : T extends Relation ? Relation.Type
     : T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
@@ -124,7 +156,7 @@ export namespace Field {
   } & Omit<Field<T>, 'type'>
 
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>
+    [K in keyof O]?: O[K] extends Relation | undefined ? Relation.Definition<FlatKeys<O>>: (Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>)
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
@@ -134,43 +166,6 @@ export namespace Field {
 
   export type Config<O = any> = {
     [K in keyof O]?: Field<O[K]>
-  }
-
-  export interface RelationDefinition<K extends string = string> {
-    type: 'oneToOne' | 'oneToMany' | 'manyToOne' | 'manyToMany'
-    target: [string, string]
-    references: MaybeArray<string>
-    fields: MaybeArray<K>
-  }
-
-  export interface Relation<K extends string = string> {
-    type: 'oneToOne' | 'oneToMany' | 'manyToOne' | 'manyToMany'
-    table: string
-    references: string[]
-    fields: K[]
-  }
-
-  export namespace Relation {
-
-    export function parse(def: RelationDefinition): Relation {
-      return {
-        type: def.type,
-        table: def.target[0],
-        fields: makeArray(def.fields),
-        references: makeArray(def.references),
-      }
-    }
-
-    export function inverse(relation: Relation, table: string): Relation {
-      return {
-        type: relation.type === 'oneToMany' ? 'manyToOne'
-          : relation.type === 'manyToOne' ? 'oneToMany'
-            : relation.type,
-        table,
-        fields: relation.references,
-        references: relation.fields,
-      }
-    }
   }
 
   const regexp = /^(\w+)(?:\((.+)\))?$/
@@ -233,9 +228,6 @@ export namespace Model {
     foreign: {
       [P in K]?: [string, string]
     }
-    relation: {
-      [P in K]?: Field.RelationDefinition<K>
-    }
   }
 
 }
@@ -258,7 +250,7 @@ export class Model<S = any> {
 
   extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
-    const { primary, autoInc, unique = [] as [], foreign, callback, relation = {} } = config
+    const { primary, autoInc, unique = [] as [], foreign, callback } = config
 
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
@@ -270,14 +262,6 @@ export class Model<S = any> {
     for (const key in fields) {
       this.fields[key] = Field.parse(fields[key])
       this.fields[key].deprecated = !!callback
-      if (relation?.[key]) {
-        this.fields[key].relation = relation[key]
-      }
-    }
-
-    for (const key in relation) {
-      if (!this.fields[key]) this.fields[key] = Field.parse('expr')
-      this.fields[key].relation = relation[key]
     }
 
     if (typeof this.primary === 'string' && this.fields[this.primary]?.deftype === 'primary') {

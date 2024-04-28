@@ -59,17 +59,14 @@ function RelationTests(database: Database<Tables>) {
   database.extend('profile', {
     name: 'string',
     userId: 'unsigned',
-    user: 'expr',
+    user: {
+      type: 'oneToOne',
+      target: ['user', 'profile'],
+      fields: 'userId',
+      references: 'id',
+    },
   }, {
     primary: ['userId'],
-    relation: {
-      user: {
-        type: 'oneToOne',
-        target: ['user', 'profile'],
-        fields: 'userId',
-        references: 'id',
-      },
-    }
   })
 
   database.extend('post', {
@@ -77,57 +74,47 @@ function RelationTests(database: Database<Tables>) {
     score: 'unsigned',
     content: 'string',
     authorId: 'unsigned',
-    author: 'expr',
+    author: {
+      type: 'manyToOne',
+      target: ['user', 'posts'],
+      fields: 'authorId',
+      references: 'id',
+    },
   }, {
     autoInc: true,
-    relation: {
-      author: {
-        type: 'manyToOne',
-        target: ['user', 'posts'],
-        fields: 'authorId',
-        references: 'id',
-      },
-    }
   })
 
   database.extend('tag', {
     id: 'unsigned',
     name: 'string',
-    posts: 'expr',
+    posts: {
+      type: 'manyToMany',
+      target: ['post', 'tags'],
+      fields: 'id',
+      references: 'id',
+    },
   }, {
     autoInc: true,
-    relation: {
-      posts: {
-        type: 'manyToMany',
-        target: ['post', 'tags'],
-        fields: 'id',
-        references: 'id',
-      },
-    }
   })
 
   database.extend('post2tag', {
     id: 'unsigned',
     postId: 'unsigned',
     tagId: 'unsigned',
-    post: 'expr',
-    tag: 'expr',
+    post: {
+      type: 'manyToOne',
+      target: ['post', '_tags'],
+      fields: 'postId',
+      references: 'id',
+    },
+    tag: {
+      type: 'manyToOne',
+      target: ['tag', '_posts'],
+      fields: 'tagId',
+      references: 'id',
+    },
   }, {
     primary: ['postId', 'tagId'],
-    relation: {
-      post: {
-        type: 'manyToOne',
-        target: ['post', '_tags'],
-        fields: 'postId',
-        references: 'id',
-      },
-      tag: {
-        type: 'manyToOne',
-        target: ['tag', '_posts'],
-        fields: 'tagId',
-        references: 'id',
-      },
-    }
   })
 
   async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
@@ -175,10 +162,6 @@ namespace RelationTests {
     { postId: 3, tagId: 3 },
   ]
 
-  function nm(l: any) {
-    return l
-  }
-
   export function select(database: Database<Tables>) {
     it('basic support', async () => {
       const users = await setup(database, 'user', userTable)
@@ -187,22 +170,22 @@ namespace RelationTests {
 
       await expect(database.get('profile', {}, ['user'])).to.eventually.have.shape(
         profiles.map(profile => ({
-          user: nm(users.find(user => user.id === profile.userId)),
+          user: users.find(user => user.id === profile.userId),
         }))
       )
 
       await expect(database.get('user', {}, ['id', 'value', 'profile', 'posts'])).to.eventually.have.shape(
         users.map(user => ({
           ...user,
-          profile: nm(profiles.find(profile => profile.userId === user.id)),
-          posts: nm(posts.filter(post => post.authorId === user.id)),
+          profile: profiles.find(profile => profile.userId === user.id),
+          posts: posts.filter(post => post.authorId === user.id),
         }))
       )
 
       await expect(database.select('post', {}, { author: true }).execute()).to.eventually.have.shape(
         posts.map(post => ({
           ...post,
-          author: nm(users.find(user => user.id === post.authorId)),
+          author: users.find(user => user.id === post.authorId),
         }))
       )
     })
@@ -215,31 +198,33 @@ namespace RelationTests {
       await expect(database.select('user', {}, { posts: { author: true } }).execute()).to.eventually.have.shape(
         users.map(user => ({
           ...user,
-          posts: nm(posts.filter(post => post.authorId === user.id).map(post => ({
+          posts: posts.filter(post => post.authorId === user.id).map(post => ({
             ...post,
-            author: nm(users.find(user => user.id === post.authorId)),
-          }))),
+            author: users.find(user => user.id === post.authorId),
+          })),
         }))
       )
 
       await expect(database.select('profile', {}, { user: { posts: { author: true } } }).execute()).to.eventually.have.shape(
         profiles.map(profile => ({
-          ...profile, user: {
-            ...nm(users.find(user => user.id === profile.userId)),
-            posts: nm(posts.filter(post => post.authorId === profile.userId).map(post => ({
+          ...profile,
+          user: {
+            ...(users.find(user => user.id === profile.userId)),
+            posts: posts.filter(post => post.authorId === profile.userId).map(post => ({
               ...post,
-              author: nm(users.find(user => user.id === profile.userId)),
-            }))),
-          }
+              author: users.find(user => user.id === profile.userId),
+            })),
+          },
         }))
       )
 
       await expect(database.select('post', {}, { author: { profile: true } }).execute()).to.eventually.have.shape(
         posts.map(post => ({
-          ...post, author: {
-            ...nm(users.find(user => user.id === post.authorId)),
-            profile: nm(profiles.find(profile => profile.userId === post.authorId)),
-          }
+          ...post,
+          author: {
+            ...users.find(user => user.id === post.authorId),
+            profile: profiles.find(profile => profile.userId === post.authorId),
+          },
         }))
       )
     })
@@ -261,14 +246,13 @@ namespace RelationTests {
       await expect(database.select('post', {}, { tags: { posts: true } }).execute()).to.eventually.have.shape(
         posts.map(post => ({
           ...post,
-          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+          tags: post2tags.filter(p2t => p2t.postId === post.id)
             .map(p2t => tags.find(tag => tag.id === p2t.tagId))
             .filter(tag => tag)
             .map(tag => ({
               ...tag,
-              posts: nm(post2tags.filter(p2t => p2t.tagId === tag!.id).map(p2t => posts.find(post => post.id === p2t.postId)))
-            }))
-          ),
+              posts: post2tags.filter(p2t => p2t.tagId === tag!.id).map(p2t => posts.find(post => post.id === p2t.postId)),
+            })),
         }))
       )
     })
@@ -287,7 +271,7 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         users.slice(0, 1).map(user => ({
           ...user,
-          profile: nm(profiles.find(profile => profile.userId === user.id)),
+          profile: profiles.find(profile => profile.userId === user.id),
         }))
       )
 
@@ -297,7 +281,7 @@ namespace RelationTests {
       }))).to.eventually.have.shape(
         users.map(user => ({
           ...user,
-          profile: nm(profiles.find(profile => profile.userId === user.id)),
+          profile: profiles.find(profile => profile.userId === user.id),
         }))
       )
 
@@ -310,7 +294,7 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         users.slice(1, 2).map(user => ({
           ...user,
-          profile: nm(profiles.find(profile => profile.userId === user.id)),
+          profile: profiles.find(profile => profile.userId === user.id),
         }))
       )
 
@@ -321,8 +305,8 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         posts.map(post => ({
           ...post,
-          author: nm(users.find(user => post.authorId === user.id)),
-        })).filter(post => post.author.id === 1)
+          author: users.find(user => post.authorId === user.id),
+        })).filter(post => post.author?.id === 1)
       )
     })
 
@@ -340,7 +324,7 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         users.slice(0, 1).map(user => ({
           ...user,
-          posts: nm(posts.filter(post => post.authorId === user.id)),
+          posts: posts.filter(post => post.authorId === user.id),
         }))
       )
 
@@ -351,7 +335,7 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         users.slice(0, 1).map(user => ({
           ...user,
-          posts: nm(posts.filter(post => post.authorId === user.id)),
+          posts: posts.filter(post => post.authorId === user.id),
         }))
       )
 
@@ -364,7 +348,7 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         users.slice(1).map(user => ({
           ...user,
-          posts: nm(posts.filter(post => post.authorId === user.id)),
+          posts: posts.filter(post => post.authorId === user.id),
         }))
       )
 
@@ -377,7 +361,7 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         [users[0], users[2]].map(user => ({
           ...user,
-          posts: nm(posts.filter(post => post.authorId === user.id)),
+          posts: posts.filter(post => post.authorId === user.id),
         }))
       )
     })
@@ -402,10 +386,9 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         posts.slice(0, 2).map(post => ({
           ...post,
-          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+          tags: post2tags.filter(p2t => p2t.postId === post.id)
             .map(p2t => tags.find(tag => tag.id === p2t.tagId))
-            .filter(tag => tag)
-          ),
+            .filter(tag => tag),
         }))
       )
 
@@ -418,10 +401,9 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         posts.slice(2).map(post => ({
           ...post,
-          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+          tags: post2tags.filter(p2t => p2t.postId === post.id)
             .map(p2t => tags.find(tag => tag.id === p2t.tagId))
-            .filter(tag => tag)
-          ),
+            .filter(tag => tag),
         }))
       )
 
@@ -434,10 +416,9 @@ namespace RelationTests {
       })).to.eventually.have.shape(
         posts.slice(2, 3).map(post => ({
           ...post,
-          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+          tags: post2tags.filter(p2t => p2t.postId === post.id)
             .map(p2t => tags.find(tag => tag.id === p2t.tagId))
-            .filter(tag => tag)
-          ),
+            .filter(tag => tag),
         }))
       )
     })
@@ -462,15 +443,15 @@ namespace RelationTests {
       await expect(database.select('profile', {}, { user: true }).execute()).to.eventually.have.shape(
         profileTable.map(profile => ({
           ...profile,
-          user: nm(userTable.find(user => user.id === profile.userId)),
+          user: userTable.find(user => user.id === profile.userId),
         }))
       )
 
       await expect(database.select('user', {}, { profile: true, posts: true }).execute()).to.eventually.have.shape(
         userTable.map(user => ({
           ...user,
-          profile: nm(profileTable.find(profile => profile.userId === user.id)),
-          posts: nm(postTable.filter(post => post.authorId === user.id)),
+          profile: profileTable.find(profile => profile.userId === user.id),
+          posts: postTable.filter(post => post.authorId === user.id),
         }))
       )
     })
@@ -520,12 +501,12 @@ namespace RelationTests {
       posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post2' }))
 
       await database.set('user', 2, {
-        posts: $.update({
+        posts: $.update<Post>({
           $create: [
             { content: 'post1' },
             { content: 'post2' },
           ],
-        }) as any,
+        }),
       })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
@@ -533,7 +514,7 @@ namespace RelationTests {
       await database.set('user', 1, row => ({
         value: $.add(row.id, 98),
         posts: $.update({
-          $create: { id: 101, content: 'post101' }
+          $create: { id: 101, content: 'post101' },
         }),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
@@ -550,7 +531,7 @@ namespace RelationTests {
         posts: $.update({
           $set: r => ({
             score: $.add(row.id, r.id),
-          })
+          }),
         }),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
@@ -564,7 +545,7 @@ namespace RelationTests {
       posts.splice(0, 1)
       await database.set('user', {}, row => ({
         posts: $.update({
-          $remove: r => $.eq(r.id, row.id)
+          $remove: r => $.eq(r.id, row.id),
         }),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
@@ -583,19 +564,19 @@ namespace RelationTests {
 
       await database.set('post', 2, {
         tags: $.update({
-          $disconnect: {}
+          $disconnect: {},
         }),
       })
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').deep.equal([])
 
       await database.set('post', 2, row => ({
         tags: $.update({
-          $connect: r => $.eq(r.id, row.id)
+          $connect: r => $.eq(r.id, row.id),
         }),
       }))
 
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([{
-        id: 2
+        id: 2,
       }])
     })
   }
