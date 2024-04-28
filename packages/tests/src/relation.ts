@@ -455,6 +455,26 @@ namespace RelationTests {
         }))
       )
     })
+
+    it('oneToMany', async () => {
+      await setup(database, 'user', [])
+      await setup(database, 'profile', [])
+      await setup(database, 'post', [])
+
+      for (const user of userTable) {
+        await database.create('user', {
+          ...userTable.find(u => u.id === user.id)!,
+          posts: postTable.filter(post => post.authorId === user.id),
+        })
+      }
+
+      await expect(database.select('user', {}, { posts: true }).execute()).to.eventually.have.shape(
+        userTable.map(user => ({
+          ...user,
+          posts: postTable.filter(post => post.authorId === user.id),
+        }))
+      )
+    })
   }
 
   export function modify(database: Database<Tables>) {
@@ -490,6 +510,26 @@ namespace RelationTests {
         profile: null,
       })
       await expect(database.get('profile', {})).to.eventually.have.deep.members(profiles)
+    })
+
+    it('upsert', async () => {
+      await setup(database, 'user', [])
+      await setup(database, 'profile', [])
+      await setup(database, 'post', [])
+
+      for (const user of userTable) {
+        await database.upsert('user', [{
+          ...userTable.find(u => u.id === user.id)!,
+          profile: profileTable.find(profile => profile.userId === user.id),
+        } as any])
+      }
+
+      await expect(database.select('user', {}, { profile: true }).execute()).to.eventually.have.shape(
+        userTable.map(user => ({
+          ...user,
+          profile: profileTable.find(profile => profile.userId === user.id),
+        }))
+      )
     })
 
     it('create oneToMany', async () => {
