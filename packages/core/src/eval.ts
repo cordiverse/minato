@@ -24,7 +24,7 @@ export function hasSubquery(value: any): boolean {
 }
 
 export type Uneval<U, A extends boolean> =
-  | U extends Relation<infer T> ? Eval.Term<T, A>
+  | U extends Relation<infer T> ? Partial<Eval.Term<T, A>>
   : U extends number ? Eval.Term<number, A>
   : U extends string ? Eval.Term<string, A>
   : U extends boolean ? Eval.Term<boolean, A>
@@ -72,7 +72,7 @@ export namespace Eval {
     <A extends boolean>(key: string, value: any, type: Type): Eval.Expr<any, A>
 
     select(...args: Any[]): Expr<any[], false>
-    update<T>(modifier: Relation.Modifier<T>): Expr<Relation<T[]>>
+    update<T extends object>(modifier: Relation.Modifier<T>): Expr<T[], false>
 
     // univeral
     if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: Term<T, A>, vElse: Term<T, A>): Expr<T, A>
@@ -222,9 +222,17 @@ Eval.le = Eval.lte = comparator('lte', (left, right) => left <= right)
 
 // element
 Eval.in = (value, array) => Eval('in', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
-operators.$in = ([value, array], data) => executeEval(data, array).includes(executeEval(data, value))
+operators.$in = ([value, array], data) => {
+  const val = executeEval(data, value), arr = executeEval(data, array)
+  if (typeof val === 'object') return arr.includes(val) || arr.map(JSON.stringify).includes(JSON.stringify(val))
+  return arr.includes(val)
+}
 Eval.nin = (value, array) => Eval('nin', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
-operators.$nin = ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value))
+operators.$nin = ([value, array], data) => {
+  const val = executeEval(data, value), arr = executeEval(data, array)
+  if (typeof val === 'object') return !arr.includes(val) && !arr.map(JSON.stringify).includes(JSON.stringify(val))
+  return !arr.includes(val)
+}
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''), Type.String)
@@ -300,7 +308,7 @@ Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(
 export { Eval as $ }
 
 type MapUneval<S> = {
-  [K in keyof S]?: Uneval<S[K], false>
+  [K in keyof S]?: null | Uneval<Exclude<S[K], undefined>, false>
 }
 
 export type Update<T = any> = MapUneval<Flatten<T>>

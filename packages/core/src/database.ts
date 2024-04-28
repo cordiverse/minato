@@ -472,10 +472,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       .map(([key, field]) => [key, field!.relation!] as const)
     if (relations.length) {
       return await this.ensureTransaction(async (database) => {
-      // process relations
         const queryRows = await database.get(table, query)
-        const realUpdate = omit(update, relations.map(([key]) => key) as any) as any
-        const result = await database.set(table, query, realUpdate)
+        let realUpdate = omit(update, relations.map(([key]) => key) as any) as any
+        realUpdate = sel.model.format(realUpdate)
+        const result = Object.keys(realUpdate).length === 0 ? {} : await sel._action('set', realUpdate).execute()
         for (const [key, relation] of relations) {
           if (relation.type === 'oneToOne') {
             if (update[key] === null) {
@@ -726,7 +726,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const session: this = this
     const relation = this.tables[table].fields[key]!.relation!
     if (update.$create) {
-      const data = makeArray(update.$create).map(r => {
+      const data = makeArray(update.$create).map((r: any) => {
         const data = { ...r }
         for (const k in relation.fields) {
           data[relation.references[k]] = row[relation.fields[k]]

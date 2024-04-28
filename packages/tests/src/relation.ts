@@ -1,7 +1,6 @@
-import { $, Database, Query, Relation } from 'minato'
+import { $, Database, Relation } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
-import { isNullable } from 'cosmokit'
 
 interface User {
   id: number
@@ -276,7 +275,7 @@ namespace RelationTests {
   }
 
   export function query(database: Database<Tables>) {
-    it('oneToOne', async () => {
+    it('oneToOne / manyToOne', async () => {
       const users = await setup(database, 'user', userTable)
       const profiles = await setup(database, 'profile', profileTable)
       const posts = await setup(database, 'post', postTable)
@@ -478,7 +477,7 @@ namespace RelationTests {
   }
 
   export function modify(database: Database<Tables>) {
-    it('oneToOne/manyToOne', async () => {
+    it('oneToOne / manyToOne', async () => {
       const users = await setup(database, 'user', userTable)
       const profiles = await setup(database, 'profile', profileTable)
       await setup(database, 'post', postTable)
@@ -519,22 +518,23 @@ namespace RelationTests {
 
       posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post1' }))
       posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post2' }))
+
       await database.set('user', 2, {
-        posts: {
+        posts: $.update({
           $create: [
             { content: 'post1' },
             { content: 'post2' },
           ],
-        },
+        }) as any,
       })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
-      posts.push(database.tables['post'].create({ id: 101, score: 101, authorId: 1, content: 'post101' }))
+      posts.push(database.tables['post'].create({ id: 101, authorId: 1, content: 'post101' }))
       await database.set('user', 1, row => ({
-        value: 99,
-        posts: {
-          $create: { id: 101, score: $.add(row.id, 100), content: 'post101' }
-        },
+        value: $.add(row.id, 98),
+        posts: $.update({
+          $create: { id: 101, content: 'post101' }
+        }),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
@@ -547,11 +547,11 @@ namespace RelationTests {
       posts[0].score = 2
       posts[1].score = 3
       await database.set('user', 1, row => ({
-        posts: {
+        posts: $.update({
           $set: r => ({
             score: $.add(row.id, r.id),
           })
-        },
+        }),
       }))
 
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
@@ -564,14 +564,14 @@ namespace RelationTests {
 
       posts.splice(0, 1)
       await database.set('user', {}, row => ({
-        posts: {
+        posts: $.update({
           $remove: r => $.eq(r.id, row.id)
-        },
+        }),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
 
-    it('connect/disconnect manyToMany', async () => {
+    it('connect / disconnect manyToMany', async () => {
       await setup(database, 'user', userTable)
       await setup(database, 'profile', profileTable)
       await setup(database, 'post', postTable)
@@ -583,16 +583,16 @@ namespace RelationTests {
       })))
 
       await database.set('post', 2, {
-        tags: {
+        tags: $.update({
           $disconnect: {}
-        },
+        }),
       })
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').deep.equal([])
 
       await database.set('post', 2, row => ({
-        tags: {
-          $connect: { id: row.id }
-        },
+        tags: $.update({
+          $connect: r => $.eq(r.id, row.id)
+        }),
       }))
 
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([{

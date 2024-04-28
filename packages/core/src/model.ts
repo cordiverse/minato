@@ -38,7 +38,7 @@ export namespace Relation {
     : never)
 
   export interface Modifier<S> {
-    $create?: MaybeArray<Create<S>>
+    $create?: MaybeArray<Partial<Create<S>>>
     $set?: Row.Computed<S, Update<S>>
     $remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
     $connect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
