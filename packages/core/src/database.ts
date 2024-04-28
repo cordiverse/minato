@@ -44,6 +44,10 @@ export namespace Join2 {
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
 }
 
+function getCell(row: any, key: any): any {
+  return key.split('.').reduce((r, k) => r[k], row)
+}
+
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
@@ -398,17 +402,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           if (relation.type === 'oneToOne') {
             if (update[key] === null) {
               await Promise.all(rows.map(row => database.remove(relation.table as any,
-                Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])) as any,
+                Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
               )))
             } else {
               await database.upsert(relation.table as any, rows.map(row => ({
-                ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+                ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
                 ...rawupdate(row as any)[key],
               })), relation.references as any)
             }
           } else if (relation.type === 'manyToOne') {
             await database.upsert(relation.table as any, rows.map(row => ({
-              ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+              ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
               ...rawupdate(row as any)[key],
             })), relation.references as any)
           } else if (relation.type === 'oneToMany' || relation.type === 'manyToMany') {
@@ -462,7 +466,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       const action = this[Database.transact] ? <T>(callback: (database: this) => T) => callback(this) : this.transact.bind(this)
       return action(async (database) => {
         for (const [table, data, keys] of tasks) {
-          await database.insertMany(table, data, keys)
+          await database.upsert(table, data, keys)
         }
         return database.create(table, data)
       })
@@ -479,62 +483,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('create', sel.model.create(data)).execute()
   }
 
-  private async insertMany<K extends Keys<S>>(table: K, upsert: Partial<S[K]>[], keys?: MaybeArray<FlatKeys<S[K], Indexable>>): Promise<S[K][]> {
-    const buildKey = (relation: Field.Relation) => [relation.table, ...relation.references].join('__')
-    const tasks: Dict<{
-      table: string
-      upsert: any[]
-      keys?: string[]
-    }> = {}
-
-    upsert = upsert.map(data => {
-      for (const key in data) {
-        if (data[key] && this.tables[table].fields[key]?.relation) {
-          const relation = this.tables[table].fields[key].relation
-          if (relation.type === 'oneToOne') {
-            const mergedData = { ...data[key] }
-            for (const k in relation.fields) {
-              mergedData[relation.references[k]] = data[relation.fields[k]]
-            }
-            ;(tasks[buildKey(relation)] ??= {
-              table: relation.table,
-              upsert: [],
-              keys: relation.references,
-            }).upsert.push(mergedData)
-          } else if (relation.type === 'oneToMany' && Array.isArray(data[key])) {
-            const mergedData = data[key].map(row => {
-              const mergedData = { ...row }
-              for (const k in relation.fields) {
-                mergedData[relation.references[k]] = data[relation.fields[k]]
-              }
-              return mergedData
-            })
-
-            ;(tasks[relation.table] ??= { table: relation.table, upsert: [] }).upsert.push(...mergedData)
-          } else {
-            throw new Error(`field ${key} with ${relation.type} relation can not be used in create`)
-          }
-          data = omit(data, [key]) as any
-        }
-      }
-      return data
-    })
-
-    if (Object.keys(tasks).length) {
-      return this.ensureTransaction(async (database) => {
-        for (const { table, upsert, keys } of Object.values(tasks)) {
-          await database.insertMany(table as any, upsert, keys as any)
-        }
-        return database.insertMany(table, upsert)
-      })
-    }
-
-    const sel = this.select(table)
-    upsert = upsert.map(item => sel.model.format(item))
-    keys = makeArray(keys || sel.model.primary) as any
-    return await sel._action('upsert', upsert, keys).execute()
-  }
-
   async upsert<K extends Keys<S>>(
     table: K,
     upsert: Row.Computed<S[K], Update<S[K]>[]>,
@@ -542,6 +490,56 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   ): Promise<Driver.WriteResult> {
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
+    else {
+      const buildKey = (relation: Field.Relation) => [relation.table, ...relation.references].join('__')
+      const tasks: Dict<{
+        table: string
+        upsert: any[]
+        keys?: string[]
+      }> = {}
+
+      const upsert2 = (upsert as any[]).map(data => {
+        for (const key in data) {
+          if (data[key] && this.tables[table].fields[key]?.relation) {
+            const relation = this.tables[table].fields[key].relation
+            if (relation.type === 'oneToOne') {
+              const mergedData = { ...data[key] }
+              for (const k in relation.fields) {
+                mergedData[relation.references[k]] = data[relation.fields[k]]
+              }
+              ;(tasks[buildKey(relation)] ??= {
+                table: relation.table,
+                upsert: [],
+                keys: relation.references,
+              }).upsert.push(mergedData)
+            } else if (relation.type === 'oneToMany' && Array.isArray(data[key])) {
+              const mergedData = data[key].map(row => {
+                const mergedData = { ...row }
+                for (const k in relation.fields) {
+                  mergedData[relation.references[k]] = data[relation.fields[k]]
+                }
+                return mergedData
+              })
+
+            ;(tasks[relation.table] ??= { table: relation.table, upsert: [] }).upsert.push(...mergedData)
+            } else {
+              throw new Error(`field ${key} with ${relation.type} relation can not be used in create`)
+            }
+            data = omit(data, [key]) as any
+          }
+        }
+        return data
+      })
+
+      if (Object.keys(tasks).length) {
+        return this.ensureTransaction(async (database) => {
+          for (const { table, upsert, keys } of Object.values(tasks)) {
+            await database.upsert(table as any, upsert, keys as any)
+          }
+          return database.upsert(table, upsert2)
+        })
+      }
+    }
     upsert = upsert.map(item => sel.model.format(item))
     keys = makeArray(keys || sel.model.primary) as any
     return await sel._action('upsert', upsert, keys).execute()
@@ -695,7 +693,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         }
         return data
       })
-      await session.insertMany(relation.table as any, upsert)
+      await session.upsert(relation.table as any, upsert)
     }
     if (update.$set) {
       if (relation.type === 'oneToMany') {
@@ -726,7 +724,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
         const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
         const rels = await session.get(relation.table as any, update.$connect as any)
-        await session.insertMany(assocTable as any, rels.map(r => ({
+        await session.upsert(assocTable as any, rels.map(r => ({
           ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
           ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i]]])),
         })) as any)

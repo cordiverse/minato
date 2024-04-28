@@ -30,8 +30,8 @@ export namespace Relation {
 
   export type Create<S> = S
     | (S extends Values<AtomicTypes> ? never
-    : S extends Relation<(infer T)[]> ? Create<T>[]
-    : S extends Relation<infer T> ? Create<T>
+    : S extends Relation<(infer T)[]> ? Partial<Create<T>>[]
+    : S extends Relation<infer T> ? Partial<Create<T>>
     : S extends any[] ? never
     : string extends keyof S ? never
     : S extends object ? { [K in keyof S]: Create<S[K]> }
@@ -348,6 +348,7 @@ export class Model<S = any> {
         return
       }
       const field = fields.find(field => key.startsWith(field + '.'))
+      // console.log('>format', key, field, (fields), source)
       if (field) {
         result[key] = value
       } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {

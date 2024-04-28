@@ -96,7 +96,7 @@ export function isEmpty(value: any) {
   if (isNullable(value)) return true
   if (typeof value !== 'object') return false
   for (const key in value) {
-    if (!isNullable(value[key])) return false
+    if (!isEmpty(value[key])) return false
   }
   return true
 }

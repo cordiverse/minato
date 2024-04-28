@@ -440,6 +440,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const merged = {}
     const insertion = data.map((item) => {
       Object.assign(merged, item)
+      // console.log(executeUpdate(model.create(), item, ref))
       return model.format(executeUpdate(model.create(), item, ref))
     })
     const initFields = Object.keys(model.fields).filter(key => Field.available(model.fields[key]))
