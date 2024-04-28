@@ -459,13 +459,14 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
 
     if (tasks.length) {
-      const action = this[Database.transact] ? <T>(callback: (database: this) => T) => callback(this) : this.transact.bind(this)
-      return action(async (database) => {
+      let result: any
+      await this.ensureTransaction(async (database) => {
         for (const [table, data, keys] of tasks) {
           await database.upsert(table, data, keys)
         }
-        return database.create(table, data)
+        result = await database.create(table, data)
       })
+      return result
     }
 
     const sel = this.select(table)
@@ -577,6 +578,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       async get(...args) {
         await this._commit()
         return await database.get.apply(database, args)
+      }
+
+      async create(...args) {
+        await this._commit()
+        return await database.create.apply(database, args)
       }
 
       async set(...args) {
