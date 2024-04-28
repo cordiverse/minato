@@ -195,11 +195,11 @@ export class Builder {
     if (Array.isArray(value)) {
       if (!value.length) return notStr ? this.$true : this.$false
       if (Array.isArray(value[0])) {
-        return `(${key}${notStr}) in (${value.map((val: any[]) => `(${val.map(x => this.escape(x)).join(', ')})`).join(', ')})`
+        return `(${key})${notStr} in (${value.map((val: any[]) => `(${val.map(x => this.escape(x)).join(', ')})`).join(', ')})`
       }
       return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
     } else if (value.$exec) {
-      return `(${key}${notStr}) in ${this.parseSelection(value.$exec, true)}`
+      return `(${key})${notStr} in ${this.parseSelection(value.$exec, true)}`
     } else {
       const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
       return notStr ? this.logicalNot(res) : res
