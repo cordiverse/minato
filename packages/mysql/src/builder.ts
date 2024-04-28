@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
+import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -146,11 +146,11 @@ export class MySQLBuilder extends Builder {
     const refFields = this.state.refFields
     restore()
     let query: string
-    if (!(sel.args[0] as any).$) {
-      query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    if (inline || !isAggrExpr(expr as any)) {
+      query = `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
       query = `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+        FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
     if (Object.keys(refFields ?? {}).length) {
       const funcname = `minato_tfunc_${randomId()}`

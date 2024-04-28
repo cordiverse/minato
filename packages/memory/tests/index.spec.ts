@@ -30,5 +30,10 @@ describe('@minatojs/driver-memory', () => {
         nullableComparator: false,
       },
     },
+    selection: {
+      subquery: {
+        objectMemberQuery: false,
+      },
+    },
   })
 })

@@ -372,7 +372,13 @@ namespace SelectionTests {
     })
   }
 
-  export function subquery(database: Database<Tables>) {
+  interface SubqueryOptions {
+    objectMemberQuery?: boolean
+  }
+
+  export function subquery(database: Database<Tables>, options: SubqueryOptions = {}) {
+    const { objectMemberQuery = true } = options
+
     it('select', async () => {
       await expect(database.select('foo')
         .project({
@@ -391,6 +397,20 @@ namespace SelectionTests {
     it('where', async () => {
       await expect(database.get('foo', row => $.in(
         row.id, database.select('foo').project({ x: row => $.add(row.id, 1) }).evaluate('x')
+      ))).to.eventually.deep.equal([
+        { id: 2, value: 2 },
+        { id: 3, value: 2 },
+      ])
+
+      objectMemberQuery && await expect(database.get('foo', row => $.in(
+        [row.id, row.id], database.select('foo').project({ x: row => $.add(row.id, 1) }).evaluate(['x', 'x'])
+      ))).to.eventually.deep.equal([
+        { id: 2, value: 2 },
+        { id: 3, value: 2 },
+      ])
+
+      objectMemberQuery && await expect(database.get('foo', row => $.in(
+        [row.id, row.id], [[2, 2], [3, 3]]
       ))).to.eventually.deep.equal([
         { id: 2, value: 2 },
         { id: 3, value: 2 },

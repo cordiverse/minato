@@ -1,5 +1,5 @@
 import { clone, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, isAggrExpr, RuntimeError, Selection, z } from 'minato'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
   static name = 'memory'
@@ -186,7 +186,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     const expr = sel.args[0], table = sel.table as Selection
     if (Array.isArray(env)) env = { [sel.ref]: env }
     const data = this.table(sel.table, env)
-    const res = expr.$ ? data.map(row => executeEval({ ...env, [table.ref]: row, _: row }, expr))
+    const res = isAggrExpr(expr) ? data.map(row => executeEval({ ...env, [table.ref]: row, _: row }, expr))
       : executeEval(Object.assign(data.map(row => ({ [table.ref]: row, _: row })), env), expr)
     return res
   }
