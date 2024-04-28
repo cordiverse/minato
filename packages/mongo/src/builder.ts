@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
+import { Driver, Eval, isAggrExpr, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -118,6 +118,7 @@ export class Builder {
           throw new Error(`$ not transformed: ${JSON.stringify(arg)}`)
         }
       },
+      $select: (args, group) => args.map(val => this.eval(val, group)),
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
       $object: (arg, group) => mapValues(arg as any, x => this.transformEvalExpr(x)),
@@ -171,7 +172,7 @@ export class Builder {
           },
         }, {
           $set: {
-            [name]: !(sel.args[0] as any).$ ? {
+            [name]: !isAggrExpr(sel.args[0] as any) ? {
               $getField: {
                 input: {
                   $ifNull: [

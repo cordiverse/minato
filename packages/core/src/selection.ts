@@ -1,6 +1,6 @@
 import { defineProperty, Dict, filterKeys, mapValues } from 'cosmokit'
 import { Driver } from './driver.ts'
-import { Eval, executeEval, isEvalExpr } from './eval.ts'
+import { Eval, executeEval, isAggrExpr, isEvalExpr } from './eval.ts'
 import { Field, Model } from './model.ts'
 import { Query } from './query.ts'
 import { FlatKeys, FlatPick, Flatten, Keys, randomId, Row } from './utils.ts'
@@ -264,12 +264,13 @@ export class Selection<S = any> extends Executable<S, S[]> {
 
   evaluate<T>(callback: Selection.Callback<S, T, true>): Eval.Expr<T, true>
   evaluate<K extends Keys<S>>(field: K): Eval.Expr<S[K][], boolean>
+  evaluate<K extends Keys<S>>(field: K[]): Eval.Expr<any[][], boolean>
   evaluate(): Eval.Expr<S[], boolean>
   evaluate(callback?: any): any {
     const selection = new Selection(this.driver, this)
     if (!callback) callback = (row: any) => Eval.array(Eval.object(row))
-    const expr = this.resolveField(callback)
-    if (expr['$']) defineProperty(expr, Type.kType, Type.Array(Type.fromTerm(expr)))
+    const expr = Array.isArray(callback) ? Eval.select(...callback.map(x => this.resolveField(x))) : this.resolveField(callback)
+    if (isAggrExpr(expr)) defineProperty(expr, Type.kType, Type.Array(Type.fromTerm(expr)))
     return Eval.exec(selection._action('eval', expr))
   }
 

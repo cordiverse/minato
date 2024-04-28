@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
+import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -163,7 +163,7 @@ export class PostgresBuilder extends Builder {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)})`
+    return outtype ? this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)
       : this.parseEvalExpr(expr)
   }
 
@@ -231,11 +231,11 @@ export class PostgresBuilder extends Builder {
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
     restore()
-    if (inline || !(sel.args[0] as any).$) {
-      return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    if (inline || !isAggrExpr(expr as any)) {
+      return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
       return `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
+        FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
     }
   }
 

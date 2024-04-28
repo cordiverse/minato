@@ -1,5 +1,5 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type, unravel } from 'minato'
+import { Driver, Eval, Field, isAggrExpr, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -122,6 +122,7 @@ export class Builder {
     this.evalOperators = {
       // universal
       $: (key) => this.getRecursive(key),
+      $select: (args) => `${args.map(arg => this.parseEval(arg, false)).join(', ')}`,
       $if: (args) => `if(${args.map(arg => this.parseEval(arg)).join(', ')})`,
       $ifNull: (args) => `ifnull(${args.map(arg => this.parseEval(arg)).join(', ')})`,
 
@@ -193,9 +194,12 @@ export class Builder {
   protected createMemberQuery(key: string, value: any, notStr = '') {
     if (Array.isArray(value)) {
       if (!value.length) return notStr ? this.$true : this.$false
+      if (Array.isArray(value[0])) {
+        return `(${key}${notStr}) in (${value.map((val: any[]) => `(${val.map(x => this.escape(x)).join(', ')})`).join(', ')})`
+      }
       return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
     } else if (value.$exec) {
-      return `${key}${notStr} in ${this.parseSelection(value.$exec, true)}`
+      return `(${key}${notStr}) in ${this.parseSelection(value.$exec, true)}`
     } else {
       const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
       return notStr ? this.logicalNot(res) : res
@@ -252,11 +256,11 @@ export class Builder {
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
     restore()
-    if (inline || !(sel.args[0] as any).$) {
-      return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    if (inline || !isAggrExpr(expr as any)) {
+      return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
       return `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+        FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
     }
   }
 

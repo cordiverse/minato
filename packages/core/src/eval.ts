@@ -7,6 +7,10 @@ export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
+export function isAggrExpr(expr: Eval.Expr): boolean {
+  return expr['$'] || expr['$select']
+}
+
 export function hasSubquery(value: any): boolean {
   if (!isEvalExpr(value)) return false
   return Object.entries(value).filter(([k]) => k.startsWith('$')).some(([k, v]) => {
@@ -66,6 +70,8 @@ export namespace Eval {
   export interface Static {
     <A extends boolean>(key: string, value: any, type: Type): Eval.Expr<any, A>
 
+    select(...args: Any[]): Expr<any[], false>
+
     // univeral
     if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: Term<T, A>, vElse: Term<T, A>): Expr<T, A>
     ifNull<T extends Comparable, A extends boolean>(...args: Term<T, A>[]): Expr<T, A>
@@ -105,7 +111,9 @@ export namespace Eval {
 
     // element
     in<T extends Comparable, A extends boolean>(x: Term<T, A>, array: Array<T, A>): Expr<boolean, A>
+    in<T extends Comparable, A extends boolean>(x: Term<T, A>[], array: Array<T[], A>): Expr<boolean, A>
     nin<T extends Comparable, A extends boolean>(x: Term<T, A>, array: Array<T, A>): Expr<boolean, A>
+    nin<T extends Comparable, A extends boolean>(x: Term<T, A>[], array: Array<T[], A>): Expr<boolean, A>
 
     // string
     concat: Multi<string, string>
@@ -176,6 +184,8 @@ operators.$switch = (args, data) => {
   return executeEval(data, args.default)
 }
 
+Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
+
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)
   : executeEval(data, vElse), (cond, vThen, vElse) => Type.fromTerm(vThen))
@@ -208,8 +218,10 @@ Eval.lt = comparator('lt', (left, right) => left < right)
 Eval.le = Eval.lte = comparator('lte', (left, right) => left <= right)
 
 // element
-Eval.in = multary('in', ([value, array], data) => executeEval(data, array).includes(executeEval(data, value)), Type.Boolean)
-Eval.nin = multary('nin', ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value)), Type.Boolean)
+Eval.in = (value, array) => Eval('in', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
+operators.$in = ([value, array], data) => executeEval(data, array).includes(executeEval(data, value))
+Eval.nin = (value, array) => Eval('min', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
+operators.$nin = ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value))
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''), Type.String)
