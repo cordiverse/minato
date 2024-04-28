@@ -220,7 +220,7 @@ Eval.le = Eval.lte = comparator('lte', (left, right) => left <= right)
 // element
 Eval.in = (value, array) => Eval('in', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
 operators.$in = ([value, array], data) => executeEval(data, array).includes(executeEval(data, value))
-Eval.nin = (value, array) => Eval('min', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
+Eval.nin = (value, array) => Eval('nin', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
 operators.$nin = ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value))
 
 // string
