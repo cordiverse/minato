@@ -63,14 +63,14 @@ function createUnit<T>(target: T, root = false): Unit<T> {
 }
 
 namespace Tests {
-  // export const model = ModelOperations
-  // export const query = QueryOperators
-  // export const update = UpdateOperators
-  // export const object = ObjectOperations
-  // export const selection = Selection
-  // export const migration = Migration
-  // export const json = Json
-  // export const transaction = Transaction
+  export const model = ModelOperations
+  export const query = QueryOperators
+  export const update = UpdateOperators
+  export const object = ObjectOperations
+  export const selection = Selection
+  export const migration = Migration
+  export const json = Json
+  export const transaction = Transaction
   export const relation = Relation
 }
 

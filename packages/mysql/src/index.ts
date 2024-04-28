@@ -447,7 +447,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
     let updateFields = difference(dataFields, keys)
-    if (!updateFields.length) updateFields = [dataFields[0]]
+    if (!updateFields.length) updateFields = []
 
     const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
     const createMultiFilter = (items: any[]) => {
@@ -483,7 +483,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const result = await this.query([
       `INSERT INTO ${escapeId(table)} (${initFields.map(escapeId).join(', ')})`,
       `VALUES (${insertion.map(item => this._formatValues(table, item, initFields)).join('), (')})`,
-      `ON DUPLICATE KEY UPDATE ${update}`,
+      update ? `ON DUPLICATE KEY UPDATE ${update}` : '',
     ].join(' '))
     const records = +(/^&Records:\s*(\d+)/.exec(result.message)?.[1] ?? result.affectedRows)
     if (!result.message && !result.insertId) return { inserted: 0, matched: result.affectedRows, modified: 0 }

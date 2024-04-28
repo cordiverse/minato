@@ -1,9 +1,10 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval.ts'
-import { Comparable, Flatten, Indexable, isComparable, makeRegExp } from './utils.ts'
+import { Comparable, Flatten, Indexable, isComparable, makeRegExp, Row } from './utils.ts'
 import { Selection } from './selection.ts'
+import { Relation } from './model.ts'
 
-export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
+export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean> | Query.Callback<T>
 
 export namespace Query {
   export interface FieldExpr<T = any> {
@@ -40,14 +41,17 @@ export namespace Query {
     $bitsAllSet?: Extract<T, number>
     $bitsAnyClear?: Extract<T, number>
     $bitsAnySet?: Extract<T, number>
+
+    $some?: T extends Relation<(infer I)[]> ? Query<I> : never
+    $none?: T extends Relation<(infer I)[]> ? Query<I> : never
+    $every?: T extends Relation<(infer I)[]> ? Query<I> : never
   }
 
   export interface LogicalExpr<T = any> {
     $or?: Expr<T>[]
     $and?: Expr<T>[]
     $not?: Expr<T>
-    /** @deprecated use query callback instead */
-    $expr?: Eval.Expr<boolean>
+    $expr?: Eval.Term<boolean>
   }
 
   export type Shorthand<T = any> =
@@ -57,8 +61,10 @@ export namespace Query {
 
   export type FieldQuery<T = any> = FieldExpr<T> | Shorthand<T>
 
+  export type Callback<T = any> = (row: Row<T>) => Query.Expr<Flatten<T>>
+
   export type Expr<T = any> = LogicalExpr<T> & {
-    [K in keyof T]?: null | FieldQuery<T[K]>
+    [K in keyof T]?: null | (T[K] extends Relation<infer I> | undefined ? I extends any[] ? FieldQuery<T[K]> : Query<I> : FieldQuery<T[K]>)
   }
 }
 

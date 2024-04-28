@@ -1,12 +1,58 @@
 import { Binary, clone, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
-import { Eval, isEvalExpr } from './eval.ts'
-import { Flatten, Keys, unravel } from './utils.ts'
+import { Eval, isEvalExpr, Update } from './eval.ts'
+import { AtomicTypes, Flatten, Keys, Row, unravel, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
+import { Query } from './query.ts'
+import { Selection } from './selection.ts'
 
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
+
+export type Relation<T = object> = Partial<T> & Relation.Mark
+
+export namespace Relation {
+  const Mark = Symbol('minato.relation')
+  export type Mark = { [Mark]: true }
+
+  type UnArray<T> = T extends (infer I)[] ? I : T
+
+  export type Include<S> = boolean | {
+    [P in Keys<S, Mark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
+  }
+
+  export type QueryExpr<S> = {
+    $every: Query.Expr<Flatten<S>>
+    $some: Query.Expr<Flatten<S>>
+    $none: Query.Expr<Flatten<S>>
+  }
+
+  export type Create<S> = S
+    | (S extends Values<AtomicTypes> ? never
+    : S extends Relation<(infer T)[]> ? Create<T>[]
+    : S extends Relation<infer T> ? Create<T>
+    : S extends any[] ? never
+    : string extends keyof S ? never
+    : S extends object ? { [K in keyof S]: Create<S[K]> }
+    : never)
+
+  export interface Modifier<S> {
+    $create?: MaybeArray<Create<S>>
+    $set?: Row.Computed<S, Update<S>>
+    $remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+    $connect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+    $disconnect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+  }
+
+  export function buildAssociationTable(...tables: [string, string]) {
+    return '_' + tables.sort().join('To')
+  }
+
+  export function buildAssociationKey(key: string, table: string) {
+    return `${table}_${key}`
+  }
+}
 
 export interface Field<T = any> {
   type: Type<T>

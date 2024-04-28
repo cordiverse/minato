@@ -1,4 +1,4 @@
-import { $, Database, Relation } from 'minato'
+import { $, Database, Query, Relation } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
 import { isNullable } from 'cosmokit'
@@ -130,6 +130,17 @@ function RelationTests(database: Database<Tables>) {
       },
     }
   })
+
+  async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
+    await database.upsert(name, Array(length).fill({}))
+    await database.remove(name, {})
+  }
+
+  before(async () => {
+    await setupAutoInc(database, 'user', 3)
+    await setupAutoInc(database, 'post', 3)
+    await setupAutoInc(database, 'tag', 3)
+  })
 }
 
 namespace RelationTests {
@@ -165,12 +176,11 @@ namespace RelationTests {
     { postId: 3, tagId: 3 },
   ]
 
-
   function nm(l: any) {
     return l
   }
 
-  export function query(database: Database<Tables>) {
+  export function select(database: Database<Tables>) {
     it('basic support', async () => {
       const users = await setup(database, 'user', userTable)
       const profiles = await setup(database, 'profile', profileTable)
@@ -233,11 +243,6 @@ namespace RelationTests {
           }
         }))
       )
-
-      it('query on relation', async () => {
-
-      })
-
     })
 
     it('manyToMany', async () => {
@@ -257,16 +262,183 @@ namespace RelationTests {
       await expect(database.select('post', {}, { tags: { posts: true } }).execute()).to.eventually.have.shape(
         posts.map(post => ({
           ...post,
-          tags: {
-            ...nm(post2tags.filter(p2t => p2t.postId === post.id)
-              .map(p2t => tags.find(tag => tag.id === p2t.tagId))
-              .filter(tag => tag)
-              .map(tag => ({
-                ...tag,
-                posts: nm(post2tags.filter(p2t => p2t.tagId === tag!.id).map(p2t => posts.find(post => post.id === p2t.postId)))
-              }))
-            ),
-          },
+          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+            .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+            .filter(tag => tag)
+            .map(tag => ({
+              ...tag,
+              posts: nm(post2tags.filter(p2t => p2t.tagId === tag!.id).map(p2t => posts.find(post => post.id === p2t.postId)))
+            }))
+          ),
+        }))
+      )
+    })
+  }
+
+  export function query(database: Database<Tables>) {
+    it('oneToOne', async () => {
+      const users = await setup(database, 'user', userTable)
+      const profiles = await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+
+      await expect(database.get('user', {
+        profile: {
+          userId: 1
+        }
+      })).to.eventually.have.shape(
+        users.slice(0, 1).map(user => ({
+          ...user,
+          profile: nm(profiles.find(profile => profile.userId === user.id)),
+        }))
+      )
+
+      await expect(database.get('user', row => ({
+        $expr: true,
+        profile: r => $.eq(r.userId, row.id)
+      }))).to.eventually.have.shape(
+        users.map(user => ({
+          ...user,
+          profile: nm(profiles.find(profile => profile.userId === user.id)),
+        }))
+      )
+
+      await expect(database.get('user', {
+        profile: {
+          user: {
+            value: 1
+          }
+        }
+      })).to.eventually.have.shape(
+        users.slice(1, 2).map(user => ({
+          ...user,
+          profile: nm(profiles.find(profile => profile.userId === user.id)),
+        }))
+      )
+
+      await expect(database.get('post', {
+        author: {
+          id: 1
+        }
+      })).to.eventually.have.shape(
+        posts.map(post => ({
+          ...post,
+          author: nm(users.find(user => post.authorId === user.id)),
+        })).filter(post => post.author.id === 1)
+      )
+    })
+
+    it('oneToMany', async () => {
+      const users = await setup(database, 'user', userTable)
+      const profiles = await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+
+      await expect(database.get('user', {
+        posts: {
+          $some: {
+            authorId: 1
+          }
+        }
+      })).to.eventually.have.shape(
+        users.slice(0, 1).map(user => ({
+          ...user,
+          posts: nm(posts.filter(post => post.authorId === user.id)),
+        }))
+      )
+
+      await expect(database.get('user', {
+        posts: {
+          $some: row => $.eq(row.id, 1)
+        }
+      })).to.eventually.have.shape(
+        users.slice(0, 1).map(user => ({
+          ...user,
+          posts: nm(posts.filter(post => post.authorId === user.id)),
+        }))
+      )
+
+      await expect(database.get('user', {
+        posts: {
+          $none: {
+            authorId: 1
+          }
+        }
+      })).to.eventually.have.shape(
+        users.slice(1).map(user => ({
+          ...user,
+          posts: nm(posts.filter(post => post.authorId === user.id)),
+        }))
+      )
+
+      await expect(database.get('user', {
+        posts: {
+          $every: {
+            authorId: 1
+          }
+        }
+      })).to.eventually.have.shape(
+        [users[0], users[2]].map(user => ({
+          ...user,
+          posts: nm(posts.filter(post => post.authorId === user.id)),
+        }))
+      )
+    })
+
+    it('manyToMany', async () => {
+      const users = await setup(database, 'user', userTable)
+      const profiles = await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+      const tags = await setup(database, 'tag', tagTable)
+      const post2tags = await setup(database, 'post2tag', post2TagTable)
+      const re = await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable.map(x => ({
+        post_id: x.postId,
+        tag_id: x.tagId,
+      })))
+
+      await expect(database.get('post', {
+        tags: {
+          $some: {
+            id: 1
+          }
+        }
+      })).to.eventually.have.shape(
+        posts.slice(0, 2).map(post => ({
+          ...post,
+          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+            .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+            .filter(tag => tag)
+          ),
+        }))
+      )
+
+      await expect(database.get('post', {
+        tags: {
+          $none: {
+            id: 1
+          }
+        }
+      })).to.eventually.have.shape(
+        posts.slice(2).map(post => ({
+          ...post,
+          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+            .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+            .filter(tag => tag)
+          ),
+        }))
+      )
+
+      await expect(database.get('post', {
+        tags: {
+          $every: {
+            id: 3
+          }
+        }
+      })).to.eventually.have.shape(
+        posts.slice(2, 3).map(post => ({
+          ...post,
+          tags: nm(post2tags.filter(p2t => p2t.postId === post.id)
+            .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+            .filter(tag => tag)
+          ),
         }))
       )
     })
@@ -357,11 +529,11 @@ namespace RelationTests {
       })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
-      posts.push(database.tables['post'].create({ id: 101, authorId: 1, content: 'post101' }))
+      posts.push(database.tables['post'].create({ id: 101, score: 101, authorId: 1, content: 'post101' }))
       await database.set('user', 1, row => ({
         value: 99,
         posts: {
-          $create: { id: $.add(row.id, 100), content: 'post101' }
+          $create: { id: 101, score: $.add(row.id, 100), content: 'post101' }
         },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
@@ -400,31 +572,32 @@ namespace RelationTests {
     })
 
     it('connect/disconnect manyToMany', async () => {
-      const users = await setup(database, 'user', userTable)
-      const profiles = await setup(database, 'profile', profileTable)
-      const posts = await setup(database, 'post', postTable)
-      const tags = await setup(database, 'tag', tagTable)
-      const post2tags = await setup(database, 'post2tag', post2TagTable)
-      const re = await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable.map(x => ({
+      await setup(database, 'user', userTable)
+      await setup(database, 'profile', profileTable)
+      await setup(database, 'post', postTable)
+      await setup(database, 'tag', tagTable)
+      await setup(database, 'post2tag', post2TagTable)
+      await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable.map(x => ({
         post_id: x.postId,
         tag_id: x.tagId,
       })))
 
-      await database.set('post', 2, row => ({
+      await database.set('post', 2, {
         tags: {
           $disconnect: {}
         },
-      }))
-      // await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+      })
+      await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').deep.equal([])
 
       await database.set('post', 2, row => ({
         tags: {
-          $connect: { id: 1 }
+          $connect: { id: row.id }
         },
       }))
 
-      console.dir(await database.select('post', {}, { tags: true }).execute(), { depth: 10 })
-      console.log(posts)
+      await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([{
+        id: 2
+      }])
     })
   }
 }
