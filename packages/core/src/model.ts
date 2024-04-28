@@ -10,11 +10,11 @@ import { Selection } from './selection.ts'
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
 
-export type Relation<T = object> = Partial<T> & Relation.Mark
+export type Relation<T = object> = Partial<T> & Relation.Marker
 
 export namespace Relation {
   const Mark = Symbol('minato.relation')
-  export type Mark = { [Mark]: true }
+  export type Marker = { [Mark]: true }
 
   export const Type = ['oneToOne', 'oneToMany', 'manyToOne', 'manyToMany'] as const
   export type Type = typeof Type[number]
@@ -36,7 +36,7 @@ export namespace Relation {
   type UnArray<T> = T extends (infer I)[] ? I : T
 
   export type Include<S> = boolean | {
-    [P in Keys<S, Mark>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
+    [P in Keys<S, Relation>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
   }
 
   export type Create<S> = S

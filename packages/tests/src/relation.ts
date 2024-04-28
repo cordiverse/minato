@@ -551,6 +551,19 @@ namespace RelationTests {
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
 
+    it('override oneToMany', async () => {
+      await setup(database, 'user', userTable)
+      await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+
+      posts[0].score = 2
+      posts[1].score = 3
+      await database.set('user', 1, row => ({
+        posts: posts.slice(0, 2)
+      }))
+      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+    })
+
     it('connect / disconnect manyToMany', async () => {
       await setup(database, 'user', userTable)
       await setup(database, 'profile', profileTable)
@@ -574,7 +587,6 @@ namespace RelationTests {
           $connect: r => $.eq(r.id, row.id),
         }),
       }))
-
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([{
         id: 2,
       }])

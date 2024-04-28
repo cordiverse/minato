@@ -567,8 +567,40 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   private ensureTransaction<T>(callback: (database: this) => Promise<T>) {
-    if (this[Database.transact]) return callback(this)
-    else return this.transact(callback)
+    const makeDelegate = (database: this) => new class {
+      _tasks: any[] = []
+
+      async _commit() {
+        return Promise.all(this._tasks.splice(0))
+      }
+
+      async get(...args) {
+        await this._commit()
+        return await database.get.apply(database, args)
+      }
+
+      async set(...args) {
+        this._tasks.push(database.set.apply(database, args))
+      }
+
+      async upsert(...args) {
+        this._tasks.push(database.upsert.apply(database, args))
+      }
+
+      async remove(...args) {
+        this._tasks.push(database.remove.apply(database, args))
+      }
+    }()
+
+    if (this[Database.transact]) {
+      const delegate = makeDelegate(this)
+      return callback(delegate as any).then(() => delegate._commit()).then(() => ({}))
+    } else {
+      return this.transact((database) => {
+        const delegate = makeDelegate(database)
+        return callback(delegate as any).then(() => delegate._commit()).then(() => ({}))
+      })
+    }
   }
 
   withTransaction(callback: (database: this) => Promise<void>) {
@@ -681,24 +713,14 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   private async processRelationUpdate<K extends Keys<S>, P extends Keys<S[K], Relation>>(table: K, row: S[K], key: P, update: Relation.Modifier<S[K][P]>) {
     const session: this = this
     const relation = this.tables[table].fields[key]!.relation!
-    if (update.$create) {
-      const upsert = makeArray(update.$create).map((r: any) => {
-        const data = { ...r }
-        for (const k in relation.fields) {
-          data[relation.references[k]] = row[relation.fields[k]]
-        }
-        return data
-      })
-      await session.upsert(relation.table as any, upsert)
-    }
-    if (update.$set) {
+    if (Array.isArray(update)) {
       if (relation.type === 'oneToMany') {
-        await session.set(relation.table as any,
-          Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])) as any,
-          update.$set as any,
-        )
+        update = {
+          $remove: {},
+          $create: update as any,
+        }
       } else if (relation.type === 'manyToMany') {
-        throw new Error('set for manyToMany relation is not supported')
+        throw new Error('override for manyToMany relation is not supported')
       }
     }
     if (update.$remove) {
@@ -712,19 +734,25 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         throw new Error('remove for manyToMany relation is not supported')
       }
     }
-    if (update.$connect) {
+    if (update.$set) {
       if (relation.type === 'oneToMany') {
-        throw new Error('connect for oneToMany relation is not supported')
+        await session.set(relation.table as any,
+          Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])) as any,
+          update.$set as any,
+        )
       } else if (relation.type === 'manyToMany') {
-        const assocTable = Relation.buildAssociationTable(table, relation.table)
-        const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
-        const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
-        const rels = await session.get(relation.table as any, update.$connect as any)
-        await session.upsert(assocTable as any, rels.map(r => ({
-          ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
-          ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i]]])),
-        })) as any)
+        throw new Error('set for manyToMany relation is not supported')
       }
+    }
+    if (update.$create) {
+      const upsert = makeArray(update.$create).map((r: any) => {
+        const data = { ...r }
+        for (const k in relation.fields) {
+          data[relation.references[k]] = row[relation.fields[k]]
+        }
+        return data
+      })
+      await session.upsert(relation.table as any, upsert)
     }
     if (update.$disconnect) {
       if (relation.type === 'oneToMany') {
@@ -742,6 +770,20 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           [...fields.map(x => r[x]), ...references.map(x => r[x])] as any,
           rels.map(r => [...fields.map(x => r[x]), ...references.map(x => r[x])]),
         ))
+      }
+    }
+    if (update.$connect) {
+      if (relation.type === 'oneToMany') {
+        throw new Error('connect for oneToMany relation is not supported')
+      } else if (relation.type === 'manyToMany') {
+        const assocTable = Relation.buildAssociationTable(table, relation.table)
+        const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
+        const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
+        const rels = await session.get(relation.table as any, update.$connect as any)
+        await session.upsert(assocTable as any, rels.map(r => ({
+          ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
+          ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i]]])),
+        })) as any)
       }
     }
   }
