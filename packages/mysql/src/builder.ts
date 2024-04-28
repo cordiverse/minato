@@ -33,6 +33,14 @@ export class MySQLBuilder extends Builder {
     super(driver, tables)
     this._dbTimezone = compat.timezone ?? 'SYSTEM'
 
+    this.evalOperators.$select = (args) => {
+      if (compat.maria || compat.mysql57) {
+        return `json_object(${args.map(arg => this.parseEval(arg)).flatMap((x, i) => [`${i}`, x]).join(', ')})`
+      } else {
+        return `${args.map(arg => this.parseEval(arg, false)).join(', ')}`
+      }
+    }
+
     this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
     this.evalOperators.$min = (expr) => this.createAggr(expr, value => `min(${value})`, undefined, value => `minato_cfunc_min(${value})`)
@@ -99,6 +107,18 @@ export class MySQLBuilder extends Builder {
       },
       dump: value => isNullable(value) ? value : Time.template('yyyy-MM-dd hh:mm:ss.SSS', value),
     }
+  }
+
+  protected createMemberQuery(key: string, value: any, notStr = '') {
+    if (Array.isArray(value) && Array.isArray(value[0]) && (this.compat.maria || this.compat.mysql57)) {
+      const vals = `json_array(${value.map((val: any[]) => `(${this.evalOperators.$select!(val)})`).join(', ')})`
+      return this.jsonContains(vals, key)
+    }
+    if (value.$exec && (this.compat.maria || this.compat.mysql57)) {
+      const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
+      return notStr ? this.logicalNot(res) : res
+    }
+    return super.createMemberQuery(key, value, notStr)
   }
 
   escapePrimitive(value: any, type?: Type) {
