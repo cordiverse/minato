@@ -1,4 +1,4 @@
-import { defineProperty, Dict, makeArray, mapValues, MaybeArray, omit } from 'cosmokit'
+import { defineProperty, Dict, makeArray, mapValues, MaybeArray, noop, omit } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
 import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
@@ -575,7 +575,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (this[Database.transact]) throw new Error('nested transactions are not supported')
     const finalTasks: Promise<void>[] = []
     const database = this.makeProxy(Database.transact, (driver) => {
-      let session: any
+      let initialized = false, session: any
       let _resolve: (value: any) => void
       const sessionTask = new Promise((resolve) => _resolve = resolve)
       driver = new Proxy(driver, {
@@ -587,16 +587,16 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         },
       })
       finalTasks.push(driver.withTransaction((_session) => {
+        if (initialized) initialTask = initialTaskFactory()
+        initialized = true
         _resolve(session = _session)
         return initialTask as any
       }))
       return driver
     })
-    const initialTask = (async () => {
-      await Promise.resolve()
-      return await callback(database)
-    })()
-    return await initialTask.finally(() => Promise.all(finalTasks))
+    const initialTaskFactory = () => Promise.resolve().then(() => callback(database))
+    let initialTask = initialTaskFactory()
+    return await initialTask.catch(noop).finally(() => Promise.all(finalTasks))
   }
 
   async stopAll() {

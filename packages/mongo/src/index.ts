@@ -49,7 +49,12 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
     await this.client.withSession((session) => session.withTransaction(
       () => this.db.collection('_fields').findOne({}, { session }),
-    )).catch(() => this._replSet = false)
+    )).catch(() => {
+      this._replSet = false
+      this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
+      Convert to replicaSet to enable the feature.
+      See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
+    })
 
     this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
@@ -478,9 +483,6 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     if (this._replSet) {
       await this.client.withSession((session) => session.withTransaction(() => callback(session)))
     } else {
-      this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
-Convert to replicaSet to enable the feature.
-See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
       await callback(undefined)
     }
   }
