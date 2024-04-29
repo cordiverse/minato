@@ -268,22 +268,18 @@ namespace RelationTests {
         profile: {
           userId: 1,
         },
-      })).to.eventually.have.shape(
-        users.slice(0, 1).map(user => ({
-          ...user,
-          profile: profiles.find(profile => profile.userId === user.id),
-        })),
-      )
+      })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
+        ...user,
+        profile: profiles.find(profile => profile.userId === user.id),
+      })))
 
       await expect(database.get('user', row => ({
         $expr: true,
         profile: r => $.eq(r.userId, row.id),
-      }))).to.eventually.have.shape(
-        users.map(user => ({
-          ...user,
-          profile: profiles.find(profile => profile.userId === user.id),
-        })),
-      )
+      }))).to.eventually.have.shape(users.map(user => ({
+        ...user,
+        profile: profiles.find(profile => profile.userId === user.id),
+      })))
 
       await expect(database.get('user', {
         profile: {
@@ -291,23 +287,19 @@ namespace RelationTests {
             value: 1,
           },
         },
-      })).to.eventually.have.shape(
-        users.slice(1, 2).map(user => ({
-          ...user,
-          profile: profiles.find(profile => profile.userId === user.id),
-        })),
-      )
+      })).to.eventually.have.shape(users.slice(1, 2).map(user => ({
+        ...user,
+        profile: profiles.find(profile => profile.userId === user.id),
+      })))
 
       await expect(database.get('post', {
         author: {
           id: 1,
         },
-      })).to.eventually.have.shape(
-        posts.map(post => ({
-          ...post,
-          author: users.find(user => post.authorId === user.id),
-        })).filter(post => post.author?.id === 1),
-      )
+      })).to.eventually.have.shape(posts.map(post => ({
+        ...post,
+        author: users.find(user => post.authorId === user.id),
+      })).filter(post => post.author?.id === 1))
     })
 
     it('oneToMany', async () => {
@@ -321,23 +313,19 @@ namespace RelationTests {
             authorId: 1,
           },
         },
-      })).to.eventually.have.shape(
-        users.slice(0, 1).map(user => ({
-          ...user,
-          posts: posts.filter(post => post.authorId === user.id),
-        })),
-      )
+      })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
+        ...user,
+        posts: posts.filter(post => post.authorId === user.id),
+      })))
 
       await expect(database.get('user', {
         posts: {
           $some: row => $.eq(row.id, 1),
         },
-      })).to.eventually.have.shape(
-        users.slice(0, 1).map(user => ({
-          ...user,
-          posts: posts.filter(post => post.authorId === user.id),
-        })),
-      )
+      })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
+        ...user,
+        posts: posts.filter(post => post.authorId === user.id),
+      })))
 
       await expect(database.get('user', {
         posts: {
@@ -345,12 +333,10 @@ namespace RelationTests {
             authorId: 1,
           },
         },
-      })).to.eventually.have.shape(
-        users.slice(1).map(user => ({
-          ...user,
-          posts: posts.filter(post => post.authorId === user.id),
-        })),
-      )
+      })).to.eventually.have.shape(users.slice(1).map(user => ({
+        ...user,
+        posts: posts.filter(post => post.authorId === user.id),
+      })))
 
       await expect(database.get('user', {
         posts: {
@@ -358,12 +344,10 @@ namespace RelationTests {
             authorId: 1,
           },
         },
-      })).to.eventually.have.shape(
-        [users[0], users[2]].map(user => ({
-          ...user,
-          posts: posts.filter(post => post.authorId === user.id),
-        })),
-      )
+      })).to.eventually.have.shape([users[0], users[2]].map(user => ({
+        ...user,
+        posts: posts.filter(post => post.authorId === user.id),
+      })))
     })
 
     it('manyToMany', async () => {
@@ -383,14 +367,12 @@ namespace RelationTests {
             id: 1,
           },
         },
-      })).to.eventually.have.shape(
-        posts.slice(0, 2).map(post => ({
-          ...post,
-          tags: post2tags.filter(p2t => p2t.postId === post.id)
-            .map(p2t => tags.find(tag => tag.id === p2t.tagId))
-            .filter(tag => tag),
-        })),
-      )
+      })).to.eventually.have.shape(posts.slice(0, 2).map(post => ({
+        ...post,
+        tags: post2tags.filter(p2t => p2t.postId === post.id)
+          .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+          .filter(tag => tag),
+      })))
 
       await expect(database.get('post', {
         tags: {
@@ -398,14 +380,12 @@ namespace RelationTests {
             id: 1,
           },
         },
-      })).to.eventually.have.shape(
-        posts.slice(2).map(post => ({
-          ...post,
-          tags: post2tags.filter(p2t => p2t.postId === post.id)
-            .map(p2t => tags.find(tag => tag.id === p2t.tagId))
-            .filter(tag => tag),
-        })),
-      )
+      })).to.eventually.have.shape(posts.slice(2).map(post => ({
+        ...post,
+        tags: post2tags.filter(p2t => p2t.postId === post.id)
+          .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+          .filter(tag => tag),
+      })))
 
       await expect(database.get('post', {
         tags: {
@@ -413,14 +393,71 @@ namespace RelationTests {
             id: 3,
           },
         },
-      })).to.eventually.have.shape(
-        posts.slice(2, 3).map(post => ({
-          ...post,
-          tags: post2tags.filter(p2t => p2t.postId === post.id)
-            .map(p2t => tags.find(tag => tag.id === p2t.tagId))
-            .filter(tag => tag),
-        })),
-      )
+      })).to.eventually.have.shape(posts.slice(2, 3).map(post => ({
+        ...post,
+        tags: post2tags.filter(p2t => p2t.postId === post.id)
+          .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+          .filter(tag => tag),
+      })))
+
+      await expect(database.get('post', {
+        tags: {
+          $some: {
+            id: 1,
+          },
+          $none: {
+            id: 3,
+          },
+          $every: {},
+        },
+      })).to.eventually.have.shape(posts.slice(0, 1).map(post => ({
+        ...post,
+        tags: post2tags.filter(p2t => p2t.postId === post.id)
+          .map(p2t => tags.find(tag => tag.id === p2t.tagId))
+          .filter(tag => tag),
+      })))
+    })
+
+    it('nested query', async () => {
+      const users = await setup(database, 'user', userTable)
+      const profiles = await setup(database, 'profile', profileTable)
+      const posts = await setup(database, 'post', postTable)
+      const tags = await setup(database, 'tag', tagTable)
+      const post2tags = await setup(database, 'post2tag', post2TagTable)
+      const re = await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable.map(x => ({
+        post_id: x.postId,
+        tag_id: x.tagId,
+      })))
+
+      await expect(database.get('user', {
+        posts: {
+          $some: {
+            tags: {
+              $some: {
+                id: 1,
+              },
+            },
+          },
+        },
+      })).to.eventually.have.shape([users[0]].map(user => ({
+        ...user,
+        posts: posts.filter(post => post.authorId === user.id),
+      })))
+
+      await expect(database.get('tag', {
+        posts: {
+          $some: {
+            author: {
+              id: 2,
+            },
+          },
+        },
+      })).to.eventually.have.shape([tags[2]].map(tag => ({
+        ...tag,
+        posts: post2tags.filter(p2t => p2t.tagId === tag.id)
+          .map(p2t => posts.find(post => post.id === p2t.postId))
+          .filter(post => post),
+      })))
     })
   }
 
@@ -572,6 +609,17 @@ namespace RelationTests {
           $set: r => ({
             score: $.add(row.id, r.id),
           }),
+        }),
+      }))
+      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+
+      posts[1].score = 13
+      await database.set('user', 1, row => ({
+        posts: $.update({
+          $set: [
+            { score: { $gt: 2 } },
+            r => ({ score: $.add(r.score, 10) }),
+          ],
         }),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)

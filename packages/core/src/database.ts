@@ -716,38 +716,42 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return { $expr: { $and: results } } as any
   }
 
-  private async processRelationUpdate(table: any, row: any, key: any, update: Relation.Modifier) {
+  private async processRelationUpdate(table: any, row: any, key: any, modifier: Relation.Modifier) {
     const relation: Relation.Config<S> = this.tables[table].fields[key]!.relation! as any
-    if (Array.isArray(update)) {
+    if (Array.isArray(modifier)) {
       if (relation.type === 'oneToMany') {
-        update = { $remove: {}, $create: update }
+        modifier = { $remove: {}, $create: modifier }
       } else if (relation.type === 'manyToMany') {
         throw new Error('override for manyToMany relation is not supported')
       }
     }
-    if (update.$remove) {
+    if (modifier.$remove) {
       if (relation.type === 'oneToMany') {
         await this.remove(relation.table, (r: any) => ({
           $expr: true,
           ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
-          ...(typeof update.$remove === 'function' ? { $expr: update.$remove(r) } : update.$remove),
+          ...(typeof modifier.$remove === 'function' ? { $expr: modifier.$remove(r) } : modifier.$remove),
         }) as any)
       } else if (relation.type === 'manyToMany') {
         throw new Error('remove for manyToMany relation is not supported')
       }
     }
-    if (update.$set) {
+    if (modifier.$set) {
+      const [query, update] = Array.isArray(modifier.$set) ? modifier.$set : [{}, modifier.$set]
       if (relation.type === 'oneToMany') {
-        await this.set(relation.table,
-          Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])) as any,
-          update.$set,
+        await this.set(relation.table, (r: any) => ({
+          $expr: true,
+          ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+          ...(typeof query === 'function' ? { $expr: query } : query),
+        }) as any,
+        update,
         )
       } else if (relation.type === 'manyToMany') {
         throw new Error('set for manyToMany relation is not supported')
       }
     }
-    if (update.$create) {
-      const upsert = makeArray(update.$create).map((r: any) => {
+    if (modifier.$create) {
+      const upsert = makeArray(modifier.$create).map((r: any) => {
         const data = { ...r }
         for (const k in relation.fields) {
           data[relation.references[k]] = row[relation.fields[k]]
@@ -756,7 +760,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       })
       await this.upsert(relation.table, upsert)
     }
-    if (update.$disconnect) {
+    if (modifier.$disconnect) {
       if (relation.type === 'oneToMany') {
         throw new Error('disconnect for oneToMany relation is not supported')
       } else if (relation.type === 'manyToMany') {
@@ -765,7 +769,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
         const rows = await this.select(assocTable, {
           ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])) as any,
-          [relation.table]: update.$disconnect,
+          [relation.table]: modifier.$disconnect,
         }, null).execute()
         await this.remove(assocTable, r => Eval.in(
           [...fields.map(x => r[x]), ...references.map(x => r[x])],
@@ -773,14 +777,14 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         ))
       }
     }
-    if (update.$connect) {
+    if (modifier.$connect) {
       if (relation.type === 'oneToMany') {
         throw new Error('connect for oneToMany relation is not supported')
       } else if (relation.type === 'manyToMany') {
         const assocTable: any = Relation.buildAssociationTable(table, relation.table)
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
         const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
-        const rows = await this.get(relation.table, update.$connect)
+        const rows = await this.get(relation.table, modifier.$connect)
         await this.upsert(assocTable, rows.map(r => ({
           ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
           ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i] as any]])),

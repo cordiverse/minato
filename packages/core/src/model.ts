@@ -48,9 +48,9 @@ export namespace Relation {
     : S extends object ? { [K in keyof S]: Create<S[K]> }
     : never)
 
-  export interface Modifier<S = any> {
+  export interface Modifier<S extends object = any> {
     $create?: MaybeArray<Partial<Create<S>>>
-    $set?: Row.Computed<S, Update<S>>
+    $set?: Row.Computed<S, Update<S>> | [Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>, Row.Computed<S, Update<S>>]
     $remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
     $connect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
     $disconnect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
