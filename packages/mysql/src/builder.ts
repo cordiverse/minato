@@ -169,8 +169,10 @@ export class MySQLBuilder extends Builder {
     if (inline || !isAggrExpr(expr as any)) {
       query = `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      query = `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      query = [
+        `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,
+        `FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`,
+      ].join(' ')
     }
     if (Object.keys(refFields ?? {}).length) {
       const funcname = `minato_tfunc_${randomId()}`

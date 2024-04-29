@@ -259,8 +259,10 @@ export class Builder {
     if (inline || !isAggrExpr(expr as any)) {
       return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      return [
+        `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,
+        `FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`,
+      ].join(' ')
     }
   }
 

@@ -19,10 +19,10 @@ export namespace Relation {
   export const Type = ['oneToOne', 'oneToMany', 'manyToOne', 'manyToMany'] as const
   export type Type = typeof Type[number]
 
-  export interface Config<K extends string = string> {
+  export interface Config<S extends any = any, T extends Keys<S> = Keys<S>, K extends string = string> {
     type: Type
-    table: string
-    references: string[]
+    table: T
+    references: Keys<S[T]>[]
     fields: K[]
   }
 
@@ -48,7 +48,7 @@ export namespace Relation {
     : S extends object ? { [K in keyof S]: Create<S[K]> }
     : never)
 
-  export interface Modifier<S> {
+  export interface Modifier<S = any> {
     $create?: MaybeArray<Partial<Create<S>>>
     $set?: Row.Computed<S, Update<S>>
     $remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>

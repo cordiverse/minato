@@ -171,7 +171,7 @@ namespace RelationTests {
       await expect(database.get('profile', {}, ['user'])).to.eventually.have.shape(
         profiles.map(profile => ({
           user: users.find(user => user.id === profile.userId),
-        }))
+        })),
       )
 
       await expect(database.get('user', {}, ['id', 'value', 'profile', 'posts'])).to.eventually.have.shape(
@@ -179,14 +179,14 @@ namespace RelationTests {
           ...user,
           profile: profiles.find(profile => profile.userId === user.id),
           posts: posts.filter(post => post.authorId === user.id),
-        }))
+        })),
       )
 
       await expect(database.select('post', {}, { author: true }).execute()).to.eventually.have.shape(
         posts.map(post => ({
           ...post,
           author: users.find(user => user.id === post.authorId),
-        }))
+        })),
       )
     })
 
@@ -202,7 +202,7 @@ namespace RelationTests {
             ...post,
             author: users.find(user => user.id === post.authorId),
           })),
-        }))
+        })),
       )
 
       await expect(database.select('profile', {}, { user: { posts: { author: true } } }).execute()).to.eventually.have.shape(
@@ -215,7 +215,7 @@ namespace RelationTests {
               author: users.find(user => user.id === profile.userId),
             })),
           },
-        }))
+        })),
       )
 
       await expect(database.select('post', {}, { author: { profile: true } }).execute()).to.eventually.have.shape(
@@ -225,7 +225,7 @@ namespace RelationTests {
             ...users.find(user => user.id === post.authorId),
             profile: profiles.find(profile => profile.userId === post.authorId),
           },
-        }))
+        })),
       )
     })
 
@@ -253,7 +253,7 @@ namespace RelationTests {
               ...tag,
               posts: post2tags.filter(p2t => p2t.tagId === tag!.id).map(p2t => posts.find(post => post.id === p2t.postId)),
             })),
-        }))
+        })),
       )
     })
   }
@@ -266,47 +266,47 @@ namespace RelationTests {
 
       await expect(database.get('user', {
         profile: {
-          userId: 1
-        }
+          userId: 1,
+        },
       })).to.eventually.have.shape(
         users.slice(0, 1).map(user => ({
           ...user,
           profile: profiles.find(profile => profile.userId === user.id),
-        }))
+        })),
       )
 
       await expect(database.get('user', row => ({
         $expr: true,
-        profile: r => $.eq(r.userId, row.id)
+        profile: r => $.eq(r.userId, row.id),
       }))).to.eventually.have.shape(
         users.map(user => ({
           ...user,
           profile: profiles.find(profile => profile.userId === user.id),
-        }))
+        })),
       )
 
       await expect(database.get('user', {
         profile: {
           user: {
-            value: 1
-          }
-        }
+            value: 1,
+          },
+        },
       })).to.eventually.have.shape(
         users.slice(1, 2).map(user => ({
           ...user,
           profile: profiles.find(profile => profile.userId === user.id),
-        }))
+        })),
       )
 
       await expect(database.get('post', {
         author: {
-          id: 1
-        }
+          id: 1,
+        },
       })).to.eventually.have.shape(
         posts.map(post => ({
           ...post,
           author: users.find(user => post.authorId === user.id),
-        })).filter(post => post.author?.id === 1)
+        })).filter(post => post.author?.id === 1),
       )
     })
 
@@ -318,51 +318,51 @@ namespace RelationTests {
       await expect(database.get('user', {
         posts: {
           $some: {
-            authorId: 1
-          }
-        }
+            authorId: 1,
+          },
+        },
       })).to.eventually.have.shape(
         users.slice(0, 1).map(user => ({
           ...user,
           posts: posts.filter(post => post.authorId === user.id),
-        }))
+        })),
       )
 
       await expect(database.get('user', {
         posts: {
-          $some: row => $.eq(row.id, 1)
-        }
+          $some: row => $.eq(row.id, 1),
+        },
       })).to.eventually.have.shape(
         users.slice(0, 1).map(user => ({
           ...user,
           posts: posts.filter(post => post.authorId === user.id),
-        }))
+        })),
       )
 
       await expect(database.get('user', {
         posts: {
           $none: {
-            authorId: 1
-          }
-        }
+            authorId: 1,
+          },
+        },
       })).to.eventually.have.shape(
         users.slice(1).map(user => ({
           ...user,
           posts: posts.filter(post => post.authorId === user.id),
-        }))
+        })),
       )
 
       await expect(database.get('user', {
         posts: {
           $every: {
-            authorId: 1
-          }
-        }
+            authorId: 1,
+          },
+        },
       })).to.eventually.have.shape(
         [users[0], users[2]].map(user => ({
           ...user,
           posts: posts.filter(post => post.authorId === user.id),
-        }))
+        })),
       )
     })
 
@@ -380,46 +380,46 @@ namespace RelationTests {
       await expect(database.get('post', {
         tags: {
           $some: {
-            id: 1
-          }
-        }
+            id: 1,
+          },
+        },
       })).to.eventually.have.shape(
         posts.slice(0, 2).map(post => ({
           ...post,
           tags: post2tags.filter(p2t => p2t.postId === post.id)
             .map(p2t => tags.find(tag => tag.id === p2t.tagId))
             .filter(tag => tag),
-        }))
+        })),
       )
 
       await expect(database.get('post', {
         tags: {
           $none: {
-            id: 1
-          }
-        }
+            id: 1,
+          },
+        },
       })).to.eventually.have.shape(
         posts.slice(2).map(post => ({
           ...post,
           tags: post2tags.filter(p2t => p2t.postId === post.id)
             .map(p2t => tags.find(tag => tag.id === p2t.tagId))
             .filter(tag => tag),
-        }))
+        })),
       )
 
       await expect(database.get('post', {
         tags: {
           $every: {
-            id: 3
-          }
-        }
+            id: 3,
+          },
+        },
       })).to.eventually.have.shape(
         posts.slice(2, 3).map(post => ({
           ...post,
           tags: post2tags.filter(p2t => p2t.postId === post.id)
             .map(p2t => tags.find(tag => tag.id === p2t.tagId))
             .filter(tag => tag),
-        }))
+        })),
       )
     })
   }
@@ -444,7 +444,7 @@ namespace RelationTests {
         profileTable.map(profile => ({
           ...profile,
           user: userTable.find(user => user.id === profile.userId),
-        }))
+        })),
       )
 
       await expect(database.select('user', {}, { profile: true, posts: true }).execute()).to.eventually.have.shape(
@@ -452,7 +452,7 @@ namespace RelationTests {
           ...user,
           profile: profileTable.find(profile => profile.userId === user.id),
           posts: postTable.filter(post => post.authorId === user.id),
-        }))
+        })),
       )
     })
 
@@ -472,7 +472,7 @@ namespace RelationTests {
         userTable.map(user => ({
           ...user,
           posts: postTable.filter(post => post.authorId === user.id),
-        }))
+        })),
       )
     })
   }
@@ -521,14 +521,14 @@ namespace RelationTests {
         await database.upsert('user', [{
           ...userTable.find(u => u.id === user.id)!,
           profile: profileTable.find(profile => profile.userId === user.id),
-        } as any])
+        }] as any)
       }
 
       await expect(database.select('user', {}, { profile: true }).execute()).to.eventually.have.shape(
         userTable.map(user => ({
           ...user,
           profile: profileTable.find(profile => profile.userId === user.id),
-        }))
+        })),
       )
     })
 
@@ -599,7 +599,7 @@ namespace RelationTests {
       posts[0].score = 2
       posts[1].score = 3
       await database.set('user', 1, row => ({
-        posts: posts.slice(0, 2)
+        posts: posts.slice(0, 2),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })

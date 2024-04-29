@@ -234,8 +234,10 @@ export class PostgresBuilder extends Builder {
     if (inline || !isAggrExpr(expr as any)) {
       return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
     } else {
-      return `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
+      return [
+        `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,
+        `FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`,
+      ].join(' ')
     }
   }
 
