@@ -10,7 +10,7 @@ import { Selection } from './selection.ts'
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
 
-export type Relation<T = object> = Partial<T> & Relation.Marker
+export type Relation<T extends object = object> = Partial<T> & Relation.Marker
 
 export namespace Relation {
   const Mark = Symbol('minato.relation')
@@ -229,7 +229,6 @@ export namespace Model {
       [P in K]?: [string, string]
     }
   }
-
 }
 
 export interface Model extends Model.Config {}

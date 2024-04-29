@@ -10,7 +10,8 @@ export interface Type<T = any, N = any> {
   type: Field.Type<T> // | Keys<N, T> | Field.NewType<T>
   inner?: T extends (infer I)[] ? Type<I, N> : Field.Type<T> extends 'json' ? { [key in keyof T]: Type<T[key], N> } : never
   array?: boolean
-  relation?: boolean
+  // For toMany relation join only
+  ignoreNull?: boolean
 }
 
 export namespace Type {
@@ -90,7 +91,7 @@ export namespace Type {
   export function transform(value: any, type: Type, callback: (value: any, type?: Type) => any) {
     if (!isNullable(value) && type?.inner) {
       if (Type.isArray(type)) {
-        return (value as any[]).map(x => callback(x, Type.getInner(type))).filter(x => !type.relation || !isEmpty(x))
+        return (value as any[]).map(x => callback(x, Type.getInner(type))).filter(x => !type.ignoreNull || !isEmpty(x))
       } else {
         return mapValues(value, (x, k) => callback(x, Type.getInner(type, k)))
       }

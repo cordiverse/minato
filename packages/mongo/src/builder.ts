@@ -262,22 +262,19 @@ export class Builder {
       for (const type of aggrKeys) {
         if (!expr[type]) continue
         const key = this.createKey()
+        const value = this.transformAggr(Array.isArray(expr[type]) ? expr[type][0] : expr[type])
         this.aggrDefault = 0
         if (type === '$count') {
-          const value = this.transformAggr(expr[type])
           group![key] = { $addToSet: value }
           return { $size: '$' + key }
         } else if (type === '$length') {
-          const value = this.transformAggr(expr[type])
           group![key] = { $push: value }
           return { $size: '$' + key }
         } else if (type === '$array') {
-          const value = this.transformAggr(expr[type][0])
           this.aggrDefault = []
           group![key] = { $push: value }
           return '$' + key
         } else {
-          const value = this.transformAggr(expr[type])
           group![key] = { [type]: value }
           return '$' + key
         }

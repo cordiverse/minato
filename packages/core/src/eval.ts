@@ -143,7 +143,7 @@ export namespace Eval {
 
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
     object<T extends any>(row: Row<T>): Expr<T, false>
-    array<T>(value: Expr<T, false>, _ignoreNull?: boolean): Expr<T[], true>
+    array<T>(value: Expr<T, false>, ignoreNull?: boolean): Expr<T[], true>
   }
 }
 
@@ -300,7 +300,7 @@ Eval.array = multary('array', ([expr, ignoreNull], table) => Array.isArray(table
   ? table.map(data => executeAggr(expr, data)).filter(x => !ignoreNull || !isEmpty(x))
   : Array.from(executeEval(table, expr)).filter(x => !ignoreNull || !isEmpty(x)), (expr, ignoreNull = false) => {
   const type = Type.Array(Type.fromTerm(expr))
-  type.relation = ignoreNull
+  type.ignoreNull = ignoreNull
   return type
 })
 

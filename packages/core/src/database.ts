@@ -625,44 +625,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   private ensureTransaction<T>(callback: (database: this) => Promise<T>) {
-    const makeDelegate = (database: this) => new class {
-      _tasks: any[] = []
-
-      async _commit() {
-        return Promise.all(this._tasks.splice(0))
-      }
-
-      async get(...args) {
-        await this._commit()
-        return await database.get.apply(database, args)
-      }
-
-      async create(...args) {
-        await this._commit()
-        return await database.create.apply(database, args)
-      }
-
-      async set(...args) {
-        this._tasks.push(database.set.apply(database, args))
-      }
-
-      async upsert(...args) {
-        this._tasks.push(database.upsert.apply(database, args))
-      }
-
-      async remove(...args) {
-        this._tasks.push(database.remove.apply(database, args))
-      }
-    }()
-
     if (this[Database.transact]) {
-      const delegate = makeDelegate(this)
-      return callback(delegate as any).then(() => delegate._commit()).then(() => ({}))
+      return callback(this)
     } else {
-      return this.transact((database) => {
-        const delegate = makeDelegate(database)
-        return callback(delegate as any).then(() => delegate._commit()).then(() => ({}))
-      })
+      return this.transact(callback)
     }
   }
 
