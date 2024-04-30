@@ -7,6 +7,8 @@ interface User {
   value?: number
   profile?: Relation<Profile>
   posts?: Relation<Post[]>
+  successorId?: number
+  successor?: Relation
 }
 
 interface Profile {
@@ -52,6 +54,16 @@ function RelationTests(database: Database<Tables>) {
   database.extend('user', {
     id: 'unsigned',
     value: 'integer',
+    successorId: {
+      type: 'unsigned',
+      nullable: true,
+    },
+    successor: {
+      type: 'oneToOne',
+      target: ['user', 'predecessor'],
+      fields: 'successorId',
+      references: 'id',
+    },
   }, {
     autoInc: true,
   })
@@ -66,7 +78,7 @@ function RelationTests(database: Database<Tables>) {
       references: 'id',
     },
   }, {
-    primary: ['userId'],
+    primary: 'userId',
   })
 
   database.extend('post', {
@@ -132,7 +144,7 @@ function RelationTests(database: Database<Tables>) {
 namespace RelationTests {
   const userTable: User[] = [
     { id: 1, value: 0 },
-    { id: 2, value: 1 },
+    { id: 2, value: 1, successorId: 1 },
     { id: 3, value: 2 },
   ]
 
@@ -162,7 +174,13 @@ namespace RelationTests {
     { postId: 3, tagId: 3 },
   ]
 
-  export function select(database: Database<Tables>) {
+  export interface SelectOptions {
+    ignoreNullObject?: boolean
+  }
+
+  export function select(database: Database<Tables>, options: SelectOptions = {}) {
+    const { ignoreNullObject = true } = options
+
     it('basic support', async () => {
       const users = await setup(database, 'user', userTable)
       const profiles = await setup(database, 'profile', profileTable)
@@ -174,7 +192,7 @@ namespace RelationTests {
         })),
       )
 
-      await expect(database.get('user', {}, ['id', 'value', 'profile', 'posts'])).to.eventually.have.shape(
+      await expect(database.select('user', {}, { profile: true, posts: true }).execute()).to.eventually.have.shape(
         users.map(user => ({
           ...user,
           profile: profiles.find(profile => profile.userId === user.id),
@@ -186,6 +204,17 @@ namespace RelationTests {
         posts.map(post => ({
           ...post,
           author: users.find(user => user.id === post.authorId),
+        })),
+      )
+    })
+
+    ignoreNullObject && it('self relation', async () => {
+      const users = await setup(database, 'user', userTable)
+
+      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape(
+        users.map(user => ({
+          ...user,
+          successor: users.find(successor => successor.id === user.successorId),
         })),
       )
     })
@@ -650,6 +679,24 @@ namespace RelationTests {
         posts: posts.slice(0, 2),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+    })
+
+    it('connect / disconnect oneToMany', async () => {
+      await setup(database, 'user', userTable)
+      await setup(database, 'profile', profileTable)
+      await setup(database, 'post', postTable)
+
+      await database.set('post', 1, {
+        tags: $.update({
+          $disconnect: {},
+          $connect: { id: 3 },
+        }),
+      })
+      await expect(database.get('post', 1, ['tags'])).to.eventually.have.shape([{
+        tags: [
+          { id: 3 },
+        ],
+      }])
     })
 
     it('connect / disconnect manyToMany', async () => {

@@ -339,8 +339,26 @@ namespace SelectionTests {
           value: 0, id: 1,
           bar: { uid: 1, pid: 2, value: 0, id: 3 },
         },
-        { value: 2, id: 2, bar: {} },
-        { value: 2, id: 3, bar: {} },
+        { value: 2, id: 2 },
+        { value: 2, id: 3 },
+      ])
+
+      await expect(database.select('bar')
+        .join('foo', database.select('foo'), (bar, foo) => $.eq(foo.value, bar.value), true)
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          uid: 1, pid: 1, value: 0, id: 1,
+          foo: { value: 0, id: 1 },
+        },
+        { uid: 1, pid: 1, value: 1, id: 2 },
+        {
+          uid: 1, pid: 2, value: 0, id: 3,
+          foo: { value: 0, id: 1 },
+        },
+        { uid: 1, pid: 3, value: 1, id: 4 },
+        { uid: 2, pid: 1, value: 1, id: 5 },
+        { uid: 2, pid: 1, value: 1, id: 6 },
       ])
     })
 

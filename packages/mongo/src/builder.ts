@@ -262,7 +262,7 @@ export class Builder {
       for (const type of aggrKeys) {
         if (!expr[type]) continue
         const key = this.createKey()
-        const value = this.transformAggr(Array.isArray(expr[type]) ? expr[type][0] : expr[type])
+        const value = this.transformAggr(expr[type])
         this.aggrDefault = 0
         if (type === '$count') {
           group![key] = { $addToSet: value }

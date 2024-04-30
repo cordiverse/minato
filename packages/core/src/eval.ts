@@ -72,6 +72,7 @@ export namespace Eval {
   export interface Static {
     <A extends boolean>(key: string, value: any, type: Type): Eval.Expr<any, A>
 
+    ignoreNull<T, A extends boolean>(value: Eval.Expr<T, A>): Eval.Expr<T, A>
     select(...args: Any[]): Expr<any[], false>
     update<T extends object>(modifier: Relation.Modifier<T>): Expr<T>[]
 
@@ -143,7 +144,7 @@ export namespace Eval {
 
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
     object<T extends any>(row: Row<T>): Expr<T, false>
-    array<T>(value: Expr<T, false>, ignoreNull?: boolean): Expr<T[], true>
+    array<T>(value: Expr<T, false>): Expr<T[], true>
   }
 }
 
@@ -187,6 +188,7 @@ operators.$switch = (args, data) => {
   return executeEval(data, args.default)
 }
 
+Eval.ignoreNull = (expr) => (expr[Type.kType]!.ignoreNull = true, expr)
 Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
 Eval.update = (modifier) => modifier as any
 
@@ -296,13 +298,9 @@ Eval.object = (fields: any) => {
   return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value)))) as any
 }
 
-Eval.array = multary('array', ([expr, ignoreNull], table) => Array.isArray(table)
-  ? table.map(data => executeAggr(expr, data)).filter(x => !ignoreNull || !isEmpty(x))
-  : Array.from(executeEval(table, expr)).filter(x => !ignoreNull || !isEmpty(x)), (expr, ignoreNull = false) => {
-  const type = Type.Array(Type.fromTerm(expr))
-  type.ignoreNull = ignoreNull
-  return type
-})
+Eval.array = unary('array', (expr, table) => Array.isArray(table)
+  ? table.map(data => executeAggr(expr, data)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x))
+  : Array.from(executeEval(table, expr)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x)), (expr) => Type.Array(Type.fromTerm(expr)))
 
 Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
 

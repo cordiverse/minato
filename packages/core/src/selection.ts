@@ -250,11 +250,11 @@ export class Selection<S = any> extends Executable<S, S[]> {
     if (optional) {
       return this.driver.database
         .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]), { [this.ref]: false, [name]: true })
-        .project({ ...fields, [name]: name }) as any
+        .project({ ...fields, [name]: (row) => Eval.ignoreNull(row[name]) }) as any
     } else {
       return this.driver.database
         .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]))
-        .project({ ...fields, [name]: name }) as any
+        .project({ ...fields, [name]: (row) => Eval.ignoreNull(row[name]) }) as any
     }
   }
 

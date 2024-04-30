@@ -177,7 +177,7 @@ export class Builder {
         : this.asEncoded(`if(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false)),
 
       $object: (fields) => this.groupObject(fields),
-      $array: ([expr]) => this.groupArray(this.transform(this.parseEval(expr, false), expr, 'encode')),
+      $array: (expr) => this.groupArray(this.transform(this.parseEval(expr, false), expr, 'encode')),
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
