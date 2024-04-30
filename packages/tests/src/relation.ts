@@ -727,6 +727,40 @@ namespace RelationTests {
       }])
     })
   }
+
+  export function misc(database: Database<Tables>) {
+    it('unsupported', async () => {
+      await expect(database.create('post', {
+        tags: [],
+      })).to.eventually.be.rejected
+
+      await expect(database.upsert('post', [
+        { tags: [] },
+      ])).to.eventually.be.rejected
+
+      await expect(database.set('post', 1, {
+        tags: [],
+      })).to.eventually.be.rejected
+
+      await expect(database.set('post', 1, {
+        tags: $.update({
+          $remove: {},
+        }),
+      })).to.eventually.be.rejected
+
+      await expect(database.set('post', 1, {
+        tags: $.update({
+          $set: {},
+        }),
+      })).to.eventually.be.rejected
+
+      await expect(database.set('post', 1, {
+        tags: $.update({
+          $create: {},
+        }),
+      })).to.eventually.be.rejected
+    })
+  }
 }
 
 export default RelationTests

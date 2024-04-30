@@ -715,14 +715,18 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
     }
     if (modifier.$create) {
-      const upsert = makeArray(modifier.$create).map((r: any) => {
-        const data = { ...r }
-        for (const k in relation.fields) {
-          data[relation.references[k]] = row[relation.fields[k]]
-        }
-        return data
-      })
-      await this.upsert(relation.table, upsert)
+      if (relation.type === 'oneToMany') {
+        const upsert = makeArray(modifier.$create).map((r: any) => {
+          const data = { ...r }
+          for (const k in relation.fields) {
+            data[relation.references[k]] = row[relation.fields[k]]
+          }
+          return data
+        })
+        await this.upsert(relation.table, upsert)
+      } else if (relation.type === 'manyToMany') {
+        throw new Error('create for manyToMany relation is not supported')
+      }
     }
     if (modifier.$disconnect) {
       if (relation.type === 'oneToMany') {
