@@ -468,13 +468,13 @@ namespace RelationTests {
       await setup(database, 'post', [])
 
       for (const profile of profileTable) {
-        await database.create('profile', {
+        await expect(database.create('profile', {
           ...profile,
           user: {
             ...userTable.find(user => profile.userId === user.id)!,
             posts: postTable.filter(post => post.authorId === profile.userId),
           },
-        })
+        })).to.eventually.have.shape(profile)
       }
 
       await expect(database.select('profile', {}, { user: true }).execute()).to.eventually.have.shape(

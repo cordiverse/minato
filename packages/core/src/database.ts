@@ -421,12 +421,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
     update = sel.model.format(update)
     if (Object.keys(update).length === 0) return {}
-    return await sel._action('set', update).execute()
+    return sel._action('set', update).execute()
   }
 
   async remove<K extends Keys<S>>(table: K, query: Query<S[K]>): Promise<Driver.WriteResult> {
     const sel = this.select(table, query, null)
-    return await sel._action('remove').execute()
+    return sel._action('remove').execute()
   }
 
   async create<K extends Keys<S>>(table: K, data: Partial<Relation.Create<S[K]>>): Promise<S[K]>
@@ -459,14 +459,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
 
     if (tasks.length) {
-      let result: any
-      await this.ensureTransaction(async (database) => {
+      return this.ensureTransaction(async (database) => {
         for (const [table, data, keys] of tasks) {
           await database.upsert(table, data, keys)
         }
-        result = await database.create(table, data)
+        return database.create(table, data)
       })
-      return result
     }
 
     const sel = this.select(table)
@@ -539,7 +537,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
     upsert = upsert.map(item => sel.model.format(item))
     keys = makeArray(keys || sel.model.primary) as any
-    return await sel._action('upsert', upsert, keys).execute()
+    return sel._action('upsert', upsert, keys).execute()
   }
 
   makeProxy(marker: any, getDriver?: (driver: Driver<any, C>, database: this) => Driver<any, C>) {
@@ -596,7 +594,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     })
     const initialTaskFactory = () => Promise.resolve().then(() => callback(database))
     let initialTask = initialTaskFactory()
-    return await initialTask.catch(noop).finally(() => Promise.all(finalTasks))
+    return initialTask.catch(noop).finally(() => Promise.all(finalTasks))
   }
 
   async stopAll() {

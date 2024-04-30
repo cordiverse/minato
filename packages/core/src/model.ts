@@ -13,8 +13,8 @@ export type Primary = (string | number) & { [Primary]: true }
 export type Relation<T extends object = object> = Partial<T> & Relation.Marker
 
 export namespace Relation {
-  const Mark = Symbol('minato.relation')
-  export type Marker = { [Mark]: true }
+  const Marker = Symbol('minato.relation')
+  export type Marker = { [Marker]: true }
 
   export const Type = ['oneToOne', 'oneToMany', 'manyToOne', 'manyToMany'] as const
   export type Type = typeof Type[number]
