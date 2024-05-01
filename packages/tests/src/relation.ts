@@ -60,7 +60,8 @@ function RelationTests(database: Database<Tables>) {
     },
     successor: {
       type: 'oneToOne',
-      target: ['user', 'predecessor'],
+      table: 'user',
+      target: 'predecessor',
       fields: 'successorId',
       references: 'id',
     },
@@ -73,7 +74,8 @@ function RelationTests(database: Database<Tables>) {
     userId: 'unsigned',
     user: {
       type: 'oneToOne',
-      target: ['user', 'profile'],
+      table: 'user',
+      target: 'profile',
       fields: 'userId',
       references: 'id',
     },
@@ -88,7 +90,8 @@ function RelationTests(database: Database<Tables>) {
     authorId: 'unsigned',
     author: {
       type: 'manyToOne',
-      target: ['user', 'posts'],
+      table: 'user',
+      target: 'posts',
       fields: 'authorId',
       references: 'id',
     },
@@ -101,7 +104,8 @@ function RelationTests(database: Database<Tables>) {
     name: 'string',
     posts: {
       type: 'manyToMany',
-      target: ['post', 'tags'],
+      table: 'post',
+      target: 'tags',
       fields: 'id',
       references: 'id',
     },
@@ -115,13 +119,15 @@ function RelationTests(database: Database<Tables>) {
     tagId: 'unsigned',
     post: {
       type: 'manyToOne',
-      target: ['post', '_tags'],
+      table: 'post',
+      target: '_tags',
       fields: 'postId',
       references: 'id',
     },
     tag: {
       type: 'manyToOne',
-      target: ['tag', '_posts'],
+      table: 'tag',
+      target: '_posts',
       fields: 'tagId',
       references: 'id',
     },

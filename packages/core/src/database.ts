@@ -120,8 +120,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       const relation = Relation.parse(def), inverse = Relation.inverse(relation, name)
       if (!this.tables[relation.table]) throw new Error(`relation table ${relation.table} does not exist`)
       ;(model.fields[key] ??= Field.parse('expr')).relation = relation
-      if (def.target[1]) {
-        (this.tables[relation.table].fields[def.target[1]] ??= Field.parse('expr')).relation = inverse
+      if (def.target) {
+        (this.tables[relation.table].fields[def.target] ??= Field.parse('expr')).relation = inverse
       }
 
       if (relation.type !== 'manyToMany') return
@@ -133,13 +133,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         ...Object.fromEntries([...fields, ...references]),
         [name]: {
           type: 'manyToOne',
-          target: [name],
+          table: name,
           fields: fields.map(x => x[0]),
           references: relation.references,
         },
         [relation.table]: {
           type: 'manyToOne',
-          target: [relation.table],
+          table: relation.table,
           fields: references.map(x => x[0]),
           references: relation.fields,
         },

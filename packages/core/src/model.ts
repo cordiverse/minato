@@ -28,7 +28,8 @@ export namespace Relation {
 
   export interface Definition<K extends string = string> {
     type: Type
-    target: [string, string]
+    table: string
+    target?: string
     references: MaybeArray<string>
     fields: MaybeArray<K>
   }
@@ -67,7 +68,7 @@ export namespace Relation {
   export function parse(def: Definition): Config {
     return {
       type: def.type,
-      table: def.target[0],
+      table: def.table,
       fields: makeArray(def.fields),
       references: makeArray(def.references),
     }
