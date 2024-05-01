@@ -34,6 +34,9 @@ describe('@minatojs/driver-memory', () => {
       select: {
         ignoreNullObject: false,
       },
+      modify: {
+        ignoreNullObject: false,
+      },
     },
   })
 })

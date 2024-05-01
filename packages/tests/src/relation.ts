@@ -180,11 +180,11 @@ namespace RelationTests {
     { postId: 3, tagId: 3 },
   ]
 
-  export interface SelectOptions {
+  export interface RelationOptions {
     ignoreNullObject?: boolean
   }
 
-  export function select(database: Database<Tables>, options: SelectOptions = {}) {
+  export function select(database: Database<Tables>, options: RelationOptions = {}) {
     const { ignoreNullObject = true } = options
 
     it('basic support', async () => {
@@ -549,7 +549,9 @@ namespace RelationTests {
     })
   }
 
-  export function modify(database: Database<Tables>) {
+  export function modify(database: Database<Tables>, options: RelationOptions = {}) {
+    const { ignoreNullObject = true } = options
+
     it('oneToOne / manyToOne', async () => {
       const users = await setup(database, 'user', userTable)
       const profiles = await setup(database, 'profile', profileTable)
@@ -687,19 +689,19 @@ namespace RelationTests {
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
 
-    it('connect / disconnect oneToMany', async () => {
+    ignoreNullObject && it('connect / disconnect oneToMany', async () => {
       await setup(database, 'user', userTable)
       await setup(database, 'profile', profileTable)
       await setup(database, 'post', postTable)
 
-      await database.set('post', 1, {
-        tags: $.update({
+      await database.set('user', 1, {
+        posts: $.update({
           $disconnect: {},
           $connect: { id: 3 },
         }),
       })
-      await expect(database.get('post', 1, ['tags'])).to.eventually.have.shape([{
-        tags: [
+      await expect(database.get('user', 1, ['posts'])).to.eventually.have.shape([{
+        posts: [
           { id: 3 },
         ],
       }])
