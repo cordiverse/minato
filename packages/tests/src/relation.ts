@@ -494,6 +494,18 @@ namespace RelationTests {
           .filter(post => post),
       })))
     })
+
+    it('omit query', async () => {
+      const users = await setup(database, 'user', userTable)
+      const profiles = await setup(database, 'profile', profileTable)
+
+      await expect(database.get('user', { id: 2 }, ['id', 'profile'])).to.eventually.have.shape(
+        [users[1]].map(user => ({
+          id: user.id,
+          profile: profiles.find(profile => user.id === profile.userId),
+        })),
+      )
+    })
   }
 
   export function create(database: Database<Tables>) {
