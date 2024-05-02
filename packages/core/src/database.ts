@@ -1,4 +1,4 @@
-import { defineProperty, Dict, makeArray, mapValues, MaybeArray, noop, omit } from 'cosmokit'
+import { defineProperty, Dict, filterKeys, makeArray, mapValues, MaybeArray, noop, omit } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
 import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
 import { Selection } from './selection.ts'
@@ -270,6 +270,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const whereOnly = relations === null
     const rawquery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
+    if (relations) relations = filterKeys(relations, (key) => !!modelFields[key]?.relation)
     for (const key in sel.query) {
       if (modelFields[key]?.relation && !relations?.[key]) {
         (relations ??= {})[key] = true
@@ -430,6 +431,15 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
   async create<K extends Keys<S>>(table: K, data: Partial<Relation.Create<S[K]>>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
+    const sel = this.select(table)
+    const { primary, autoInc } = sel.model
+    if (!autoInc) {
+      const keys = makeArray(primary)
+      if (keys.some(key => !(key in data))) {
+        throw new Error('missing primary key')
+      }
+    }
+
     const tasks: any[] = []
     for (const key in data) {
       if (data[key] && this.tables[table].fields[key]?.relation) {
@@ -464,15 +474,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         }
         return database.create(table, data)
       })
-    }
-
-    const sel = this.select(table)
-    const { primary, autoInc } = sel.model
-    if (!autoInc) {
-      const keys = makeArray(primary)
-      if (keys.some(key => !(key in data))) {
-        throw new Error('missing primary key')
-      }
     }
     return sel._action('create', sel.model.create(data)).execute()
   }
