@@ -272,7 +272,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const modelFields = this.tables[table].fields
     if (relations) relations = filterKeys(relations, (key) => !!modelFields[key]?.relation)
     for (const key in sel.query) {
-      if (modelFields[key]?.relation && !relations?.[key]) {
+      if (modelFields[key]?.relation && (!relations || !Object.getOwnPropertyNames(relations).includes(key))) {
         (relations ??= {})[key] = true
       }
     }
