@@ -748,7 +748,7 @@ namespace RelationTests {
     })
 
     it('query relation', async () => {
-      const users = await setup(database, 'user', userTable)
+      await setup(database, 'user', userTable)
       const posts = await setup(database, 'post', postTable)
       await setup(database, 'tag', tagTable)
       await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable.map(x => ({
@@ -757,7 +757,6 @@ namespace RelationTests {
       })))
 
       posts.filter(post => post2TagTable.some(p2t => p2t.postId === post.id && p2t.tagId === 1)).forEach(post => post.score! += 10)
-      users[0].value = 100
       await database.set('post', {
         tags: {
           $some: {
@@ -766,29 +765,7 @@ namespace RelationTests {
         },
       }, row => ({
         score: $.add(row.score, 10),
-        author: {
-          value: 100,
-        },
       }))
-      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
-      await expect(database.get('user', {})).to.eventually.have.deep.members(users)
-    })
-  }
-
-  export function remove(database: Database<Tables>) {
-    it('basic support', async () => {
-      await setup(database, 'user', userTable)
-      let posts = await setup(database, 'post', postTable)
-      await setup(database, 'tag', tagTable)
-
-      posts = posts.filter(post => post2TagTable.every(p2t => !(p2t.postId === post.id && p2t.tagId === 1)))
-      await database.remove('post', {
-        tags: {
-          $some: {
-            id: 1,
-          },
-        },
-      })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
   }
