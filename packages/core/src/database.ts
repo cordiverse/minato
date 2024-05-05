@@ -343,7 +343,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       return typeof t === 'string' ? this.select(t) : t
     })
     if (Object.keys(sels).length === 0) throw new Error('no tables to join')
-    const drivers = new Set(Object.values(sels).map(sel => sel.driver))
+    const drivers = new Set(Object.values(sels).map(sel => sel.driver[Database.transact] ?? sel.driver))
     if (drivers.size !== 1) throw new Error('cannot join tables from different drivers')
     if (Object.keys(sels).length === 2 && (optional?.[0] || optional?.[Object.keys(sels)[0]])) {
       if (optional[1] || optional[Object.keys(sels)[1]]) throw new Error('full join is not supported')
@@ -379,7 +379,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     update: Row.Computed<S[K], Update<S[K]>>,
   ): Promise<Driver.WriteResult> {
     const rawupdate = typeof update === 'function' ? update : () => update
-    const sel = this.select(table, query)
+    const sel = this.select(table, query, null)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)
     if (primary.some(key => key in update)) {
@@ -578,6 +578,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       const sessionTask = new Promise((resolve) => _resolve = resolve)
       driver = new Proxy(driver, {
         get: (target, p, receiver) => {
+          if (p === Database.transact) return target
           if (p === 'database') return database
           if (p === 'session') return session
           if (p === '_ensureSession') return () => sessionTask
