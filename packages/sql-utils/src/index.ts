@@ -155,7 +155,7 @@ export class Builder {
       $bitOr: (args) => `(${args.map(arg => this.parseEval(arg)).join(' | ')})`,
       $bitAnd: (args) => `(${args.map(arg => this.parseEval(arg)).join(' & ')})`,
       $bitNot: (arg) => `(~(${this.parseEval(arg)}))`,
-      $bitXor: ([left, right]) => `(${this.parseEval(left)} ^ ${this.parseEval(right)})`,
+      // $bitXor: ([left, right]) => `(${this.parseEval(left)} ^ ${this.parseEval(right)})`,
 
       // boolean
       $eq: this.binary('='),
