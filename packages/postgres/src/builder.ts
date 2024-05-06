@@ -161,7 +161,7 @@ export class PostgresBuilder extends Builder {
     const type = Type.fromTerm(expr)
     if (Field.string.includes(type.type) || typeof expr === 'string') return 'text'
     else if (Field.number.includes(type.type) || typeof expr === 'number') return 'double precision'
-    else if (Field.boolean.includes(type.type) || typeof expr === 'string') return 'boolean'
+    else if (Field.boolean.includes(type.type) || typeof expr === 'boolean') return 'boolean'
     else if (type.type === 'json') return 'jsonb'
   }
 
