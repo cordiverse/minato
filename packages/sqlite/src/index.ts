@@ -40,13 +40,20 @@ function getTypeDef({ deftype: type }: Field) {
   }
 }
 
-export interface SQLiteFieldInfo {
+interface SQLiteFieldInfo {
   cid: number
   name: string
   type: string
   notnull: number
   dflt_value: string
   pk: boolean
+}
+
+interface SQLiteMasterInfo {
+  type: string
+  name: string
+  tbl_name: string
+  sql: string
 }
 
 export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
@@ -419,6 +426,42 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
         (e) => (this._run('ROLLBACK'), reject(e)),
       )
     })
+  }
+
+  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+    const indexes = this._all(`SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ?`, [table]) as SQLiteMasterInfo[]
+    const result = {}
+    for (const { name, sql } of indexes) {
+      result[name] = {
+        unique: !sql || sql.toUpperCase().startsWith('CREATE UNIQUE'),
+        keys: this._parseIndexDef(sql),
+      }
+    }
+    return result
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const name = `index:${table}:` + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
+    const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
+    await this._run(`create ${index.unique ? 'UNIQUE' : ''} index ${escapeId(name)} ON ${escapeId(table)} (${keyFields})`)
+  }
+
+  async dropIndex(table: string, name: string) {
+    await this._run(`DROP INDEX ${escapeId(name)}`)
+  }
+
+  _parseIndexDef(def: string) {
+    if (!def) return {}
+    try {
+      const keys = {}, matches = def.match(/\((.*)\)/)!
+      matches[1].split(',').forEach((key) => {
+        const [name, direction] = key.trim().split(' ')
+        keys[name.startsWith('`') ? name.slice(1, -1) : name] = direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
+      })
+      return keys
+    } catch {
+      return {}
+    }
   }
 }
 

@@ -8,6 +8,8 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     _fields: [],
   }
 
+  _indexes: Dict<Dict<any>> = {}
+
   async prepare(name: string) {}
 
   async start() {
@@ -197,6 +199,21 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       this._store = data
       throw e
     })
+  }
+
+  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+    return this._indexes[table] ?? {}
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const name = 'index:' + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction}`).join('+')
+    this._indexes[table] ??= {}
+    this._indexes[table][name] = { unique: false, ...index }
+  }
+
+  async dropIndex(table: string, name: string) {
+    this._indexes[table] ??= {}
+    delete this._indexes[table][name]
   }
 }
 

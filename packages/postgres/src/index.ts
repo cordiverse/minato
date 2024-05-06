@@ -34,6 +34,14 @@ interface ConstraintInfo {
   nulls_distinct: string
 }
 
+interface IndexInfo {
+  schemaname: string
+  tablename: string
+  indexname: string
+  tablespace: string
+  indexdef: string
+}
+
 interface TableInfo {
   table_catalog: string
   table_schema: string
@@ -412,6 +420,41 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
   async withTransaction(callback: (session: any) => Promise<void>) {
     return this.postgres.begin((conn) => callback(conn))
+  }
+
+  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+    const indexes = await this.queue<IndexInfo[]>(`SELECT * FROM pg_indexes WHERE schemaname = 'public' AND tablename = ${this.sql.escape(table)}`)
+    const result = {}
+    for (const { indexname: name, indexdef: sql } of indexes) {
+      result[name] = {
+        unique: sql.toUpperCase().startsWith('CREATE UNIQUE'),
+        keys: this._parseIndexDef(sql),
+      }
+    }
+    return result
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const name = `index:${table}:` + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
+    const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
+    await this.query(`CREATE ${index.unique ? 'UNIQUE' : ''} INDEX IF NOT EXISTS ${escapeId(name)} ON ${escapeId(table)} (${keyFields})`)
+  }
+
+  async dropIndex(table: string, name: string) {
+    await this.query(`DROP INDEX ${escapeId(name)}`)
+  }
+
+  _parseIndexDef(def: string) {
+    try {
+      const keys = {}, matches = def.match(/\((.*)\)/)!
+      matches[1].split(',').forEach((key) => {
+        const [name, direction] = key.trim().split(' ')
+        keys[name.startsWith('"') ? name.slice(1, -1).replace(/""/g, '"') : name] = direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
+      })
+      return keys
+    } catch {
+      return {}
+    }
   }
 
   private getTypeDef(field: Field & { autoInc?: boolean }) {

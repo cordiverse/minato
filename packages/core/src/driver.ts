@@ -33,6 +33,11 @@ export namespace Driver {
     removed?: number
   }
 
+  export interface Index<S = any> {
+    unique?: boolean
+    keys: { [P in keyof S ]?: 'asc' | 'desc' }
+  }
+
   export interface Transformer<S = any, T = any> {
     types: Field.Type<S>[]
     dump: (value: S | null) => T | null | void
@@ -60,6 +65,9 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract create(sel: Selection.Mutable, data: any): Promise<any>
   abstract upsert(sel: Selection.Mutable, data: any[], keys: string[]): Promise<Driver.WriteResult>
   abstract withTransaction(callback: (session?: any) => Promise<void>): Promise<void>
+  abstract getIndexes(table: string): Promise<Dict<Driver.Index>>
+  abstract createIndex(table: string, index: Driver.Index): Promise<void>
+  abstract dropIndex(table: string, name: string): Promise<void>
 
   public database: Database<any, any, C>
   public logger: Logger

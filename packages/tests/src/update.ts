@@ -1,5 +1,5 @@
 import { $, Database } from 'minato'
-import { omit } from 'cosmokit'
+import { deepEqual, omit } from 'cosmokit'
 import { expect } from 'chai'
 
 interface Bar {
@@ -424,6 +424,28 @@ namespace OrmOperations {
     it('$.random', async () => {
       await setup(database, 'temp2', barTable)
       await expect(database.eval('temp2', row => $.max($.random()))).to.eventually.gt(0).lt(1)
+    })
+  }
+
+  export const index = function Index(database: Database<Tables>) {
+    it('basic support', async () => {
+      const index = {
+        unique: false,
+        keys: {
+          num: 'asc',
+          timestamp: 'asc',
+        },
+      } as const
+
+      await database.createIndex('temp2', index)
+      let indexes = await database.getIndexes('temp2')
+      let added = Object.entries(indexes).find(([, ind]) => deepEqual(ind, index))
+      expect(added).to.not.be.undefined
+
+      await database.dropIndex('temp2', added![0])
+      indexes = await database.getIndexes('temp2')
+      added = Object.entries(indexes).find(([, ind]) => deepEqual(ind, index))
+      expect(added).to.be.undefined
     })
   }
 

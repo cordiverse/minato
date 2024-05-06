@@ -1,4 +1,4 @@
-import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
+import { Binary, Dict, difference, isNullable, makeArray, noop, pick } from 'cosmokit'
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
@@ -30,6 +30,10 @@ interface ColumnInfo {
 interface IndexInfo {
   INDEX_NAME: string
   COLUMN_NAME: string
+  SEQ_IN_INDEX: string
+  COLLATION: 'A' | 'D'
+  NULLABLE: string
+  NON_UNIQUE: string
 }
 
 interface QueryTask {
@@ -504,6 +508,30 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
         ).finally(() => conn.release()))
       })
     })
+  }
+
+  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+    const indexes = await this.queue<IndexInfo[]>([
+      `SELECT *`,
+      `FROM information_schema.statistics`,
+      `WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?`,
+    ].join(' '), [this.config.database, table])
+    const result = {}
+    for (const { INDEX_NAME: name, COLUMN_NAME: key, COLLATION: direction, NON_UNIQUE: unique } of indexes) {
+      if (!result[name]) result[name] = { unique: unique !== '1', keys: {} }
+      result[name].keys[key] = direction === 'A' ? 'asc' : direction === 'D' ? 'desc' : direction
+    }
+    return result
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const name = 'index:' + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
+    const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
+    await this.query(`ALTER TABLE ${escapeId(table)} ADD ${index.unique ? 'UNIQUE' : ''} INDEX ${escapeId(name)} (${keyFields})`).catch(noop)
+  }
+
+  async dropIndex(table: string, name: string) {
+    await this.query(`DROP INDEX ${escapeId(name)} ON ${escapeId(table)}`)
   }
 
   private getTypeDef({ deftype: type, length, precision, scale }: Field) {

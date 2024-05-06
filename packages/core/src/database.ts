@@ -393,6 +393,18 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await Promise.all(Object.values(this.drivers).map(driver => driver.dropAll()))
   }
 
+  getIndexes<K extends Keys<S>>(table: K): Promise<Dict<Driver.Index<S[K]>>> {
+    return this.getDriver(table).getIndexes(table)
+  }
+
+  createIndex<K extends Keys<S>>(table: K, index: Driver.Index<S[K]>) {
+    return this.getDriver(table).createIndex(table, index)
+  }
+
+  dropIndex<K extends Keys<S>>(table: K, name: string) {
+    return this.getDriver(table).dropIndex(table, name)
+  }
+
   async stats() {
     await this.prepared()
     const stats: Driver.Stats = { size: 0, tables: {} }
