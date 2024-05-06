@@ -68,6 +68,10 @@ export class PostgresBuilder extends Builder {
         ? `ln(${this.parseEval(left, 'double precision')})`
         : `ln(${this.parseEval(left, 'double precision')}) / ln(${this.parseEval(right, 'double precision')})`,
       $random: () => `random()`,
+
+      $bitOr: (args) => `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' | ')})`,
+      $bitAnd: (args) => `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' & ')})`,
+      $bitNot: (arg) => `(~(${this.parseEval(arg, 'bigint')}))`,
       $bitXor: ([left, right]) => `(${this.parseEval(left, 'bigint')} # ${this.parseEval(right, 'bigint')})`,
 
       $eq: this.binary('=', 'text'),
@@ -154,9 +158,11 @@ export class PostgresBuilder extends Builder {
   }
 
   private getLiteralType(expr: any) {
-    if (typeof expr === 'string') return 'text'
-    else if (typeof expr === 'number') return 'double precision'
-    else if (typeof expr === 'string') return 'boolean'
+    const type = Type.fromTerm(expr)
+    if (Field.string.includes(type.type) || typeof expr === 'string') return 'text'
+    else if (Field.number.includes(type.type) || typeof expr === 'number') return 'double precision'
+    else if (Field.boolean.includes(type.type) || typeof expr === 'string') return 'boolean'
+    else if (type.type === 'json') return 'jsonb'
   }
 
   parseEval(expr: any, outtype: boolean | string = true): string {
