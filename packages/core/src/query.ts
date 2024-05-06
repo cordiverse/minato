@@ -8,9 +8,9 @@ export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable>
 export namespace Query {
   export interface FieldExpr<T = any> {
     // logical
-    $or?: FieldQuery<T>[]
-    $and?: FieldQuery<T>[]
-    $not?: FieldQuery<T>
+    $or?: Field<T>[]
+    $and?: Field<T>[]
+    $not?: Field<T>
 
     // existence
     $exists?: boolean
@@ -28,7 +28,7 @@ export namespace Query {
     $lte?: Extract<T, Comparable>
 
     // list
-    $el?: T extends (infer U)[] ? FieldQuery<U> : never
+    $el?: T extends (infer U)[] ? Field<U> : never
     $size?: Extract<T, any[], number>
 
     // regexp
@@ -55,10 +55,10 @@ export namespace Query {
     | Extract<T, Indexable, T[]>
     | Extract<T, string, RegExp>
 
-  export type FieldQuery<T = any> = FieldExpr<T> | Shorthand<T>
+  export type Field<T = any> = FieldExpr<T> | Shorthand<T>
 
   export type Expr<T = any> = LogicalExpr<T> & {
-    [K in keyof T]?: null | FieldQuery<T[K]>
+    [K in keyof T]?: null | Field<T[K]>
   }
 }
 
@@ -102,7 +102,7 @@ const queryOperators: QueryOperators = {
   $size: (query, data) => data.length === query,
 }
 
-function executeFieldQuery(query: Query.FieldQuery, data: any) {
+function executeFieldQuery(query: Query.Field, data: any) {
   // shorthand syntax
   if (Array.isArray(query)) {
     return query.includes(data)
