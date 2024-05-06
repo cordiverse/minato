@@ -285,6 +285,10 @@ namespace QueryOperators {
       await expect(database.get('temp1',
         row => $.eq($.bitXor(row.value, 3), 7),
       )).eventually.to.have.shape([{ value: 4 }])
+
+      await expect(database.eval('temp1', _ => $.max($.bitNot(2 ** 30)))).eventually.to.have.shape(-(2 ** 30) - 1)
+      await expect(database.eval('temp1', _ => $.max($.bitNot(-(2 ** 30))))).eventually.to.have.shape(2 ** 30 - 1)
+      await expect(database.eval('temp1', _ => $.max($.bitOr(-(2 ** 30), 1)))).eventually.to.have.shape(-(2 ** 30) + 1)
     })
   }
 

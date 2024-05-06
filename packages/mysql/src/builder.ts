@@ -45,6 +45,10 @@ export class MySQLBuilder extends Builder {
         : ['timestamp', 'date'].includes(type.type!) ? `unix_timestamp(convert_tz(${value}, '${this._localTimezone}', '${this._dbTimezone}'))` : `(0+${value})`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
+    this.evalOperators.$bitOr = (args) => `cast(${args.map(arg => this.parseEval(arg)).join(' | ')} as signed)`
+    this.evalOperators.$bitAnd = (args) => `cast(${args.map(arg => this.parseEval(arg)).join(' & ')} as signed)`
+    this.evalOperators.$bitNot = (arg) => `cast(~(${this.parseEval(arg)}) as signed)`
+    this.evalOperators.$bitXor = ([left, right]) => `cast(${this.parseEval(left)} ^ ${this.parseEval(right)} as signed)`
 
     this.transformers['boolean'] = {
       encode: value => `if(${value}=b'1', 1, 0)`,
