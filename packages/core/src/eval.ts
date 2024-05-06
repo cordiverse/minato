@@ -116,6 +116,12 @@ export namespace Eval {
     or: Multi<boolean, boolean>
     not: Unary<boolean, boolean>
 
+    // bitwise
+    bitAnd: Multi<number, number>
+    bitOr: Multi<number, number>
+    bitNot: Unary<number, number>
+    bitXor: Binary<number, number>
+
     // typecast
     literal<T>(value: T, type?: Type<T> | Field.Type<T> | Field.NewType<T> | string): Expr<T, false>
     number: Unary<any, number>
@@ -219,6 +225,11 @@ Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(d
 Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, arg)), Type.Boolean)
 Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg)), Type.Boolean)
 Eval.not = unary('not', (value, data) => !executeEval(data, value), Type.Boolean)
+
+Eval.bitAnd = multary('bitAnd', (args, data) => args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev & curr), Type.Number)
+Eval.bitOr = multary('bitOr', (args, data) => args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev | curr), Type.Number)
+Eval.bitNot = unary('bitNot', (value, data) => ~executeEval(data, value), Type.Number)
+Eval.bitXor = multary('bitXor', ([left, right], data) => executeEval(data, left) ^ executeEval(data, right), Type.Number)
 
 // typecast
 Eval.literal = multary('literal', ([value, type]) => {

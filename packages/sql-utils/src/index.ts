@@ -151,6 +151,12 @@ export class Builder {
       $and: (args) => this.logicalAnd(args.map(arg => this.parseEval(arg))),
       $not: (arg) => this.logicalNot(this.parseEval(arg)),
 
+      // bitwise
+      $bitOr: (args) => `(${args.map(arg => this.parseEval(arg)).join(' | ')})`,
+      $bitAnd: (args) => `(${args.map(arg => this.parseEval(arg)).join(' & ')})`,
+      $bitNot: (arg) => `(~(${this.parseEval(arg)}))`,
+      $bitXor: ([left, right]) => `(${this.parseEval(left)} ^ ${this.parseEval(right)})`,
+
       // boolean
       $eq: this.binary('='),
       $ne: this.binary('!='),

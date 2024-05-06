@@ -24,6 +24,10 @@ export class SQLiteBuilder extends Builder {
       const res = Field.date.includes(type.type as any) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
+    this.evalOperators.$bitXor = ([left, right]) => {
+      const leftTerm = this.parseEval(left), rightTerm = this.parseEval(right)
+      return `((${leftTerm} & ~${rightTerm}) | (~${leftTerm} & ${rightTerm}))`
+    }
 
     this.transformers['bigint'] = {
       encode: value => `cast(${value} as text)`,

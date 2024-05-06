@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Driver, Eval, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
+import { Eval, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -95,7 +95,7 @@ export class Builder {
 
   private evalOperators: EvalOperators
 
-  constructor(private driver: Driver, private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
+  constructor(private driver: MongoDriver, private tables: string[], public virtualKey?: string, public recursivePrefix: string = '$') {
     this.walkedKeys = []
 
     this.evalOperators = {
@@ -119,6 +119,51 @@ export class Builder {
         }
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
+
+      $bitAnd: (args, group) => (+this.driver.version?.[0] >= 7 ? {
+        $bitAnd: args.map(arg => this.eval(arg, group)),
+      } : {
+        $function: {
+          body: function (...args: number[]) {
+            return args.reduce((prev, curr) => prev & curr)
+          }.toString(),
+          args: args.map(arg => this.eval(arg, group)),
+          lang: 'js',
+        },
+      }),
+      $bitOr: (args, group) => (+this.driver.version?.[0] >= 7 ? {
+        $bitOr: args.map(arg => this.eval(arg, group)),
+      } : {
+        $function: {
+          body: function (...args: number[]) {
+            return args.reduce((prev, curr) => prev | curr)
+          }.toString(),
+          args: args.map(arg => this.eval(arg, group)),
+          lang: 'js',
+        },
+      }),
+      $bitNot: (arg, group) => (+this.driver.version?.[0] >= 7 ? {
+        $bitNot: this.eval(arg, group),
+      } : {
+        $function: {
+          body: function (arg: number) {
+            return ~arg
+          }.toString(),
+          args: [this.eval(arg, group)],
+          lang: 'js',
+        },
+      }),
+      $bitXor: ([left, right], group) => (+this.driver.version?.[0] >= 7 ? {
+        $bitXor: [this.eval(left, group), this.eval(right, group)],
+      } : {
+        $function: {
+          body: function (left: number, right: number) {
+            return left ^ right
+          }.toString(),
+          args: [this.eval(left, group), this.eval(right, group)],
+          lang: 'js',
+        },
+      }),
 
       $object: (arg, group) => mapValues(arg as any, x => this.transformEvalExpr(x)),
 

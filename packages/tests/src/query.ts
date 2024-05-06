@@ -268,6 +268,24 @@ namespace QueryOperators {
         value: { $bitsAnyClear: 6 },
       })).eventually.to.have.shape([{ value: 3 }, { value: 4 }])
     })
+
+    it('using expressions', async () => {
+      await expect(database.get('temp1',
+        row => $.eq($.bitAnd(row.value, 1, 1), 1),
+      )).eventually.to.have.shape([{ value: 3 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.bitOr(row.value, 3, 3), 7),
+      )).eventually.to.have.shape([{ value: 4 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.bitAnd(row.value, $.bitNot(4)), 3),
+      )).eventually.to.have.shape([{ value: 3 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.bitXor(row.value, 3), 7),
+      )).eventually.to.have.shape([{ value: 4 }])
+    })
   }
 
   interface ListOptions {

@@ -68,6 +68,7 @@ export class PostgresBuilder extends Builder {
         ? `ln(${this.parseEval(left, 'double precision')})`
         : `ln(${this.parseEval(left, 'double precision')}) / ln(${this.parseEval(right, 'double precision')})`,
       $random: () => `random()`,
+      $bitXor: ([left, right]) => `(${this.parseEval(left, 'bigint')} # ${this.parseEval(right, 'bigint')})`,
 
       $eq: this.binary('=', 'text'),
 
