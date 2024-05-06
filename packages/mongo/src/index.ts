@@ -12,7 +12,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   public client!: MongoClient
   public db!: Db
   public mongo = this
-  public version: string = '0.0.0'
+  public version = 0
 
   private builder: Builder = new Builder(this, [])
   private session?: ClientSession
@@ -48,7 +48,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     ]))
     this.db = this.client.db(this.config.database)
 
-    this.db.admin().serverInfo().then((doc) => this.version = doc.version).catch(noop)
+    this.db.admin().serverInfo().then((doc) => this.version = +doc.version.split('.')[0]).catch(noop)
     await this.client.withSession((session) => session.withTransaction(
       () => this.db.collection('_fields').findOne({}, { session }),
     )).catch(() => this._replSet = false)

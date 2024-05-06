@@ -120,7 +120,7 @@ export class Builder {
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
-      $bitAnd: (args, group) => (+this.driver.version?.[0] >= 7 ? {
+      $bitAnd: (args, group) => (this.driver.version >= 7 ? {
         $bitAnd: args.map(arg => this.eval(arg, group)),
       } : {
         $function: {
@@ -131,7 +131,7 @@ export class Builder {
           lang: 'js',
         },
       }),
-      $bitOr: (args, group) => (+this.driver.version?.[0] >= 7 ? {
+      $bitOr: (args, group) => (this.driver.version >= 7 ? {
         $bitOr: args.map(arg => this.eval(arg, group)),
       } : {
         $function: {
@@ -142,7 +142,7 @@ export class Builder {
           lang: 'js',
         },
       }),
-      $bitNot: (arg, group) => (+this.driver.version?.[0] >= 7 ? {
+      $bitNot: (arg, group) => (this.driver.version >= 7 ? {
         $bitNot: this.eval(arg, group),
       } : {
         $function: {
@@ -153,7 +153,7 @@ export class Builder {
           lang: 'js',
         },
       }),
-      $bitXor: ([left, right], group) => (+this.driver.version?.[0] >= 7 ? {
+      $bitXor: ([left, right], group) => (this.driver.version >= 7 ? {
         $bitXor: [this.eval(left, group), this.eval(right, group)],
       } : {
         $function: {
