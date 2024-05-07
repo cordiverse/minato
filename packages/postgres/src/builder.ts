@@ -184,7 +184,7 @@ export class PostgresBuilder extends Builder {
   parseEval(expr: any, outtype: boolean | string = true): string {
     this.state.encoded = false
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
-      return this.escape(expr) // typeof outtype === 'string' ? `(${this.escape(expr)})::${outtype}` : this.escape(expr)
+      return this.escape(expr)
     }
     return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)})`
       : this.parseEvalExpr(expr)
