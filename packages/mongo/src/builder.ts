@@ -171,7 +171,7 @@ export class Builder {
       },
       $not: (arg, group) => {
         const type = this.evalType!
-        if (Field.boolean.includes(type.type)) return { $not: arg => this.eval(arg, group) }
+        if (Field.boolean.includes(type.type)) return { $not: this.eval(arg, group) }
         else if (this.driver.version >= 7) return { $bitNot: this.eval(arg, group) }
         else if (Field.number.includes(type.type)) {
           return {
