@@ -295,6 +295,9 @@ namespace QueryOperators {
       await expect(database.eval('temp1', _ => $.array($.xor(true, false, true)))).eventually.to.include.members([false])
 
       await expect(database.eval('temp1', _ => $.max($.not(BigInt(2 ** 40))))).eventually.to.deep.equal(BigInt(-(2 ** 40) - 1))
+      await expect(database.eval('temp1', _ => $.max($.and(9223372036854775701n, 9223372036854775702n)))).eventually.to.deep.equal(9223372036854775700n)
+      await expect(database.eval('temp1', _ => $.max($.or(9223372036854775701n, 1n)))).eventually.to.deep.equal(9223372036854775701n)
+      await expect(database.eval('temp1', _ => $.max($.xor(9223372036854775701n, 9223372036854775702n)))).eventually.to.deep.equal(3n)
       await expect(database.eval('temp1', _ => $.max($.not(9223372036854775701n)))).eventually.to.deep.equal(-9223372036854775702n)
     })
   }
