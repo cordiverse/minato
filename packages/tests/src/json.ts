@@ -170,6 +170,39 @@ namespace JsonTests {
       ])
     })
 
+    it('project in json with nested object', async () => {
+      const res = await database.select('bar')
+        .project({
+          'obj.num': row => row.obj.x,
+          'obj.str': row => row.obj.y,
+          'obj.str2': row => row.obj.z,
+          'obj.obj': row => row.obj.o,
+          'obj.a': row => row.obj.o.a,
+        })
+        .execute()
+
+      expect(res).to.deep.equal([
+        { obj: { a: 1, num: 1, obj: { a: 1, b: '1' }, str: 'a', str2: '1' } },
+        { obj: { a: 2, num: 2, obj: { a: 2, b: '2' }, str: 'b', str2: '2' } },
+        { obj: { a: 3, num: 3, obj: { a: 3, b: '3' }, str: 'c', str2: '3' } },
+      ])
+    })
+
+    it('$.object on row', async () => {
+      const res = await database.select('foo')
+        .project({
+          obj: row => $.object(row),
+        })
+        .orderBy(row => row.obj.id)
+        .execute()
+
+      expect(res).to.deep.equal([
+        { obj: { id: 1, value: 0 } },
+        { obj: { id: 2, value: 2 } },
+        { obj: { id: 3, value: 2 } },
+      ])
+    })
+
     it('$.object on cell', async () => {
       const res = await database.join(['foo', 'bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('bar', {
