@@ -329,7 +329,7 @@ export class Builder {
     return this.asEncoded(`ifnull(json_arrayagg(${value}), json_array())`, true)
   }
 
-  protected parseFieldQuery(key: string, query: Query.FieldExpr) {
+  protected parseFieldQuery(key: string, query: Query.Field) {
     const conditions: string[] = []
     if (this.modifiedTable) key = `${this.escapeId(this.modifiedTable)}.${key}`
 
