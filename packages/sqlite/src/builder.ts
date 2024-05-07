@@ -65,7 +65,9 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
-    return encoded ? super.encode(value, encoded, pure, type) : value
+    return encoded ? super.encode(value, encoded, pure, type)
+      : (encoded === this.isEncoded() && !pure) ? value
+        : this.asEncoded(`(${value} ->> '$')`, pure ? undefined : false)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
@@ -83,6 +85,6 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return this.asEncoded(`json_extract(${obj}, '$${path}')`, false)
+    return this.asEncoded(`(${obj} -> '$${path}')`, true)
   }
 }
