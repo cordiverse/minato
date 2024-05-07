@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Eval, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
+import { Eval, Field, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -88,6 +88,7 @@ export class Builder {
   public pipeline: any[] = []
   protected lookups: any[] = []
   public evalKey?: string
+  private evalType?: Type
   private refTables: string[] = []
   private refVirtualKeys: Dict<string> = {}
   private joinTables: Dict<string> = {}
@@ -120,50 +121,102 @@ export class Builder {
       },
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
-      $bitAnd: (args, group) => (this.driver.version >= 7 ? {
-        $bitAnd: args.map(arg => this.eval(arg, group)),
-      } : {
-        $function: {
-          body: function (...args: number[]) {
-            return args.reduce((prev, curr) => prev & curr)
-          }.toString(),
-          args: args.map(arg => this.eval(arg, group)),
-          lang: 'js',
-        },
-      }),
-      $bitOr: (args, group) => (this.driver.version >= 7 ? {
-        $bitOr: args.map(arg => this.eval(arg, group)),
-      } : {
-        $function: {
-          body: function (...args: number[]) {
-            return args.reduce((prev, curr) => prev | curr)
-          }.toString(),
-          args: args.map(arg => this.eval(arg, group)),
-          lang: 'js',
-        },
-      }),
-      $bitNot: (arg, group) => (this.driver.version >= 7 ? {
-        $bitNot: this.eval(arg, group),
-      } : {
-        $function: {
-          body: function (arg: number) {
-            return ~arg
-          }.toString(),
-          args: [this.eval(arg, group)],
-          lang: 'js',
-        },
-      }),
-      $bitXor: ([left, right], group) => (this.driver.version >= 7 ? {
-        $bitXor: [this.eval(left, group), this.eval(right, group)],
-      } : {
-        $function: {
-          body: function (left: number, right: number) {
-            return left ^ right
-          }.toString(),
-          args: [this.eval(left, group), this.eval(right, group)],
-          lang: 'js',
-        },
-      }),
+      $and: (args, group) => {
+        const type = this.evalType!
+        if (Field.boolean.includes(type.type)) return { $and: args.map(arg => this.eval(arg, group)) }
+        else if (this.driver.version >= 7) return { $bitAnd: args.map(arg => this.eval(arg, group)) }
+        else if (Field.number.includes(type.type)) {
+          return {
+            $function: {
+              body: function (...args: number[]) { return args.reduce((prev, curr) => prev & curr) }.toString(),
+              args: args.map(arg => this.eval(arg, group)),
+              lang: 'js',
+            },
+          }
+        } else {
+          return {
+            $toLong: {
+              $function: {
+                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev) & BigInt(curr))) }.toString(),
+                args: args.map(arg => ({ $toString: this.eval(arg, group) })),
+                lang: 'js',
+              },
+            },
+          }
+        }
+      },
+      $or: (args, group) => {
+        const type = this.evalType!
+        if (Field.boolean.includes(type.type)) return { $or: args.map(arg => this.eval(arg, group)) }
+        else if (this.driver.version >= 7) return { $bitOr: args.map(arg => this.eval(arg, group)) }
+        else if (Field.number.includes(type.type)) {
+          return {
+            $function: {
+              body: function (...args: number[]) { return args.reduce((prev, curr) => prev | curr) }.toString(),
+              args: args.map(arg => this.eval(arg, group)),
+              lang: 'js',
+            },
+          }
+        } else {
+          return {
+            $toLong: {
+              $function: {
+                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev) | BigInt(curr))) }.toString(),
+                args: args.map(arg => ({ $toString: this.eval(arg, group) })),
+                lang: 'js',
+              },
+            },
+          }
+        }
+      },
+      $not: (arg, group) => {
+        const type = this.evalType!
+        if (Field.boolean.includes(type.type)) return { $not: arg => this.eval(arg, group) }
+        else if (this.driver.version >= 7) return { $bitNot: this.eval(arg, group) }
+        else if (Field.number.includes(type.type)) {
+          return {
+            $function: {
+              body: function (arg: number) { return ~arg }.toString(),
+              args: [this.eval(arg, group)],
+              lang: 'js',
+            },
+          }
+        } else {
+          return {
+            $toLong: {
+              $function: {
+                body: function (arg: string) { return String(~BigInt(arg)) }.toString(),
+                args: [{ $toString: this.eval(arg, group) }],
+                lang: 'js',
+              },
+            },
+          }
+        }
+      },
+      $xor: (args, group) => {
+        const type = this.evalType!
+        if (Field.boolean.includes(type.type)) return args.map(arg => this.eval(arg, group)).reduce((prev, curr) => ({ $ne: [prev, curr] }))
+        else if (this.driver.version >= 7) return { $bitXor: args.map(arg => this.eval(arg, group)) }
+        else if (Field.number.includes(type.type)) {
+          return {
+            $function: {
+              body: function (...args: number[]) { return args.reduce((prev, curr) => prev ^ curr) }.toString(),
+              args: args.map(arg => this.eval(arg, group)),
+              lang: 'js',
+            },
+          }
+        } else {
+          return {
+            $toLong: {
+              $function: {
+                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev) ^ BigInt(curr))) }.toString(),
+                args: args.map(arg => ({ $toString: this.eval(arg, group) })),
+                lang: 'js',
+              },
+            },
+          }
+        }
+      },
 
       $object: (arg, group) => mapValues(arg as any, x => this.transformEvalExpr(x)),
 
@@ -258,6 +311,7 @@ export class Builder {
 
     for (const key in expr) {
       if (this.evalOperators[key]) {
+        this.evalType = Type.fromTerm(expr)
         return this.evalOperators[key](expr[key], group)
       } else if (key?.startsWith('$') && Eval[key.slice(1)]) {
         return mapValues(expr, (value) => {

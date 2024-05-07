@@ -146,16 +146,22 @@ export class Builder {
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,
       $regex: ([key, value]) => `${this.parseEval(key)} regexp ${this.parseEval(value)}`,
 
-      // logical
-      $or: (args) => this.logicalOr(args.map(arg => this.parseEval(arg))),
-      $and: (args) => this.logicalAnd(args.map(arg => this.parseEval(arg))),
-      $not: (arg) => this.logicalNot(this.parseEval(arg)),
-
-      // bitwise
-      $bitOr: (args) => `(${args.map(arg => this.parseEval(arg)).join(' | ')})`,
-      $bitAnd: (args) => `(${args.map(arg => this.parseEval(arg)).join(' & ')})`,
-      $bitNot: (arg) => `(~(${this.parseEval(arg)}))`,
-      // $bitXor: ([left, right]) => `(${this.parseEval(left)} ^ ${this.parseEval(right)})`,
+      // logical / bitwise
+      $or: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
+        else return `(${args.map(arg => this.parseEval(arg)).join(' | ')})`
+      },
+      $and: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
+        else return `(${args.map(arg => this.parseEval(arg)).join(' & ')})`
+      },
+      $not: (arg) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
+        else return `(~(${this.parseEval(arg)}))`
+      },
 
       // boolean
       $eq: this.binary('='),
@@ -634,6 +640,7 @@ export class Builder {
     switch (typeof value) {
       case 'boolean':
       case 'number':
+      case 'bigint':
         return value + ''
       case 'object':
         return this.quote(JSON.stringify(value))

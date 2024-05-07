@@ -45,10 +45,27 @@ export class MySQLBuilder extends Builder {
         : ['timestamp', 'date'].includes(type.type!) ? `unix_timestamp(convert_tz(${value}, '${this._localTimezone}', '${this._dbTimezone}'))` : `(0+${value})`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
-    this.evalOperators.$bitOr = (args) => `cast(${args.map(arg => this.parseEval(arg)).join(' | ')} as signed)`
-    this.evalOperators.$bitAnd = (args) => `cast(${args.map(arg => this.parseEval(arg)).join(' & ')} as signed)`
-    this.evalOperators.$bitNot = (arg) => `cast(~(${this.parseEval(arg)}) as signed)`
-    this.evalOperators.$bitXor = ([left, right]) => `cast(${this.parseEval(left)} ^ ${this.parseEval(right)} as signed)`
+
+    this.evalOperators.$or = (args) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
+      else return `cast(${args.map(arg => this.parseEval(arg)).join(' | ')} as signed)`
+    }
+    this.evalOperators.$and = (args) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
+      else return `cast(${args.map(arg => this.parseEval(arg)).join(' & ')} as signed)`
+    }
+    this.evalOperators.$not = (arg) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
+      else return `cast(~(${this.parseEval(arg)}) as signed)`
+    }
+    this.evalOperators.$xor = (args) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
+      else return `cast(${args.map(arg => this.parseEval(arg)).join(' ^ ')} as signed)`
+    }
 
     this.transformers['boolean'] = {
       encode: value => `if(${value}=b'1', 1, 0)`,

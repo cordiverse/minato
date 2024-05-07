@@ -69,10 +69,26 @@ export class PostgresBuilder extends Builder {
         : `ln(${this.parseEval(left, 'double precision')}) / ln(${this.parseEval(right, 'double precision')})`,
       $random: () => `random()`,
 
-      $bitOr: (args) => `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' | ')})`,
-      $bitAnd: (args) => `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' & ')})`,
-      $bitNot: (arg) => `(~(${this.parseEval(arg, 'bigint')}))`,
-      $bitXor: ([left, right]) => `(${this.parseEval(left, 'bigint')} # ${this.parseEval(right, 'bigint')})`,
+      $or: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg, 'boolean')))
+        else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' | ')})`
+      },
+      $and: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg, 'boolean')))
+        else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' & ')})`
+      },
+      $not: (arg) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg, 'boolean'))
+        else return `(~(${this.parseEval(arg, 'bigint')}))`
+      },
+      $xor: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg, 'boolean')).reduce((prev, curr) => `(${prev} != ${curr})`)
+        else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' # ')})`
+      },
 
       $eq: this.binary('=', 'text'),
 
@@ -168,7 +184,7 @@ export class PostgresBuilder extends Builder {
   parseEval(expr: any, outtype: boolean | string = true): string {
     this.state.encoded = false
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
-      return this.escape(expr)
+      return this.escape(expr) // typeof outtype === 'string' ? `(${this.escape(expr)})::${outtype}` : this.escape(expr)
     }
     return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)})`
       : this.parseEvalExpr(expr)
