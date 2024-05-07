@@ -421,9 +421,7 @@ export class Builder {
       }
     }
     const prefix = this.modifiedTable ? `${this.escapeId(this.state.tables?.[table]?.name ?? this.modifiedTable)}.`
-      : (!this.state.tables || table === '_' || key in fields
-    // the only table must be the main table
-    || (Object.keys(this.state.tables).length === 1 && table in this.state.tables) ? '' : `${this.escapeId(table)}.`)
+      : (!this.state.tables || table === '_' || key in fields || table in this.state.tables ? '' : `${this.escapeId(table)}.`)
 
     if (!(table in (this.state.tables || {})) && (table in (this.state.innerTables || {}))) {
       const fields = this.state.innerTables?.[table]?.fields || {}

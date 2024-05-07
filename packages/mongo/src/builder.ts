@@ -137,7 +137,7 @@ export class Builder {
           return {
             $toLong: {
               $function: {
-                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev) & BigInt(curr))) }.toString(),
+                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev ?? 0) & BigInt(curr ?? 0))) }.toString(),
                 args: args.map(arg => ({ $toString: this.eval(arg, group) })),
                 lang: 'js',
               },
@@ -161,7 +161,7 @@ export class Builder {
           return {
             $toLong: {
               $function: {
-                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev) | BigInt(curr))) }.toString(),
+                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev ?? 0) | BigInt(curr ?? 0))) }.toString(),
                 args: args.map(arg => ({ $toString: this.eval(arg, group) })),
                 lang: 'js',
               },
@@ -185,7 +185,7 @@ export class Builder {
           return {
             $toLong: {
               $function: {
-                body: function (arg: string) { return String(~BigInt(arg)) }.toString(),
+                body: function (arg: string) { return String(~BigInt(arg ?? 0)) }.toString(),
                 args: [{ $toString: this.eval(arg, group) }],
                 lang: 'js',
               },
@@ -209,7 +209,7 @@ export class Builder {
           return {
             $toLong: {
               $function: {
-                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev) ^ BigInt(curr))) }.toString(),
+                body: function (...args: string[]) { return args.reduce((prev, curr) => String(BigInt(prev ?? 0) ^ BigInt(curr ?? 0))) }.toString(),
                 args: args.map(arg => ({ $toString: this.eval(arg, group) })),
                 lang: 'js',
               },

@@ -221,25 +221,25 @@ Eval.and = multary('and', (args, data) => {
   const type = Type.fromTerms(args, Type.Boolean)
   if (Field.boolean.includes(type.type)) return args.every(arg => executeEval(data, arg))
   else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev & curr)
-  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg))).reduce((prev, curr) => prev & curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev & curr)
 }, (...args) => Type.fromTerms(args, Type.Boolean))
 Eval.or = multary('or', (args, data) => {
   const type = Type.fromTerms(args, Type.Boolean)
   if (Field.boolean.includes(type.type)) return args.some(arg => executeEval(data, arg))
   else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev | curr)
-  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg))).reduce((prev, curr) => prev | curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev | curr)
 }, (...args) => Type.fromTerms(args, Type.Boolean))
 Eval.not = unary('not', (value, data) => {
   const type = Type.fromTerms([value], Type.Boolean)
   if (Field.boolean.includes(type.type)) return !executeEval(data, value)
   else if (Field.number.includes(type.type)) return ~executeEval(data, value) as any
-  else if (type.type === 'bigint') return ~BigInt(executeEval(data, value))
+  else if (type.type === 'bigint') return ~BigInt(executeEval(data, value) ?? 0)
 }, (value) => Type.fromTerms([value], Type.Boolean))
 Eval.xor = multary('xor', (args, data) => {
   const type = Type.fromTerms(args, Type.Boolean)
   if (Field.boolean.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev !== curr)
   else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev ^ curr)
-  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg))).reduce((prev, curr) => prev ^ curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev ^ curr)
 }, (...args) => Type.fromTerms(args, Type.Boolean))
 
 // typecast

@@ -76,7 +76,7 @@ export class MySQLBuilder extends Builder {
 
     this.transformers['bigint'] = {
       encode: value => `cast(${value} as char)`,
-      decode: value => `cast(${value} as bigint)`,
+      decode: value => `cast(${value} as signed)`,
       load: value => isNullable(value) ? value : BigInt(value),
       dump: value => isNullable(value) ? value : `${value}`,
     }
