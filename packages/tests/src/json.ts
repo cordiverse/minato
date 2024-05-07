@@ -98,6 +98,12 @@ namespace JsonTests {
         { size: 3 },
         { size: 3 },
       ])
+
+      await expect(database.select('baz', {
+        nums: { $size: 0 },
+      }).project({
+        size: row => $.length(row.nums),
+      }).execute()).to.eventually.have.length(0)
     })
 
     it('$el', async () => {

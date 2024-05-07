@@ -313,6 +313,10 @@ namespace QueryOperators {
       await expect(database.get('temp1', {
         list: { $size: 1 },
       })).eventually.to.have.length(2).with.shape([{ id: 2 }, { id: 3 }])
+
+      await expect(database.get('temp1', {
+        list: { $size: 0 },
+      })).eventually.to.have.length(1).with.shape([{ id: 1 }])
     })
 
     size && it('$.length', async () => {

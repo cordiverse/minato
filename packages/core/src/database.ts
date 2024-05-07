@@ -265,12 +265,16 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return this.select(sel)
   }
 
+  async get<K extends Keys<S>>(table: K, query: Query<S[K]>): Promise<S[K][]>
+
   async get<K extends Keys<S>, P extends FlatKeys<S[K]> = any>(
     table: K,
     query: Query<S[K]>,
     cursor?: Driver.Cursor<P>,
-  ): Promise<FlatPick<S[K], P>[]> {
-    return this.select(table, query).execute(cursor)
+  ): Promise<FlatPick<S[K], P>[]>
+
+  async get<K extends Keys<S>>(table: K, query: Query<S[K]>, cursor?: any) {
+    return this.select(table, query).execute(cursor) as any
   }
 
   async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T, true>, query?: Query<S[K]>): Promise<T> {

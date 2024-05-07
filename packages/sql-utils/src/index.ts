@@ -110,10 +110,10 @@ export class Builder {
         }
       },
       $size: (key, value) => {
-        if (!value) return this.logicalNot(key)
         if (this.isJsonQuery(key)) {
           return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
+          if (!value) return this.logicalNot(key)
           return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
         }
       },

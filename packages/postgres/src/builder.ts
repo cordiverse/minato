@@ -35,10 +35,10 @@ export class PostgresBuilder extends Builder {
       $regex: (key, value) => this.createRegExpQuery(key, value),
       $regexFor: (key, value) => `${this.escape(value)} ~ ${key}`,
       $size: (key, value) => {
-        if (!value) return this.logicalNot(key)
         if (this.isJsonQuery(key)) {
           return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
+          if (!value) return `COALESCE(ARRAY_LENGTH(${key}, 1), 0) = 0`
           return `${key} IS NOT NULL AND ARRAY_LENGTH(${key}, 1) = ${value}`
         }
       },
