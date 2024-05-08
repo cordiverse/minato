@@ -27,8 +27,10 @@ declare module 'cordis' {
   namespace Context {
     const Minato: unique symbol
     const Database: unique symbol
+    // https://github.com/typescript-eslint/typescript-eslint/issues/6720
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     interface Minato<C extends Context = Context> {}
+    // https://github.com/typescript-eslint/typescript-eslint/issues/6720
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     interface Database<C extends Context = Context> {}
   }

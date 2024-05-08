@@ -68,6 +68,10 @@ export namespace Type {
     else return fromPrimitive(value as T)
   }
 
+  export function fromTerms(values: Eval.Term<any>[], initial?: Type): Type {
+    return values.map(fromTerm).find((type) => type.type !== 'expr') ?? initial ?? fromField('expr')
+  }
+
   export function isType(value: any): value is Type {
     return value?.[kType] === true
   }

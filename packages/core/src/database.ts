@@ -360,13 +360,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return this.select(sel)
   }
 
+  async get<K extends Keys<S>>(table: K, query: Query<S[K]>): Promise<S[K][]>
+
   async get<K extends Keys<S>, P extends FlatKeys<S[K]> = any>(
     table: K,
     query: Query<S[K]>,
     cursor?: Driver.Cursor<P>,
-  ): Promise<FlatPick<S[K], P>[]> {
+  ): Promise<FlatPick<S[K], P>[]>
+
+  async get<K extends Keys<S>>(table: K, query: Query<S[K]>, cursor?: any) {
     const fields = Array.isArray(cursor) ? cursor : cursor?.fields
-    return this.select(table, query, fields && Object.fromEntries(fields.map(x => [x, true])) as any).execute(cursor)
+    return this.select(table, query, fields && Object.fromEntries(fields.map(x => [x, true])) as any).execute(cursor) as any
   }
 
   async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T, true>, query?: Query<S[K]>): Promise<T> {
@@ -678,7 +682,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         results.push(Eval.nin(relation.fields.map(x => row[x]), relTable))
       }
     }
-    return { $expr: { $and: results } } as any
+    return { $expr: Eval.and(...results) } as any
   }
 
   private async processRelationUpdate(table: any, row: any, key: any, modifier: Relation.Modifier) {

@@ -98,6 +98,12 @@ namespace JsonTests {
         { size: 3 },
         { size: 3 },
       ])
+
+      await expect(database.select('baz', {
+        nums: { $size: 0 },
+      }).project({
+        size: row => $.length(row.nums),
+      }).execute()).to.eventually.have.length(0)
     })
 
     it('$el', async () => {
@@ -122,6 +128,11 @@ namespace JsonTests {
         .to.eventually.deep.equal([
           { id: 3, nums: [7, 8] },
         ])
+    })
+
+    it('execute nested selection', async () => {
+      await expect(database.eval('bar', row => $.max($.add(1, row.value)))).to.eventually.deep.equal(2)
+      await expect(database.eval('bar', row => $.max($.add(1, row.obj.x)))).to.eventually.deep.equal(4)
     })
   }
 
@@ -161,6 +172,39 @@ namespace JsonTests {
         { obj: { a: 1, num: 1, obj: { a: 1, b: '1' }, str: 'a', str2: '1' } },
         { obj: { a: 2, num: 2, obj: { a: 2, b: '2' }, str: 'b', str2: '2' } },
         { obj: { a: 3, num: 3, obj: { a: 3, b: '3' }, str: 'c', str2: '3' } },
+      ])
+    })
+
+    it('project in json with nested object', async () => {
+      const res = await database.select('bar')
+        .project({
+          'obj.num': row => row.obj.x,
+          'obj.str': row => row.obj.y,
+          'obj.str2': row => row.obj.z,
+          'obj.obj': row => row.obj.o,
+          'obj.a': row => row.obj.o.a,
+        })
+        .execute()
+
+      expect(res).to.deep.equal([
+        { obj: { a: 1, num: 1, obj: { a: 1, b: '1' }, str: 'a', str2: '1' } },
+        { obj: { a: 2, num: 2, obj: { a: 2, b: '2' }, str: 'b', str2: '2' } },
+        { obj: { a: 3, num: 3, obj: { a: 3, b: '3' }, str: 'c', str2: '3' } },
+      ])
+    })
+
+    it('$.object on row', async () => {
+      const res = await database.select('foo')
+        .project({
+          obj: row => $.object(row),
+        })
+        .orderBy(row => row.obj.id)
+        .execute()
+
+      expect(res).to.deep.equal([
+        { obj: { id: 1, value: 0 } },
+        { obj: { id: 2, value: 2 } },
+        { obj: { id: 3, value: 2 } },
       ])
     })
 

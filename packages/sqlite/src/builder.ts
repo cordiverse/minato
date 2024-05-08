@@ -25,6 +25,13 @@ export class SQLiteBuilder extends Builder {
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
 
+    const binaryXor = (left: string, right: string) => `((${left} & ~${right}) | (~${left} & ${right}))`
+    this.evalOperators.$xor = (args) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
+      else return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => binaryXor(prev, curr))
+    }
+
     this.transformers['bigint'] = {
       encode: value => `cast(${value} as text)`,
       decode: value => `cast(${value} as integer)`,
@@ -65,7 +72,9 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
-    return encoded ? super.encode(value, encoded, pure, type) : value
+    return encoded ? super.encode(value, encoded, pure, type)
+      : (encoded === this.isEncoded() && !pure) ? value
+        : this.asEncoded(`(${value} ->> '$')`, pure ? undefined : false)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
@@ -83,6 +92,6 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return this.asEncoded(`json_extract(${obj}, '$${path}')`, false)
+    return this.asEncoded(`(${obj} -> '$${path}')`, true)
   }
 }

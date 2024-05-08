@@ -1,4 +1,4 @@
-import { defineProperty, Dict, filterKeys, mapValues } from 'cosmokit'
+import { defineProperty, Dict, filterKeys } from 'cosmokit'
 import { Driver } from './driver.ts'
 import { Eval, executeEval, isAggrExpr, isEvalExpr } from './eval.ts'
 import { Field, Model } from './model.ts'
@@ -122,7 +122,14 @@ class Executable<S = any, T = any> {
       })
       return Object.fromEntries(entries)
     } else {
-      return mapValues(fields, field => this.resolveField(field))
+      const entries = Object.entries(fields).flatMap(([key, field]) => {
+        const expr = this.resolveField(field)
+        if (expr['$object'] && !Type.fromTerm(expr).ignoreNull) {
+          return Object.entries(expr['$object']).map(([key2, expr2]) => [`${key}.${key2}`, expr2])
+        }
+        return [[key, expr]]
+      })
+      return Object.fromEntries(entries)
     }
   }
 
@@ -274,7 +281,8 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return Eval.exec(selection._action('eval', expr))
   }
 
-  execute<K extends FlatKeys<S> = any>(cursor?: Driver.Cursor<K>): Promise<Extract<FlatPick<S, K>, S>[]>
+  execute(): Promise<S[]>
+  execute<K extends FlatKeys<S> = any>(cursor?: Driver.Cursor<K>): Promise<FlatPick<S, K>[]>
   execute<T>(callback: Selection.Callback<S, T, true>): Promise<T>
   async execute(cursor?: any) {
     if (typeof cursor === 'function') {
