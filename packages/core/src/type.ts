@@ -63,13 +63,13 @@ export namespace Type {
     throw new TypeError(`invalid field: ${field}`)
   }
 
-  export function fromTerm<T>(value: Eval.Term<T>): Type<T> {
-    if (isEvalExpr(value)) return value[kType] ?? fromField('expr' as any)
+  export function fromTerm<T>(value: Eval.Term<T>, initial?: Type): Type<T> {
+    if (isEvalExpr(value)) return value[kType] ?? initial ?? fromField('expr' as any)
     else return fromPrimitive(value as T)
   }
 
   export function fromTerms(values: Eval.Term<any>[], initial?: Type): Type {
-    return values.map(fromTerm).find((type) => type.type !== 'expr') ?? initial ?? fromField('expr')
+    return values.map((x) => fromTerm(x)).find((type) => type.type !== 'expr') ?? initial ?? fromField('expr')
   }
 
   export function isType(value: any): value is Type {

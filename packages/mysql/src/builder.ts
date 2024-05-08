@@ -55,22 +55,22 @@ export class MySQLBuilder extends Builder {
     }
 
     this.evalOperators.$or = (args) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
       else return `cast(${args.map(arg => this.parseEval(arg)).join(' | ')} as signed)`
     }
     this.evalOperators.$and = (args) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
       else return `cast(${args.map(arg => this.parseEval(arg)).join(' & ')} as signed)`
     }
     this.evalOperators.$not = (arg) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
       else return `cast(~(${this.parseEval(arg)}) as signed)`
     }
     this.evalOperators.$xor = (args) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
       else return `cast(${args.map(arg => this.parseEval(arg)).join(' ^ ')} as signed)`
     }

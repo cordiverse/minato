@@ -27,7 +27,7 @@ export class SQLiteBuilder extends Builder {
 
     const binaryXor = (left: string, right: string) => `((${left} & ~${right}) | (~${left} & ${right}))`
     this.evalOperators.$xor = (args) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
       else return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => binaryXor(prev, curr))
     }

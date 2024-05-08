@@ -38,8 +38,8 @@ interface State {
   encoded?: boolean
   encodedMap?: Dict<boolean>
 
-  // current eval expr type
-  type?: Type
+  // current eval expr
+  expr?: Eval.Expr
 
   group?: boolean
   tables?: Dict<Model>
@@ -149,17 +149,17 @@ export class Builder {
 
       // logical / bitwise
       $or: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
         else return `(${args.map(arg => this.parseEval(arg)).join(' | ')})`
       },
       $and: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
         else return `(${args.map(arg => this.parseEval(arg)).join(' & ')})`
       },
       $not: (arg) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
         else return `(~(${this.parseEval(arg)}))`
       },
@@ -336,7 +336,7 @@ export class Builder {
       }
       return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, ''), true)
+    return this.asEncoded(_groupObject(unravel(_fields), Type.fromTerm(this.state.expr), ''), true)
   }
 
   protected groupArray(value: string) {
@@ -392,7 +392,7 @@ export class Builder {
     this.state.encoded = false
     for (const key in expr) {
       if (key in this.evalOperators) {
-        this.state.type = Type.fromTerm(expr)
+        this.state.expr = expr
         return this.evalOperators[key](expr[key])
       }
     }

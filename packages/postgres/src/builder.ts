@@ -70,22 +70,22 @@ export class PostgresBuilder extends Builder {
       $random: () => `random()`,
 
       $or: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg, 'boolean')))
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' | ')})`
       },
       $and: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg, 'boolean')))
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' & ')})`
       },
       $not: (arg) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg, 'boolean'))
         else return `(~(${this.parseEval(arg, 'bigint')}))`
       },
       $xor: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg, 'boolean')).reduce((prev, curr) => `(${prev} != ${curr})`)
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' # ')})`
       },
@@ -241,7 +241,7 @@ export class PostgresBuilder extends Builder {
       }
       return `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, ''), true)
+    return this.asEncoded(_groupObject(unravel(_fields), Type.fromTerm(this.state.expr), ''), true)
   }
 
   protected groupArray(value: string) {

@@ -88,7 +88,7 @@ export class Builder {
   public pipeline: any[] = []
   protected lookups: any[] = []
   public evalKey?: string
-  private evalType?: Type
+  private evalExpr?: Eval.Expr
   private refTables: string[] = []
   private refVirtualKeys: Dict<string> = {}
   private joinTables: Dict<string> = {}
@@ -123,7 +123,7 @@ export class Builder {
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
       $and: (args, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return { $and: args.map(arg => this.eval(arg, group)) }
         else if (this.driver.version >= 7) return { $bitAnd: args.map(arg => this.eval(arg, group)) }
         else if (Field.number.includes(type.type)) {
@@ -147,7 +147,7 @@ export class Builder {
         }
       },
       $or: (args, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return { $or: args.map(arg => this.eval(arg, group)) }
         else if (this.driver.version >= 7) return { $bitOr: args.map(arg => this.eval(arg, group)) }
         else if (Field.number.includes(type.type)) {
@@ -171,7 +171,7 @@ export class Builder {
         }
       },
       $not: (arg, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return { $not: this.eval(arg, group) }
         else if (this.driver.version >= 7) return { $bitNot: this.eval(arg, group) }
         else if (Field.number.includes(type.type)) {
@@ -195,7 +195,7 @@ export class Builder {
         }
       },
       $xor: (args, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return args.map(arg => this.eval(arg, group)).reduce((prev, curr) => ({ $ne: [prev, curr] }))
         else if (this.driver.version >= 7) return { $bitXor: args.map(arg => this.eval(arg, group)) }
         else if (Field.number.includes(type.type)) {
@@ -312,7 +312,7 @@ export class Builder {
 
     for (const key in expr) {
       if (this.evalOperators[key]) {
-        this.evalType = Type.fromTerm(expr)
+        this.evalExpr = expr
         return this.evalOperators[key](expr[key], group)
       } else if (key?.startsWith('$') && Eval[key.slice(1)]) {
         return mapValues(expr, (value) => {
