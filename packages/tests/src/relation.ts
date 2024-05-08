@@ -328,9 +328,7 @@ namespace RelationTests {
       })))
 
       await expect(database.get('post', {
-        author: {
-          id: 1,
-        },
+        author: 1,
       })).to.eventually.have.shape(posts.map(post => ({
         ...post,
         author: users.find(user => post.authorId === user.id),
@@ -437,12 +435,8 @@ namespace RelationTests {
 
       await expect(database.get('post', {
         tags: {
-          $some: {
-            id: 1,
-          },
-          $none: {
-            id: 3,
-          },
+          $some: 1,
+          $none: [3],
           $every: {},
         },
       })).to.eventually.have.shape(posts.slice(0, 1).map(post => ({
