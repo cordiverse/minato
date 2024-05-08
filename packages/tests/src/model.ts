@@ -294,7 +294,7 @@ namespace ModelOperations {
 
   const dobjectTable: DObject[] = [
     { id: 1 },
-    { id: 2, foo: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
+    { id: 2, foo: { nested: { id: 1, int64: 123n, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
     { id: 3, bar: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
     { id: 4, baz: [{ nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } }, { nested: { id: 2 } }] },
     { id: 5, foo: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object2: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
@@ -584,6 +584,14 @@ namespace ModelOperations {
       await Promise.all(keys.map(key =>
         expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getValue(row, key) })))
       ))
+    })
+
+    it('bitwise ops on bigint', async () => {
+      await setup(database, 'dobjects', dobjectTable)
+      await expect(database.get('dobjects', row => $.eq($.and(row.foo!.nested!.int64!, 5n), 1n))).to.eventually.have.length(1)
+      await expect(database.get('dobjects', row => $.eq($.or(row.foo!.nested!.int64!, 4n), 127n))).to.eventually.have.length(1)
+      await expect(database.get('dobjects', row => $.eq($.xor(row.foo!.nested!.int64!, 2n), 121n))).to.eventually.have.length(1)
+      await expect(database.eval('dobjects', row => $.max($.or(row.foo!.nested!.int64!, 9223372036854775701n)))).eventually.to.deep.equal(9223372036854775807n)
     })
   }
 }

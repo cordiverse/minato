@@ -129,6 +129,11 @@ namespace JsonTests {
           { id: 3, nums: [7, 8] },
         ])
     })
+
+    it('execute nested selection', async () => {
+      await expect(database.eval('bar', row => $.max($.add(1, row.value)))).to.eventually.deep.equal(2)
+      await expect(database.eval('bar', row => $.max($.add(1, row.obj.x)))).to.eventually.deep.equal(4)
+    })
   }
 
   export function selection(database: Database<Tables>) {

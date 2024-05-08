@@ -111,10 +111,11 @@ export namespace Eval {
     concat: Multi<string, string>
     regex<A extends boolean>(x: Term<string, A>, y: Term<string, A> | Term<RegExp, A>): Expr<boolean, A>
 
-    // logical
-    and: Multi<boolean, boolean>
-    or: Multi<boolean, boolean>
-    not: Unary<boolean, boolean>
+    // logical / bitwise
+    and: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
+    or: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
+    not: Unary<boolean, boolean> & Unary<number, number> & Unary<bigint, bigint>
+    xor: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
 
     // typecast
     literal<T>(value: T, type?: Type<T> | Field.Type<T> | Field.NewType<T> | string): Expr<T, false>
@@ -215,10 +216,31 @@ Eval.nin = multary('nin', ([value, array], data) => !executeEval(data, array).in
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''), Type.String)
 Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(data, regex)).test(executeEval(data, value)), Type.Boolean)
 
-// logical
-Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, arg)), Type.Boolean)
-Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg)), Type.Boolean)
-Eval.not = unary('not', (value, data) => !executeEval(data, value), Type.Boolean)
+// logical / bitwise
+Eval.and = multary('and', (args, data) => {
+  const type = Type.fromTerms(args, Type.Boolean)
+  if (Field.boolean.includes(type.type)) return args.every(arg => executeEval(data, arg))
+  else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev & curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev & curr)
+}, (...args) => Type.fromTerms(args, Type.Boolean))
+Eval.or = multary('or', (args, data) => {
+  const type = Type.fromTerms(args, Type.Boolean)
+  if (Field.boolean.includes(type.type)) return args.some(arg => executeEval(data, arg))
+  else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev | curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev | curr)
+}, (...args) => Type.fromTerms(args, Type.Boolean))
+Eval.not = unary('not', (value, data) => {
+  const type = Type.fromTerms([value], Type.Boolean)
+  if (Field.boolean.includes(type.type)) return !executeEval(data, value)
+  else if (Field.number.includes(type.type)) return ~executeEval(data, value) as any
+  else if (type.type === 'bigint') return ~BigInt(executeEval(data, value) ?? 0)
+}, (value) => Type.fromTerms([value], Type.Boolean))
+Eval.xor = multary('xor', (args, data) => {
+  const type = Type.fromTerms(args, Type.Boolean)
+  if (Field.boolean.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev !== curr)
+  else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev ^ curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev ^ curr)
+}, (...args) => Type.fromTerms(args, Type.Boolean))
 
 // typecast
 Eval.literal = multary('literal', ([value, type]) => {

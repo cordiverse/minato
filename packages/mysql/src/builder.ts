@@ -46,6 +46,27 @@ export class MySQLBuilder extends Builder {
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
 
+    this.evalOperators.$or = (args) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
+      else return `cast(${args.map(arg => this.parseEval(arg)).join(' | ')} as signed)`
+    }
+    this.evalOperators.$and = (args) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
+      else return `cast(${args.map(arg => this.parseEval(arg)).join(' & ')} as signed)`
+    }
+    this.evalOperators.$not = (arg) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
+      else return `cast(~(${this.parseEval(arg)}) as signed)`
+    }
+    this.evalOperators.$xor = (args) => {
+      const type = this.state.type!
+      if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
+      else return `cast(${args.map(arg => this.parseEval(arg)).join(' ^ ')} as signed)`
+    }
+
     this.transformers['boolean'] = {
       encode: value => `if(${value}=b'1', 1, 0)`,
       decode: value => `if(${value}=1, b'1', b'0')`,
@@ -55,7 +76,7 @@ export class MySQLBuilder extends Builder {
 
     this.transformers['bigint'] = {
       encode: value => `cast(${value} as char)`,
-      decode: value => `cast(${value} as bigint)`,
+      decode: value => `cast(${value} as signed)`,
       load: value => isNullable(value) ? value : BigInt(value),
       dump: value => isNullable(value) ? value : `${value}`,
     }

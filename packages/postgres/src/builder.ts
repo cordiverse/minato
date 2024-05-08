@@ -69,6 +69,27 @@ export class PostgresBuilder extends Builder {
         : `ln(${this.parseEval(left, 'double precision')}) / ln(${this.parseEval(right, 'double precision')})`,
       $random: () => `random()`,
 
+      $or: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg, 'boolean')))
+        else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' | ')})`
+      },
+      $and: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg, 'boolean')))
+        else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' & ')})`
+      },
+      $not: (arg) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg, 'boolean'))
+        else return `(~(${this.parseEval(arg, 'bigint')}))`
+      },
+      $xor: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg, 'boolean')).reduce((prev, curr) => `(${prev} != ${curr})`)
+        else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' # ')})`
+      },
+
       $eq: this.binary('=', 'text'),
 
       $number: (arg) => {
@@ -153,9 +174,11 @@ export class PostgresBuilder extends Builder {
   }
 
   private getLiteralType(expr: any) {
-    if (typeof expr === 'string') return 'text'
-    else if (typeof expr === 'number') return 'double precision'
-    else if (typeof expr === 'string') return 'boolean'
+    const type = Type.fromTerm(expr)
+    if (Field.string.includes(type.type) || typeof expr === 'string') return 'text'
+    else if (Field.number.includes(type.type) || typeof expr === 'number') return 'double precision'
+    else if (Field.boolean.includes(type.type) || typeof expr === 'boolean') return 'boolean'
+    else if (type.type === 'json') return 'jsonb'
   }
 
   parseEval(expr: any, outtype: boolean | string = true): string {

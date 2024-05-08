@@ -268,6 +268,38 @@ namespace QueryOperators {
         value: { $bitsAnyClear: 6 },
       })).eventually.to.have.shape([{ value: 3 }, { value: 4 }])
     })
+
+    it('using expressions', async () => {
+      await expect(database.get('temp1',
+        row => $.eq($.and(row.value, 1, 1), 1),
+      )).eventually.to.have.shape([{ value: 3 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.or(row.value, 3, 3), 7),
+      )).eventually.to.have.shape([{ value: 4 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.and(row.value, $.not(4)), 3),
+      )).eventually.to.have.shape([{ value: 3 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.xor(0, row.value, 3), 7),
+      )).eventually.to.have.shape([{ value: 4 }])
+
+      await expect(database.eval('temp1', _ => $.max($.not(2 ** 30)))).eventually.to.deep.equal(-(2 ** 30) - 1)
+      await expect(database.eval('temp1', _ => $.max($.not(-(2 ** 30))))).eventually.to.deep.equal(2 ** 30 - 1)
+      await expect(database.eval('temp1', _ => $.max($.or(-(2 ** 30), 1)))).eventually.to.deep.equal(-(2 ** 30) + 1)
+
+      await expect(database.eval('temp1', _ => $.max($.xor(2, 3, 6)))).eventually.to.deep.equal(7)
+      await expect(database.eval('temp1', _ => $.array($.xor(true, false)))).eventually.to.include.members([true])
+      await expect(database.eval('temp1', _ => $.array($.xor(true, false, true)))).eventually.to.include.members([false])
+
+      await expect(database.eval('temp1', _ => $.max($.not(BigInt(2 ** 40))))).eventually.to.deep.equal(BigInt(-(2 ** 40) - 1))
+      await expect(database.eval('temp1', _ => $.max($.and(9223372036854775701n, 9223372036854775702n)))).eventually.to.deep.equal(9223372036854775700n)
+      await expect(database.eval('temp1', _ => $.max($.or(9223372036854775701n, 1n)))).eventually.to.deep.equal(9223372036854775701n)
+      await expect(database.eval('temp1', _ => $.max($.xor(9223372036854775701n, 9223372036854775702n)))).eventually.to.deep.equal(3n)
+      await expect(database.eval('temp1', _ => $.max($.not(9223372036854775701n)))).eventually.to.deep.equal(-9223372036854775702n)
+    })
   }
 
   interface ListOptions {

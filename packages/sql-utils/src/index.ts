@@ -146,10 +146,22 @@ export class Builder {
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,
       $regex: ([key, value]) => `${this.parseEval(key)} regexp ${this.parseEval(value)}`,
 
-      // logical
-      $or: (args) => this.logicalOr(args.map(arg => this.parseEval(arg))),
-      $and: (args) => this.logicalAnd(args.map(arg => this.parseEval(arg))),
-      $not: (arg) => this.logicalNot(this.parseEval(arg)),
+      // logical / bitwise
+      $or: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
+        else return `(${args.map(arg => this.parseEval(arg)).join(' | ')})`
+      },
+      $and: (args) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
+        else return `(${args.map(arg => this.parseEval(arg)).join(' & ')})`
+      },
+      $not: (arg) => {
+        const type = this.state.type!
+        if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
+        else return `(~(${this.parseEval(arg)}))`
+      },
 
       // boolean
       $eq: this.binary('='),
@@ -323,7 +335,7 @@ export class Builder {
     return this.asEncoded(`ifnull(json_arrayagg(${value}), json_array())`, true)
   }
 
-  protected parseFieldQuery(key: string, query: Query.FieldExpr) {
+  protected parseFieldQuery(key: string, query: Query.Field) {
     const conditions: string[] = []
     if (this.modifiedTable) key = `${this.escapeId(this.modifiedTable)}.${key}`
 
@@ -409,9 +421,7 @@ export class Builder {
       }
     }
     const prefix = this.modifiedTable ? `${this.escapeId(this.state.tables?.[table]?.name ?? this.modifiedTable)}.`
-      : (!this.state.tables || table === '_' || key in fields
-    // the only table must be the main table
-    || (Object.keys(this.state.tables).length === 1 && table in this.state.tables) ? '' : `${this.escapeId(table)}.`)
+      : (!this.state.tables || table === '_' || key in fields || table in this.state.tables ? '' : `${this.escapeId(table)}.`)
 
     if (!(table in (this.state.tables || {})) && (table in (this.state.innerTables || {}))) {
       const fields = this.state.innerTables?.[table]?.fields || {}
@@ -628,6 +638,7 @@ export class Builder {
     switch (typeof value) {
       case 'boolean':
       case 'number':
+      case 'bigint':
         return value + ''
       case 'object':
         return this.quote(JSON.stringify(value))
