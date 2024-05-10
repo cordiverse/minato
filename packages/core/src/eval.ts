@@ -140,7 +140,6 @@ export namespace Eval {
     min: Aggr<Comparable>
     count(value: Any<false>): Expr<number, true>
     length(value: Any<false>): Expr<number, true>
-    size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
     length<A extends boolean>(value: any[] | Expr<any[], A>): Expr<number, A>
 
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
