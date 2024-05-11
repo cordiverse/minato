@@ -261,36 +261,36 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   select<K extends Keys<S>, R extends Relation.Include<S[K]>>(
     table: K,
     query?: Query<S[K]>,
-    relations?: R | null
+    cursor?: R | null
   ): Selection<S[K]>
 
-  select(table: any, query?: any, relations?: any) {
+  select(table: any, query?: any, cursor?: any) {
     let sel = new Selection(this.getDriver(table), table, query)
     if (typeof table !== 'string') return sel
-    const whereOnly = relations === null
+    const whereOnly = cursor === null
     const rawquery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
-    if (relations) relations = filterKeys(relations, (key) => !!modelFields[key]?.relation)
+    if (cursor) cursor = filterKeys(cursor, (key) => !!modelFields[key]?.relation)
     for (const key in sel.query) {
-      if (modelFields[key]?.relation && (!relations || !Object.getOwnPropertyNames(relations).includes(key))) {
-        (relations ??= {})[key] = true
+      if (modelFields[key]?.relation && (!cursor || !Object.getOwnPropertyNames(cursor).includes(key))) {
+        (cursor ??= {})[key] = true
       }
     }
-    sel.query = omit(sel.query, Object.keys(relations ?? {}))
-    if (relations && typeof relations === 'object') {
+    sel.query = omit(sel.query, Object.keys(cursor ?? {}))
+    if (cursor && typeof cursor === 'object') {
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
       const extraFields: string[] = []
-      for (const key in relations) {
-        if (!relations[key] || !modelFields[key]?.relation) continue
+      for (const key in cursor) {
+        if (!cursor[key] || !modelFields[key]?.relation) continue
         const relation: Relation.Config<S> = modelFields[key]!.relation as any
         if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
-          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, relations[key]), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
           const relquery = rawquery(sel.row)[key]
           sel = !relquery ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
         } else if (relation.type === 'oneToMany') {
-          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, relations[key]), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
           const relquery = rawquery(sel.row)[key]
@@ -304,7 +304,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         } else if (relation.type === 'manyToMany') {
           const assocTable: any = Relation.buildAssociationTable(relation.table, table)
           const references = relation.fields.map(x => Relation.buildAssociationKey(x, table))
-          sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { [relation.table]: relations[key] } as any), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { [relation.table]: cursor[key] } as any), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
           ), true)
           const relquery = rawquery(sel.row)[key]
