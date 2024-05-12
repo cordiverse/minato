@@ -25,6 +25,7 @@ function getTypeDef({ deftype: type }: Field) {
     case 'boolean':
     case 'integer':
     case 'unsigned':
+    case 'bigint':
     case 'date':
     case 'time':
     case 'timestamp': return `INTEGER`
@@ -37,6 +38,7 @@ function getTypeDef({ deftype: type }: Field) {
     case 'list':
     case 'json': return `TEXT`
     case 'binary': return `BLOB`
+    default: throw new Error(`unsupported type: ${type}`)
   }
 }
 
