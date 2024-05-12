@@ -54,6 +54,7 @@ export interface SQLiteFieldInfo {
 export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   static name = 'sqlite'
 
+  path!: string
   db!: init.Database
   sql = new SQLiteBuilder(this)
   beforeUnload?: () => void
@@ -161,8 +162,9 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async start() {
-    if (this.config.path !== ':memory:') {
-      this.config.path = resolve(this.ctx.baseDir, this.config.path)
+    this.path = this.config.path
+    if (this.path !== ':memory:') {
+      this.path = resolve(this.ctx.baseDir, this.path)
     }
     const isBrowser = process.env.KOISHI_ENV === 'browser'
     const sqlite = await init({
@@ -173,11 +175,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
           // @ts-ignore
           : createRequire(import.meta.url || pathToFileURL(__filename).href).resolve('@minatojs/sql.js/dist/' + file),
     })
-    if (!isBrowser || this.config.path === ':memory:') {
-      this.db = new sqlite.Database(this.config.path)
+    if (!isBrowser || this.path === ':memory:') {
+      this.db = new sqlite.Database(this.path)
     } else {
-      const buffer = await readFile(this.config.path).catch(() => null)
-      this.db = new sqlite.Database(this.config.path, buffer)
+      const buffer = await readFile(this.path).catch(() => null)
+      this.db = new sqlite.Database(this.path, buffer)
       if (isBrowser) {
         window.addEventListener('beforeunload', this.beforeUnload = () => {
           this._export()
@@ -271,7 +273,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   _export() {
     const data = this.db.export()
-    return writeFile(this.config.path, data)
+    return writeFile(this.path, data)
   }
 
   _run(sql: string, params: any = [], callback?: () => any) {
