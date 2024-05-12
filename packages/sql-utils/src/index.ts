@@ -535,7 +535,7 @@ export class Builder {
       suffix = ` WHERE ${filter}` + suffix
     }
 
-    if (inline && !args[0].fields && !suffix) {
+    if (inline && !args[0].fields && !suffix && (typeof table === 'string' || table instanceof Selection)) {
       return (addref && isBracketed(prefix)) ? `${prefix} ${ref}` : prefix
     }
 
