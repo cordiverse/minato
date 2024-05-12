@@ -458,6 +458,19 @@ namespace SelectionTests {
         .join(['foo', 'bar'])
         .execute(row => $.count(row.bar.id))
       ).to.eventually.equal(6)
+
+      await expect(database
+        .join(['foo', 'bar'])
+        .where(row => $.gt(row.bar.id, 3))
+        .execute(row => $.count(row.bar.id))
+      ).to.eventually.equal(3)
+
+      await expect(database
+        .join(['foo', 'bar'])
+        .where(row => $.gt(row.bar.id, 3))
+        .orderBy(row => row.bar.id)
+        .execute(row => $.count(row.bar.id))
+      ).to.eventually.equal(3)
     })
   }
 

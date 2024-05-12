@@ -93,11 +93,19 @@ export abstract class Driver<T = any, C extends Context = Context> {
     }
 
     if (table instanceof Selection) {
-      if (!table.args[0].fields) return table.model
+      if (!table.args[0].fields && (typeof table.table === 'string' || table.table instanceof Selection)) {
+        return table.model
+      }
       const model = new Model('temp')
-      model.fields = mapValues(table.args[0].fields, (expr, key) => ({
-        type: Type.fromTerm(expr),
-      }))
+      if (table.args[0].fields) {
+        model.fields = mapValues(table.args[0].fields, (expr) => ({
+          type: Type.fromTerm(expr),
+        }))
+      } else {
+        model.fields = mapValues(table.model.fields, (field) => ({
+          type: Type.fromField(field),
+        }))
+      }
       return model
     }
 

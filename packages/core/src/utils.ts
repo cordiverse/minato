@@ -29,7 +29,7 @@ export interface AtomicTypes {
   SharedArrayBuffer: SharedArrayBuffer
 }
 
-export type Indexable = string | number
+export type Indexable = string | number | bigint
 export type Comparable = string | number | boolean | bigint | Date
 
 type FlatWrap<S, A extends 0[], P extends string> = { [K in P]?: S }
