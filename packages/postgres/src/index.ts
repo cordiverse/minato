@@ -3,6 +3,8 @@ import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
 import { isBracketed } from '@minatojs/sql-utils'
 import { escapeId, formatTime, PostgresBuilder } from './builder'
+import zhCN from './locales/zh-CN.yml'
+import enUS from './locales/en-US.yml'
 
 interface ColumnInfo {
   table_catalog: string
@@ -491,8 +493,8 @@ export namespace PostgresDriver {
     password: z.string().role('secret'),
     database: z.string().required(),
   }).i18n({
-    'en-US': require('./locales/en-US'),
-    'zh-CN': require('./locales/zh-CN'),
+    'en-US': enUS,
+    'zh-CN': zhCN,
   })
 }
 

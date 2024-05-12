@@ -3,6 +3,8 @@ import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from
 import { Driver, Eval, executeUpdate, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Builder } from './builder'
+import zhCN from './locales/zh-CN.yml'
+import enUS from './locales/en-US.yml'
 
 const tempKey = '__temp_minato_mongo__'
 
@@ -533,8 +535,8 @@ export namespace MongoDriver {
       journal: z.boolean(),
     }),
   }).i18n({
-    'en-US': require('./locales/en-US'),
-    'zh-CN': require('./locales/zh-CN'),
+    'en-US': enUS,
+    'zh-CN': zhCN,
   })
 }
 

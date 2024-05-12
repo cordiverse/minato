@@ -4,6 +4,8 @@ import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
 import { escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Compat, MySQLBuilder } from './builder'
+import zhCN from './locales/zh-CN.yml'
+import enUS from './locales/en-US.yml'
 
 declare module 'mysql' {
   interface UntypedFieldInfo {
@@ -602,8 +604,8 @@ export namespace MySQLDriver {
       ]) as any,
     }),
   ]).i18n({
-    'en-US': require('./locales/en-US'),
-    'zh-CN': require('./locales/zh-CN'),
+    'en-US': enUS,
+    'zh-CN': zhCN,
   })
 }
 
