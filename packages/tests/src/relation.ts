@@ -308,8 +308,7 @@ namespace RelationTests {
         profile: profiles.find(profile => profile.userId === user.id),
       })))
 
-      await expect(database.get('user', row => ({
-        $expr: true,
+      await expect(database.get('user', row => $.query(row, {
         profile: r => $.eq(r.userId, row.id),
       }))).to.eventually.have.shape(users.map(user => ({
         ...user,
@@ -621,21 +620,21 @@ namespace RelationTests {
       posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post2' }))
 
       await database.set('user', 2, {
-        posts: $.update<Post>({
+        posts: {
           $create: [
             { content: 'post1' },
             { content: 'post2' },
           ],
-        }),
+        },
       })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
       posts.push(database.tables['post'].create({ id: 101, authorId: 1, content: 'post101' }))
       await database.set('user', 1, row => ({
         value: $.add(row.id, 98),
-        posts: $.update({
+        posts: {
           $create: { id: 101, content: 'post101' },
-        }),
+        },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
@@ -648,22 +647,22 @@ namespace RelationTests {
       posts[0].score = 2
       posts[1].score = 3
       await database.set('user', 1, row => ({
-        posts: $.update({
+        posts: {
           $set: r => ({
             score: $.add(row.id, r.id),
           }),
-        }),
+        },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
       posts[1].score = 13
       await database.set('user', 1, row => ({
-        posts: $.update({
-          $set: [
-            { score: { $gt: 2 } },
-            r => ({ score: $.add(r.score, 10) }),
-          ],
-        }),
+        posts: {
+          $set: {
+            where: { score: { $gt: 2 } },
+            update: r => ({ score: $.add(r.score, 10) }),
+          },
+        },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
@@ -675,9 +674,9 @@ namespace RelationTests {
 
       posts.splice(0, 1)
       await database.set('user', {}, row => ({
-        posts: $.update({
+        posts: {
           $remove: r => $.eq(r.id, row.id),
-        }),
+        },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
@@ -701,10 +700,10 @@ namespace RelationTests {
       await setup(database, 'post', postTable)
 
       await database.set('user', 1, {
-        posts: $.update({
+        posts: {
           $disconnect: {},
           $connect: { id: 3 },
-        }),
+        },
       })
       await expect(database.get('user', 1, ['posts'])).to.eventually.have.shape([{
         posts: [
@@ -725,16 +724,16 @@ namespace RelationTests {
       })))
 
       await database.set('post', 2, {
-        tags: $.update({
+        tags: {
           $disconnect: {},
-        }),
+        },
       })
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').deep.equal([])
 
       await database.set('post', 2, row => ({
-        tags: $.update({
+        tags: {
           $connect: r => $.eq(r.id, row.id),
-        }),
+        },
       }))
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([{
         id: 2,
@@ -783,21 +782,21 @@ namespace RelationTests {
       })).to.eventually.be.rejected
 
       await expect(database.set('post', 1, {
-        tags: $.update({
+        tags: {
           $remove: {},
-        }),
+        },
       })).to.eventually.be.rejected
 
       await expect(database.set('post', 1, {
-        tags: $.update({
+        tags: {
           $set: {},
-        }),
+        },
       })).to.eventually.be.rejected
 
       await expect(database.set('post', 1, {
-        tags: $.update({
+        tags: {
           $create: {},
-        }),
+        },
       })).to.eventually.be.rejected
     })
   }

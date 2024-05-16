@@ -4,7 +4,7 @@ import { Comparable, Flatten, Indexable, isComparable, makeRegExp, Row } from '.
 import { Selection } from './selection.ts'
 import { Relation } from './model.ts'
 
-export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean> | Query.Callback<T>
+export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
 
 export namespace Query {
   export interface FieldExpr<T = any> {
@@ -51,6 +51,7 @@ export namespace Query {
     $or?: Expr<T>[]
     $and?: Expr<T>[]
     $not?: Expr<T>
+    /** @deprecated use query callback instead */
     $expr?: Eval.Term<boolean>
   }
 

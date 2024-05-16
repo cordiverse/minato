@@ -2,6 +2,7 @@ import { defineProperty, isNullable, mapValues } from 'cosmokit'
 import { Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row } from './utils.ts'
 import { Type } from './type.ts'
 import { Field, Relation } from './model.ts'
+import { Query } from './query.ts'
 
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
@@ -24,7 +25,7 @@ export function hasSubquery(value: any): boolean {
 }
 
 export type Uneval<U, A extends boolean> =
-  | U extends Relation<(infer T)[]> ? Eval.Term<Partial<T>, A>[]
+  | U extends Relation<(infer T)[]> ? T extends object ? Relation.Modifier<T> | T[] : never
   : U extends Relation<infer T> ? Eval.Term<Partial<T>, A>
   : U extends number ? Eval.Term<number, A>
   : U extends string ? Eval.Term<string, A>
@@ -74,7 +75,7 @@ export namespace Eval {
 
     ignoreNull<T, A extends boolean>(value: Eval.Expr<T, A>): Eval.Expr<T, A>
     select(...args: Any[]): Expr<any[], false>
-    update<T extends object>(modifier: Relation.Modifier<T>): Expr<T>[]
+    query<T extends object>(row: Row<T>, query: Query.Expr<T>): Expr<boolean, false>
 
     // univeral
     if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: Term<T, A>, vElse: Term<T, A>): Expr<T, A>
@@ -190,7 +191,7 @@ operators.$switch = (args, data) => {
 
 Eval.ignoreNull = (expr) => (expr[Type.kType]!.ignoreNull = true, expr)
 Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
-Eval.update = (modifier) => modifier as any
+Eval.query = (row, query) => ({ $expr: true, ...query }) as any
 
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)

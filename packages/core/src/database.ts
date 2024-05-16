@@ -696,8 +696,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
     if (modifier.$remove) {
       if (relation.type === 'oneToMany') {
-        await this.remove(relation.table, (r: any) => ({
-          $expr: true,
+        await this.remove(relation.table, (r: any) => Eval.query(r, {
           ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
           ...(typeof modifier.$remove === 'function' ? { $expr: modifier.$remove(r) } : modifier.$remove),
         }) as any)
@@ -706,16 +705,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
     }
     if (modifier.$set) {
-      const [query, update] = Array.isArray(modifier.$set) ? modifier.$set : [{}, modifier.$set]
       if (relation.type === 'oneToMany') {
-        await this.set(relation.table,
-          (r: any) => ({
-            $expr: true,
-            ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
-            ...(typeof query === 'function' ? { $expr: query } : query),
-          }) as any,
-          update,
-        )
+        for (const setexpr of makeArray(modifier.$set) as any[]) {
+          const [query, update] = setexpr.update ? [setexpr.where, setexpr.update] : [{}, setexpr]
+          await this.set(relation.table,
+            (r: any) => Eval.query(r, {
+              ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+              ...(typeof query === 'function' ? { $expr: query } : query),
+            }) as any,
+            update,
+          )
+        }
       } else if (relation.type === 'manyToMany') {
         throw new Error('set for manyToMany relation is not supported')
       }
@@ -737,11 +737,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (modifier.$disconnect) {
       if (relation.type === 'oneToMany') {
         await this.set(relation.table,
-          (r: any) => ({
-            $expr: true,
+          (r: any) => Eval.query(r, {
             ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
             ...(typeof modifier.$disconnect === 'function' ? { $expr: modifier.$disconnect } : modifier.$disconnect),
-          }) as any,
+          } as any),
           Object.fromEntries(relation.references.map((k, i) => [k, null])) as any,
         )
       } else if (relation.type === 'manyToMany') {
