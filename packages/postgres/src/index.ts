@@ -168,7 +168,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign } = table
-    const fields = { ...table.fields }
+    const fields = { ...table.avaiableFields() }
     const unique = [...table.unique]
     const create: string[] = []
     const update: string[] = []
@@ -177,7 +177,6 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     // field definitions
     for (const key in fields) {
       const { initial, nullable = true } = fields[key]!
-      if (!Field.available(fields[key])) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.column_name))
       let shouldUpdate = column?.column_name !== key
@@ -308,7 +307,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const { model, query, table, tables, ref } = sel
     const builder = new PostgresBuilder(this, tables)
     const filter = builder.parseQuery(query)
-    const { fields } = model
+    const fields = model.avaiableFields()
     if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
@@ -356,7 +355,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.fields).filter(key => Field.available(model.fields[key]))
+    const initFields = Object.keys(model.avaiableFields())
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]

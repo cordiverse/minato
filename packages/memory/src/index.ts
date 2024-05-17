@@ -156,10 +156,9 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
         throw new RuntimeError('duplicate-entry')
       }
     }
-    const copy = model.create(data)
-    store.push(copy)
+    store.push(clone(data))
     this.$save(table)
-    return clone(copy)
+    return clone(clone(data))
   }
 
   async upsert(sel: Selection.Mutable, data: any, keys: string[]) {
@@ -174,7 +173,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
         result.matched++
       } else {
         const data = executeUpdate(model.create(), update, ref)
-        await this.database.create(table, data).catch(noop)
+        await this.create(sel, data).catch(noop)
         result.inserted++
       }
     }

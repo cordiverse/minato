@@ -117,35 +117,41 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
     Object.entries(fields).forEach(([key, def]: [string, Relation.Definition]) => {
       if (!Relation.Type.includes(def.type)) return
-      const relation = Relation.parse(def), inverse = Relation.inverse(relation, name)
+      const [relation, inverse] = Relation.parse(def, key, model, this.tables[def.table ?? key])
       if (!this.tables[relation.table]) throw new Error(`relation table ${relation.table} does not exist`)
       ;(model.fields[key] ??= Field.parse('expr')).relation = relation
       if (def.target) {
         (this.tables[relation.table].fields[def.target] ??= Field.parse('expr')).relation = inverse
       }
 
-      if (relation.type !== 'manyToMany') return
-      const assocTable = Relation.buildAssociationTable(relation.table, name)
-      if (this.tables[assocTable]) return
-      const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]?.deftype] as const)
-      const references = relation.references.map((x, i) => [Relation.buildAssociationKey(x, relation.table), fields[i][1]] as const)
-      this.extend(assocTable as any, {
-        ...Object.fromEntries([...fields, ...references]),
-        [name]: {
-          type: 'manyToOne',
-          table: name,
-          fields: fields.map(x => x[0]),
-          references: relation.references,
-        },
-        [relation.table]: {
-          type: 'manyToOne',
-          table: relation.table,
-          fields: references.map(x => x[0]),
-          references: relation.fields,
-        },
-      } as any, {
-        primary: [...fields.map(x => x[0]), ...references.map(x => x[0])],
-      })
+      if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
+        relation.fields.forEach((x, i) => {
+          model.fields[x] ??= { ...this.tables[relation.table].fields[relation.references[i]] } as any
+          if (!relation.required) model.fields[x]!.nullable = true
+        })
+      } else if (relation.type === 'manyToMany') {
+        const assocTable = Relation.buildAssociationTable(relation.table, name)
+        if (this.tables[assocTable]) return
+        const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]?.deftype] as const)
+        const references = relation.references.map((x, i) => [Relation.buildAssociationKey(x, relation.table), fields[i][1]] as const)
+        this.extend(assocTable as any, {
+          ...Object.fromEntries([...fields, ...references]),
+          [name]: {
+            type: 'manyToOne',
+            table: name,
+            fields: fields.map(x => x[0]),
+            references: relation.references,
+          },
+          [relation.table]: {
+            type: 'manyToOne',
+            table: relation.table,
+            fields: references.map(x => x[0]),
+            references: relation.fields,
+          },
+        } as any, {
+          primary: [...fields.map(x => x[0]), ...references.map(x => x[0])],
+        })
+      }
     })
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
@@ -271,12 +277,18 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const rawquery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
     if (cursor) cursor = filterKeys(cursor, (key) => !!modelFields[key]?.relation)
-    for (const key in sel.query) {
+    for (const key in { ...sel.query, ...sel.query.$not }) {
       if (modelFields[key]?.relation && (!cursor || !Object.getOwnPropertyNames(cursor).includes(key))) {
         (cursor ??= {})[key] = true
       }
     }
+
     sel.query = omit(sel.query, Object.keys(cursor ?? {}))
+    if (Object.keys(sel.query.$not ?? {}).length) {
+      sel.query.$not = omit(sel.query.$not!, Object.keys(cursor ?? {}))
+      if (Object.keys(sel.query.$not).length === 0) Reflect.deleteProperty(sel.query, '$not')
+    }
+
     if (cursor && typeof cursor === 'object') {
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
       const extraFields: string[] = []
@@ -287,13 +299,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
-          const relquery = rawquery(sel.row)[key]
+          const relquery = rawquery(sel.row)[key] ?? (rawquery(sel.row).$not?.[key] ? { $not: rawquery(sel.row).$not?.[key] } : null)
           sel = !relquery ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
         } else if (relation.type === 'oneToMany') {
           sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
-          const relquery = rawquery(sel.row)[key]
+          const relquery = rawquery(sel.row)[key] ?? (rawquery(sel.row).$not?.[key] ? { $not: rawquery(sel.row).$not?.[key] } : null)
           sel = !relquery ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
           sel = whereOnly ? sel : sel.groupBy([
             ...Object.entries(modelFields).filter(([, field]) => Field.available(field)).map(([k]) => k),
@@ -307,7 +319,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { [relation.table]: cursor[key] } as any), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
           ), true)
-          const relquery = rawquery(sel.row)[key]
+          const relquery = rawquery(sel.row)[key] ?? (rawquery(sel.row).$not?.[key] ? { $not: rawquery(sel.row).$not?.[key] } : null)
           sel = !relquery ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
           sel = whereOnly ? sel : sel.groupBy([
             ...Object.entries(modelFields).filter(([, field]) => Field.available(field)).map(([k]) => k),
@@ -436,7 +448,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   async create<K extends Keys<S>>(table: K, data: Partial<Relation.Create<S[K]>>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const sel = this.select(table)
-    const { primary, autoInc } = sel.model
+    const { primary, autoInc, fields } = sel.model
     if (!autoInc) {
       const keys = makeArray(primary)
       if (keys.some(key => !(key in data))) {
@@ -448,24 +460,34 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     for (const key in data) {
       if (data[key] && this.tables[table].fields[key]?.relation) {
         const relation = this.tables[table].fields[key].relation
-        if (relation.type === 'oneToOne') {
+        if (relation.type === 'oneToOne' && relation.required) {
           const mergedData = { ...data[key] }
           for (const k in relation.fields) {
-            mergedData[relation.references[k]] = data[relation.fields[k]]
+            mergedData[relation.references[k]] = getCell(data, relation.fields[k])
           }
           tasks.push([relation.table, [mergedData], relation.references])
         } else if (relation.type === 'oneToMany' && Array.isArray(data[key])) {
           const mergedData = data[key].map(row => {
             const mergedData = { ...row }
             for (const k in relation.fields) {
-              mergedData[relation.references[k]] = data[relation.fields[k]]
+              mergedData[relation.references[k]] = getCell(data, relation.fields[k])
             }
             return mergedData
           })
 
           tasks.push([relation.table, mergedData])
         } else {
-          throw new Error(`field ${key} with ${relation.type} relation can not be used in create`)
+          // handle shadowed fields
+          data = {
+            ...omit(data, [key]),
+            ...Object.fromEntries(Object.entries(data[key]).map(([k, v]) => {
+              if (!fields[`${key}.${k}`]) {
+                throw new Error(`field ${key}.${k} does not exist`)
+              }
+              return [`${key}.${k}`, v]
+            })),
+          }
+          continue
         }
         data = omit(data, [key]) as any
       }
@@ -501,7 +523,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         for (const key in data) {
           if (data[key] && this.tables[table].fields[key]?.relation) {
             const relation = this.tables[table].fields[key].relation
-            if (relation.type === 'oneToOne') {
+            if (relation.type === 'oneToOne' && relation.required) {
               const mergedData = { ...data[key] }
               for (const k in relation.fields) {
                 mergedData[relation.references[k]] = data[relation.fields[k]]
@@ -522,7 +544,15 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
             ;(tasks[relation.table] ??= { table: relation.table, upsert: [] }).upsert.push(...mergedData)
             } else {
-              throw new Error(`field ${key} with ${relation.type} relation can not be used in create`)
+              // handle shadowed fields
+              data = {
+                ...omit(data, [key]),
+                ...Object.fromEntries(Object.entries(data[key]).map(([k, v]) => {
+                  if (!sel.model.fields[`${key}.${k}`]) throw new Error(`field ${key}.${k} does not exist`)
+                  return [`${key}.${k}`, v]
+                })),
+              }
+              continue
             }
             data = omit(data, [key]) as any
           }

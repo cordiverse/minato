@@ -153,7 +153,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign, autoInc } = table
-    const fields = { ...table.fields }
+    const fields = table.avaiableFields()
     const unique = [...table.unique]
     const create: string[] = []
     const update: string[] = []
@@ -162,7 +162,6 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     // field definitions
     for (const key in fields) {
       const { initial, nullable = true } = fields[key]!
-      if (!Field.available(fields[key])) continue
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.COLUMN_NAME))
       let shouldUpdate = column?.COLUMN_NAME !== key
@@ -397,7 +396,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const { model, query, table, tables, ref } = sel
     const builder = new MySQLBuilder(this, tables, this._compat)
     const filter = builder.parseQuery(query)
-    const { fields } = model
+    const fields = model.avaiableFields()
     if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
@@ -444,12 +443,12 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.fields).filter(key => Field.available(model.fields[key]))
+    const initFields = Object.keys(model.avaiableFields())
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
     let updateFields = difference(dataFields, keys)
-    if (!updateFields.length) updateFields = []
+    if (!updateFields.length) updateFields = dataFields.length ? [dataFields[0]] : []
 
     const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
     const createMultiFilter = (items: any[]) => {

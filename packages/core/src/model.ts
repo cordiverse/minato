@@ -1,4 +1,4 @@
-import { Binary, clone, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
+import { Binary, clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, isEvalExpr, Update } from './eval.ts'
 import { AtomicTypes, FlatKeys, Flatten, Keys, Row, unravel, Values } from './utils.ts'
@@ -24,14 +24,15 @@ export namespace Relation {
     table: T
     references: Keys<S[T]>[]
     fields: K[]
+    required: boolean
   }
 
   export interface Definition<K extends string = string> {
-    type: Type
-    table: string
+    type: 'oneToOne' | 'manyToOne' | 'manyToMany'
+    table?: string
     target?: string
-    references: MaybeArray<string>
-    fields: MaybeArray<K>
+    references?: MaybeArray<string>
+    fields?: MaybeArray<K>
   }
 
   type UnArray<T> = T extends (infer I)[] ? I : T
@@ -70,24 +71,28 @@ export namespace Relation {
     return `${table}_${key}`
   }
 
-  export function parse(def: Definition): Config {
-    return {
+  export function parse(def: Definition, key: string, model: Model, relmodel: Model): [Config, Config] {
+    const fields = def.fields ?? ((model.name === relmodel.name || def.type === 'manyToOne'
+      || (def.type === 'oneToOne' && !makeArray(relmodel.primary).every(key => !relmodel.fields[key]?.nullable)))
+      ? makeArray(relmodel.primary).map(x => `${key}.${x}`) : model.primary)
+    const relation: Config = {
       type: def.type,
-      table: def.table,
-      fields: makeArray(def.fields),
-      references: makeArray(def.references),
+      table: def.table ?? relmodel.name,
+      fields: makeArray(fields),
+      references: makeArray(def.references ?? relmodel.primary),
+      required: model.name !== relmodel.name && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
     }
-  }
-
-  export function inverse(relation: Config, table: string): Config {
-    return {
+    const inverse: Config = {
       type: relation.type === 'oneToMany' ? 'manyToOne'
         : relation.type === 'manyToOne' ? 'oneToMany'
           : relation.type,
-      table,
+      table: model.name,
       fields: relation.references,
       references: relation.fields,
+      required: relation.required ? false
+        : (model.name !== relmodel.name && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key))),
     }
+    return [relation, inverse]
   }
 }
 
@@ -219,7 +224,7 @@ export namespace Field {
   }
 
   export function available(field?: Field) {
-    return field && !field.deprecated && !field.relation
+    return !!field && !field.deprecated && !field.relation
   }
 }
 
@@ -328,7 +333,7 @@ export class Model<S = any> {
   }
 
   format(source: object, strict = true, prefix = '', result = {} as S) {
-    const fields = Object.keys(this.fields)
+    const fields = Object.keys(this.fields).filter(key => !this.fields[key].relation)
     Object.entries(source).map(([key, value]) => {
       key = prefix + key
       if (value === undefined) return
@@ -351,7 +356,7 @@ export class Model<S = any> {
   }
 
   parse(source: object, strict = true, prefix = '', result = {} as S) {
-    const fields = Object.keys(this.fields)
+    const fields = Object.keys(this.fields).filter(key => !this.fields[key].relation)
     if (strict && prefix === '') {
       // initialize object layout
       Object.assign(result as any, unravel(Object.fromEntries(fields
@@ -396,6 +401,10 @@ export class Model<S = any> {
       }
     }
     return this.parse({ ...result, ...data })
+  }
+
+  avaiableFields() {
+    return filterKeys(this.fields, (_, field) => Field.available(field))
   }
 
   getType(): Type<S>

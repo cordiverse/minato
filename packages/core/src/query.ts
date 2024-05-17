@@ -146,9 +146,13 @@ export function executeQuery(data: any, query: Query.Expr, ref: string, env: any
 
     // execute field query
     try {
-      return executeFieldQuery(value, data[key])
+      return executeFieldQuery(value, getCell(data, key))
     } catch {
       return false
     }
   })
+}
+
+function getCell(row: any, key: any): any {
+  return key.split('.').reduce((r, k) => r[k], row)
 }

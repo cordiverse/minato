@@ -57,7 +57,7 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
         .map(([k, field]) => [k.slice(prefix.length + key.length + 1), Type.fromField(field!)])))
     } else {
       // unknown field inside json
-      type = Type.fromField('expr')
+      type = model?.getType(`${prefix}${key}`) ?? Type.fromField('expr')
     }
 
     const row = createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
@@ -252,7 +252,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     optional: boolean = false,
   ): Selection<S & { [P in K]: U}> {
     const fields = Object.fromEntries(Object.entries(this.model.fields)
-      .filter(([, field]) => Field.available(field))
+      .filter(([key, field]) => Field.available(field) && !key.startsWith(name + '.'))
       .map(([key]) => [key, (row) => key.split('.').reduce((r, k) => r[k], row[this.ref])]))
     if (optional) {
       return this.driver.database

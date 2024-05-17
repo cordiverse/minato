@@ -46,6 +46,7 @@ export class PostgresBuilder extends Builder {
 
     this.evalOperators = {
       ...this.evalOperators,
+      $select: (args) => `${args.map(arg => this.parseEval(arg, this.getLiteralType(arg))).join(', ')}`,
       $if: (args) => {
         const type = this.getLiteralType(args[1]) ?? this.getLiteralType(args[2]) ?? 'text'
         return `(SELECT CASE WHEN ${this.parseEval(args[0], 'boolean')} THEN ${this.parseEval(args[1], type)} ELSE ${this.parseEval(args[2], type)} END)`

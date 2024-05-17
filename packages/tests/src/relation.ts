@@ -7,20 +7,18 @@ interface User {
   value?: number
   profile?: Relation<Profile>
   posts?: Relation<Post[]>
-  successorId?: number
-  successor?: Relation
+  successor?: Relation<{ id: number }>
 }
 
 interface Profile {
+  id: number
   name?: string
-  userId: number
   user?: Relation<User>
 }
 
 interface Post {
   id: number
   score?: number
-  authorId?: number
   author?: Relation<User>
   content?: string
 
@@ -51,49 +49,35 @@ interface Tables {
 }
 
 function RelationTests(database: Database<Tables>) {
+  database.extend('profile', {
+    id: 'unsigned',
+    name: 'string',
+  })
+
   database.extend('user', {
     id: 'unsigned',
     value: 'integer',
-    successorId: {
-      type: 'unsigned',
-      nullable: true,
-    },
     successor: {
       type: 'oneToOne',
       table: 'user',
-      target: 'predecessor',
-      fields: 'successorId',
-      references: 'id',
+    },
+    profile: {
+      type: 'oneToOne',
+      table: 'profile',
+      target: 'user',
     },
   }, {
     autoInc: true,
-  })
-
-  database.extend('profile', {
-    name: 'string',
-    userId: 'unsigned',
-    user: {
-      type: 'oneToOne',
-      table: 'user',
-      target: 'profile',
-      fields: 'userId',
-      references: 'id',
-    },
-  }, {
-    primary: 'userId',
   })
 
   database.extend('post', {
     id: 'unsigned',
     score: 'unsigned',
     content: 'string',
-    authorId: 'unsigned',
     author: {
       type: 'manyToOne',
       table: 'user',
       target: 'posts',
-      fields: 'authorId',
-      references: 'id',
     },
   }, {
     autoInc: true,
@@ -106,8 +90,6 @@ function RelationTests(database: Database<Tables>) {
       type: 'manyToMany',
       table: 'post',
       target: 'tags',
-      fields: 'id',
-      references: 'id',
     },
   }, {
     autoInc: true,
@@ -122,14 +104,12 @@ function RelationTests(database: Database<Tables>) {
       table: 'post',
       target: '_tags',
       fields: 'postId',
-      references: 'id',
     },
     tag: {
       type: 'manyToOne',
       table: 'tag',
       target: '_posts',
       fields: 'tagId',
-      references: 'id',
     },
   }, {
     primary: ['postId', 'tagId'],
@@ -150,20 +130,20 @@ function RelationTests(database: Database<Tables>) {
 namespace RelationTests {
   const userTable: User[] = [
     { id: 1, value: 0 },
-    { id: 2, value: 1, successorId: 1 },
+    { id: 2, value: 1, successor: { id: 1 } },
     { id: 3, value: 2 },
   ]
 
   const profileTable: Profile[] = [
-    { userId: 1, name: 'Apple' },
-    { userId: 2, name: 'Banana' },
-    { userId: 3, name: 'Cat' },
+    { id: 1, name: 'Apple' },
+    { id: 2, name: 'Banana' },
+    { id: 3, name: 'Cat' },
   ]
 
   const postTable: Post[] = [
-    { id: 1, content: 'A1', authorId: 1 },
-    { id: 2, content: 'B2', authorId: 1 },
-    { id: 3, content: 'C3', authorId: 2 },
+    { id: 1, content: 'A1', author: { id: 1 } },
+    { id: 2, content: 'B2', author: { id: 1 } },
+    { id: 3, content: 'C3', author: { id: 2 } },
   ]
 
   const tagTable: Tag[] = [
@@ -194,22 +174,22 @@ namespace RelationTests {
 
       await expect(database.get('profile', {}, ['user'])).to.eventually.have.shape(
         profiles.map(profile => ({
-          user: users.find(user => user.id === profile.userId),
+          user: users.find(user => user.id === profile.id),
         })),
       )
 
       await expect(database.select('user', {}, { profile: true, posts: true }).execute()).to.eventually.have.shape(
         users.map(user => ({
           ...user,
-          profile: profiles.find(profile => profile.userId === user.id),
-          posts: posts.filter(post => post.authorId === user.id),
+          profile: profiles.find(profile => profile.id === user.id),
+          posts: posts.filter(post => post.author?.id === user.id),
         })),
       )
 
       await expect(database.select('post', {}, { author: true }).execute()).to.eventually.have.shape(
         posts.map(post => ({
           ...post,
-          author: users.find(user => user.id === post.authorId),
+          author: users.find(user => user.id === post.author?.id),
         })),
       )
     })
@@ -220,7 +200,7 @@ namespace RelationTests {
       await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape(
         users.map(user => ({
           ...user,
-          successor: users.find(successor => successor.id === user.successorId),
+          successor: users.find(successor => successor.id === user.successor?.id),
         })),
       )
     })
@@ -233,9 +213,9 @@ namespace RelationTests {
       await expect(database.select('user', {}, { posts: { author: true } }).execute()).to.eventually.have.shape(
         users.map(user => ({
           ...user,
-          posts: posts.filter(post => post.authorId === user.id).map(post => ({
+          posts: posts.filter(post => post.author?.id === user.id).map(post => ({
             ...post,
-            author: users.find(user => user.id === post.authorId),
+            author: users.find(user => user.id === post.author?.id),
           })),
         })),
       )
@@ -244,10 +224,10 @@ namespace RelationTests {
         profiles.map(profile => ({
           ...profile,
           user: {
-            ...(users.find(user => user.id === profile.userId)),
-            posts: posts.filter(post => post.authorId === profile.userId).map(post => ({
+            ...(users.find(user => user.id === profile.id)),
+            posts: posts.filter(post => post.author?.id === profile.id).map(post => ({
               ...post,
-              author: users.find(user => user.id === profile.userId),
+              author: users.find(user => user.id === profile.id),
             })),
           },
         })),
@@ -257,8 +237,8 @@ namespace RelationTests {
         posts.map(post => ({
           ...post,
           author: {
-            ...users.find(user => user.id === post.authorId),
-            profile: profiles.find(profile => profile.userId === post.authorId),
+            ...users.find(user => user.id === post.author?.id),
+            profile: profiles.find(profile => profile.id === post.author?.id),
           },
         })),
       )
@@ -301,18 +281,20 @@ namespace RelationTests {
 
       await expect(database.get('user', {
         profile: {
-          userId: 1,
+          user: {
+            id: 1,
+          },
         },
       })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
         ...user,
-        profile: profiles.find(profile => profile.userId === user.id),
+        profile: profiles.find(profile => profile.id === user.id),
       })))
 
       await expect(database.get('user', row => $.query(row, {
-        profile: r => $.eq(r.userId, row.id),
+        profile: r => $.eq(r.id, row.id),
       }))).to.eventually.have.shape(users.map(user => ({
         ...user,
-        profile: profiles.find(profile => profile.userId === user.id),
+        profile: profiles.find(profile => profile.id === user.id),
       })))
 
       await expect(database.get('user', {
@@ -323,14 +305,14 @@ namespace RelationTests {
         },
       })).to.eventually.have.shape(users.slice(1, 2).map(user => ({
         ...user,
-        profile: profiles.find(profile => profile.userId === user.id),
+        profile: profiles.find(profile => profile.id === user.id),
       })))
 
       await expect(database.get('post', {
         author: 1,
       })).to.eventually.have.shape(posts.map(post => ({
         ...post,
-        author: users.find(user => post.authorId === user.id),
+        author: users.find(user => post.author?.id === user.id),
       })).filter(post => post.author?.id === 1))
     })
 
@@ -342,12 +324,14 @@ namespace RelationTests {
       await expect(database.get('user', {
         posts: {
           $some: {
-            authorId: 1,
+            author: {
+              id: 1,
+            },
           },
         },
       })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
         ...user,
-        posts: posts.filter(post => post.authorId === user.id),
+        posts: posts.filter(post => post.author?.id === user.id),
       })))
 
       await expect(database.get('user', {
@@ -356,29 +340,33 @@ namespace RelationTests {
         },
       })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
         ...user,
-        posts: posts.filter(post => post.authorId === user.id),
+        posts: posts.filter(post => post.author?.id === user.id),
       })))
 
       await expect(database.get('user', {
         posts: {
           $none: {
-            authorId: 1,
+            author: {
+              id: 1,
+            },
           },
         },
       })).to.eventually.have.shape(users.slice(1).map(user => ({
         ...user,
-        posts: posts.filter(post => post.authorId === user.id),
+        posts: posts.filter(post => post.author?.id === user.id),
       })))
 
       await expect(database.get('user', {
         posts: {
           $every: {
-            authorId: 1,
+            author: {
+              id: 1,
+            },
           },
         },
       })).to.eventually.have.shape([users[0], users[2]].map(user => ({
         ...user,
-        posts: posts.filter(post => post.authorId === user.id),
+        posts: posts.filter(post => post.author?.id === user.id),
       })))
     })
 
@@ -469,7 +457,7 @@ namespace RelationTests {
         },
       })).to.eventually.have.shape([users[0]].map(user => ({
         ...user,
-        posts: posts.filter(post => post.authorId === user.id),
+        posts: posts.filter(post => post.author?.id === user.id),
       })))
 
       await expect(database.get('tag', {
@@ -495,7 +483,7 @@ namespace RelationTests {
       await expect(database.get('user', { id: 2 }, ['id', 'profile'])).to.eventually.have.shape(
         [users[1]].map(user => ({
           id: user.id,
-          profile: profiles.find(profile => user.id === profile.userId),
+          profile: profiles.find(profile => user.id === profile.id),
         })),
       )
     })
@@ -507,28 +495,28 @@ namespace RelationTests {
       await setup(database, 'profile', [])
       await setup(database, 'post', [])
 
-      for (const profile of profileTable) {
-        await expect(database.create('profile', {
-          ...profile,
-          user: {
-            ...userTable.find(user => profile.userId === user.id)!,
-            posts: postTable.filter(post => post.authorId === profile.userId),
+      for (const user of userTable) {
+        await expect(database.create('user', {
+          ...user,
+          profile: {
+            ...profileTable.find(profile => profile.id === user.id)!,
           },
-        })).to.eventually.have.shape(profile)
+          posts: postTable.filter(post => post.author?.id === user.id),
+        })).to.eventually.have.shape(user)
       }
 
       await expect(database.select('profile', {}, { user: true }).execute()).to.eventually.have.shape(
         profileTable.map(profile => ({
           ...profile,
-          user: userTable.find(user => user.id === profile.userId),
+          user: userTable.find(user => user.id === profile.id),
         })),
       )
 
       await expect(database.select('user', {}, { profile: true, posts: true }).execute()).to.eventually.have.shape(
         userTable.map(user => ({
           ...user,
-          profile: profileTable.find(profile => profile.userId === user.id),
-          posts: postTable.filter(post => post.authorId === user.id),
+          profile: profileTable.find(profile => profile.id === user.id),
+          posts: postTable.filter(post => post.author?.id === user.id),
         })),
       )
     })
@@ -541,14 +529,14 @@ namespace RelationTests {
       for (const user of userTable) {
         await database.create('user', {
           ...userTable.find(u => u.id === user.id)!,
-          posts: postTable.filter(post => post.authorId === user.id),
+          posts: postTable.filter(post => post.author?.id === user.id),
         })
       }
 
       await expect(database.select('user', {}, { posts: true }).execute()).to.eventually.have.shape(
         userTable.map(user => ({
           ...user,
-          posts: postTable.filter(post => post.authorId === user.id),
+          posts: postTable.filter(post => post.author?.id === user.id),
         })),
       )
     })
@@ -568,7 +556,7 @@ namespace RelationTests {
       })
       await expect(database.get('profile', {})).to.eventually.have.deep.members(profiles)
 
-      profiles.push(database.tables['profile'].create({ userId: 3, name: 'Reborn' }))
+      profiles.push(database.tables['profile'].create({ id: 3, name: 'Reborn' }))
       await database.set('user', 3, {
         profile: {
           name: 'Reborn',
@@ -599,14 +587,14 @@ namespace RelationTests {
       for (const user of userTable) {
         await database.upsert('user', [{
           ...userTable.find(u => u.id === user.id)!,
-          profile: profileTable.find(profile => profile.userId === user.id),
+          profile: profileTable.find(profile => profile.id === user.id),
         }] as any)
       }
 
       await expect(database.select('user', {}, { profile: true }).execute()).to.eventually.have.shape(
         userTable.map(user => ({
           ...user,
-          profile: profileTable.find(profile => profile.userId === user.id),
+          profile: profileTable.find(profile => profile.id === user.id),
         })),
       )
     })
@@ -616,8 +604,8 @@ namespace RelationTests {
       await setup(database, 'profile', profileTable)
       const posts = await setup(database, 'post', postTable)
 
-      posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post1' }))
-      posts.push(database.tables['post'].create({ id: posts.length + 1, authorId: 2, content: 'post2' }))
+      posts.push(database.tables['post'].create({ id: posts.length + 1, author: { id: 2 }, content: 'post1' }))
+      posts.push(database.tables['post'].create({ id: posts.length + 1, author: { id: 2 }, content: 'post2' }))
 
       await database.set('user', 2, {
         posts: {
@@ -629,7 +617,7 @@ namespace RelationTests {
       })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
-      posts.push(database.tables['post'].create({ id: 101, authorId: 1, content: 'post101' }))
+      posts.push(database.tables['post'].create({ id: 101, author: { id: 1 }, content: 'post101' }))
       await database.set('user', 1, row => ({
         value: $.add(row.id, 98),
         posts: {
@@ -768,14 +756,6 @@ namespace RelationTests {
       await setup(database, 'user', userTable)
       await setup(database, 'post', postTable)
       await setup(database, 'tag', tagTable)
-
-      await expect(database.create('post', {
-        tags: [],
-      })).to.eventually.be.rejected
-
-      await expect(database.upsert('post', [
-        { tags: [] },
-      ])).to.eventually.be.rejected
 
       await expect(database.set('post', 1, {
         tags: [],

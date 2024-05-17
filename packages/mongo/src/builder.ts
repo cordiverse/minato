@@ -474,6 +474,7 @@ export class Builder {
     } else {
       const $project: Dict = { _id: 0 }
       for (const key in model.fields) {
+        if (!Field.available(model.fields[key])) continue
         $project[key] = key === this.virtualKey ? '$_id' : 1
       }
       stages.push({ $project })
