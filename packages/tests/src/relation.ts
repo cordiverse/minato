@@ -680,6 +680,14 @@ namespace RelationTests {
         posts: posts.slice(0, 2),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+
+      posts[0].score = 4
+      posts[1].score = 5
+      await database.upsert('user', [{
+        id: 1,
+        posts: posts.slice(0, 2),
+      }])
+      await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
 
     ignoreNullObject && it('connect / disconnect oneToMany', async () => {
