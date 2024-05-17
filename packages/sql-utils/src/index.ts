@@ -400,7 +400,7 @@ export class Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return this.asEncoded(`(${obj} -> '$${path}')`, true)
+    return this.asEncoded(`json_extract(${obj}, '$${path}')`, true)
   }
 
   protected transformKey(key: string, fields: Field.Config, prefix: string) {
