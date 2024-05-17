@@ -35,7 +35,7 @@ export class MySQLBuilder extends Builder {
 
     this.evalOperators.$select = (args) => {
       if (compat.maria || compat.mysql57) {
-        return `json_object(${args.map(arg => this.parseEval(arg)).flatMap((x, i) => [`${i}`, x]).join(', ')})`
+        return this.asEncoded(`json_object(${args.map(arg => this.parseEval(arg, false)).flatMap((x, i) => [`${i}`, x]).join(', ')})`, true)
       } else {
         return `${args.map(arg => this.parseEval(arg, false)).join(', ')}`
       }

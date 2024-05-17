@@ -173,8 +173,8 @@ export class Builder {
       $lte: this.binary('<='),
 
       // membership
-      $in: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ''), false),
-      $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ' NOT'), false),
+      $in: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key, false), value, ''), false),
+      $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key, false), value, ' NOT'), false),
 
       // typecast
       $literal: ([value, type]) => this.escape(value, type as any),
@@ -400,7 +400,7 @@ export class Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return this.asEncoded(`json_extract(${obj}, '$${path}')`, true)
+    return this.asEncoded(`(${obj} -> '$${path}')`, true)
   }
 
   protected transformKey(key: string, fields: Field.Config, prefix: string) {
