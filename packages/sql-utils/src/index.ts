@@ -267,9 +267,11 @@ export class Builder {
     const restore = this.saveState({ tables })
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
+    const fields = expr['$select']?.map(x => this.getRecursive(x['$']))
+    const where = fields && this.logicalAnd(fields.map(x => `(${x} is not null)`))
     restore()
     if (inline || !isAggrExpr(expr as any)) {
-      return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+      return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''}${where ? ` WHERE ${where}` : ''})`
     } else {
       return [
         `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,

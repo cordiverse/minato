@@ -127,7 +127,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
         relation.fields.forEach((x, i) => {
           model.fields[x] ??= { ...this.tables[relation.table].fields[relation.references[i]] } as any
-          if (!relation.required) model.fields[x]!.nullable = true
+          if (!relation.required) {
+            model.fields[x]!.nullable = true
+            model.fields[x]!.initial = null
+          }
         })
       } else if (relation.type === 'manyToMany') {
         const assocTable = Relation.buildAssociationTable(relation.table, name)
@@ -273,13 +276,31 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   select(table: any, query?: any, cursor?: any) {
     let sel = new Selection(this.getDriver(table), table, query)
     if (typeof table !== 'string') return sel
-    const whereOnly = cursor === null
+    const whereOnly = cursor === null, skipQuery: string[] = []
     const rawquery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
     if (cursor) cursor = filterKeys(cursor, (key) => !!modelFields[key]?.relation)
     for (const key in { ...sel.query, ...sel.query.$not }) {
-      if (modelFields[key]?.relation && (!cursor || !Object.getOwnPropertyNames(cursor).includes(key))) {
-        (cursor ??= {})[key] = true
+      if (modelFields[key]?.relation) {
+        if (sel.query[key] === null && !modelFields[key].relation.required) {
+          sel.query[key] = Object.fromEntries(modelFields[key]!.relation!.references.map(k => [k, null]))
+        }
+        if (sel.query[key] && typeof sel.query[key] !== 'function' && typeof sel.query[key] === 'object'
+          && Object.keys(sel.query[key]).every(x => modelFields[key]!.relation!.fields.includes(`${key}.${x}`))) {
+          Object.entries(sel.query[key]).forEach(([k, v]) => sel.query[`${key}.${k}`] = v)
+          skipQuery.push(key)
+        }
+        if (sel.query.$not?.[key] === null && !modelFields[key].relation.required) {
+          sel.query.$not[key] = Object.fromEntries(modelFields[key]!.relation!.references.map(k => [k, null]))
+        }
+        if (sel.query.$not?.[key] && typeof sel.query.$not[key] !== 'function' && typeof sel.query.$not[key] === 'object'
+          && Object.keys(sel.query.$not[key]).every(x => modelFields[key]!.relation!.fields.includes(`${key}.${x}`))) {
+          Object.entries(sel.query.$not[key]).forEach(([k, v]) => sel.query.$not![`${key}.${k}`] = v)
+          skipQuery.push(key)
+        }
+        if (!cursor || !Object.getOwnPropertyNames(cursor).includes(key)) {
+          (cursor ??= {})[key] = true
+        }
       }
     }
 
@@ -292,6 +313,14 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (cursor && typeof cursor === 'object') {
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
       const extraFields: string[] = []
+      const applyQuery = (sel: Selection, key: string) => {
+        if (skipQuery.includes(key)) return sel
+        const query2 = rawquery(sel.row)
+        const relquery = query2[key] !== undefined ? query2[key]
+          : query2.$not?.[key] !== undefined ? { $not: query2.$not?.[key] }
+            : undefined
+        return relquery === undefined ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
+      }
       for (const key in cursor) {
         if (!cursor[key] || !modelFields[key]?.relation) continue
         const relation: Relation.Config<S> = modelFields[key]!.relation as any
@@ -299,14 +328,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
-          const relquery = rawquery(sel.row)[key] ?? (rawquery(sel.row).$not?.[key] ? { $not: rawquery(sel.row).$not?.[key] } : null)
-          sel = !relquery ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
+          sel = applyQuery(sel, key)
         } else if (relation.type === 'oneToMany') {
           sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
-          const relquery = rawquery(sel.row)[key] ?? (rawquery(sel.row).$not?.[key] ? { $not: rawquery(sel.row).$not?.[key] } : null)
-          sel = !relquery ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
+          sel = applyQuery(sel, key)
           sel = whereOnly ? sel : sel.groupBy([
             ...Object.entries(modelFields).filter(([, field]) => Field.available(field)).map(([k]) => k),
             ...extraFields,
@@ -319,8 +346,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { [relation.table]: cursor[key] } as any), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
           ), true)
-          const relquery = rawquery(sel.row)[key] ?? (rawquery(sel.row).$not?.[key] ? { $not: rawquery(sel.row).$not?.[key] } : null)
-          sel = !relquery ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
+          sel = applyQuery(sel, key)
           sel = whereOnly ? sel : sel.groupBy([
             ...Object.entries(modelFields).filter(([, field]) => Field.available(field)).map(([k]) => k),
             ...extraFields,
@@ -669,10 +695,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const relation: Relation.Config<S> = this.tables[table].fields[key]!.relation! as any
     const results: Eval.Expr<boolean>[] = []
     if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
-      results.push(Eval.in(
-        relation.fields.map(x => row[x]),
-        this.select(relation.table, query as any).evaluate(relation.references),
-      ))
+      if (query === null) {
+        results.push(Eval.nin(
+          relation.fields.map(x => row[x]),
+          this.select(relation.table).evaluate(relation.references),
+        ))
+      } else {
+        results.push(Eval.in(
+          relation.fields.map(x => row[x]),
+          this.select(relation.table, query as any).evaluate(relation.references),
+        ))
+      }
     } else if (relation.type === 'oneToMany') {
       if (query.$some) {
         results.push(Eval.in(

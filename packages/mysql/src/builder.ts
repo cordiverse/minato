@@ -184,11 +184,13 @@ export class MySQLBuilder extends Builder {
     const restore = this.saveState({ wrappedSubquery: true, tables })
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
+    const fields = expr['$select']?.map(x => this.getRecursive(x['$']))
+    const where = fields && this.logicalAnd(fields.map(x => `(${x} is not null)`))
     const refFields = this.state.refFields
     restore()
     let query: string
     if (inline || !isAggrExpr(expr as any)) {
-      query = `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+      query = `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''}${where ? ` WHERE ${where}` : ''})`
     } else {
       query = [
         `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,

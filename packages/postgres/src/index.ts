@@ -360,7 +360,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
     let updateFields = difference(dataFields, keys)
-    if (!updateFields.length) updateFields = []
+    if (!updateFields.length) updateFields = dataFields.length ? [dataFields[0]] : []
 
     const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
     const createMultiFilter = (items: any[]) => {

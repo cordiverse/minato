@@ -80,7 +80,8 @@ export namespace Relation {
       table: def.table ?? relmodel.name,
       fields: makeArray(fields),
       references: makeArray(def.references ?? relmodel.primary),
-      required: model.name !== relmodel.name && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
+      required: def.type !== 'manyToOne' && model.name !== relmodel.name
+        && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
     }
     const inverse: Config = {
       type: relation.type === 'oneToMany' ? 'manyToOne'
@@ -89,8 +90,8 @@ export namespace Relation {
       table: model.name,
       fields: relation.references,
       references: relation.fields,
-      required: relation.required ? false
-        : (model.name !== relmodel.name && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key))),
+      required: relation.type !== 'oneToMany' && !relation.required
+        && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key)),
     }
     return [relation, inverse]
   }
@@ -345,7 +346,7 @@ export class Model<S = any> {
       if (field) {
         result[key] = value
       } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
-        if (strict) {
+        if (strict && (typeof value !== 'object' || Object.keys(value).length)) {
           throw new TypeError(`unknown field "${key}" in model ${this.name}`)
         }
       } else {

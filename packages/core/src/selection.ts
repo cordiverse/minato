@@ -89,7 +89,7 @@ class Executable<S = any, T = any> {
       const expr = query(this.row)
       return expr['$expr'] ? expr : isEvalExpr(expr) ? { $expr: expr } : expr
     }
-    if (Array.isArray(query) || query instanceof RegExp || ['string', 'number'].includes(typeof query)) {
+    if (Array.isArray(query) || query instanceof RegExp || ['string', 'number', 'bigint'].includes(typeof query)) {
       const { primary } = this.model
       if (Array.isArray(primary)) {
         throw new TypeError('invalid shorthand for composite primary key')

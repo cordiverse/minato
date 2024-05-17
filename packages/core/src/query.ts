@@ -65,7 +65,8 @@ export namespace Query {
   export type Callback<T = any> = (row: Row<T>) => Expr<Flatten<T>>
 
   export type Expr<T = any> = LogicalExpr<T> & {
-    [K in keyof T]?: null | (T[K] extends Relation<infer I> | undefined ? I extends any[] ? Field<T[K]> : Query<I> : Field<T[K]>)
+    [K in keyof T]?: null | (T[K] extends Relation<infer I> | undefined ? I extends any[] ? Field<T[K]>
+      : Query.Expr<Flatten<I>> | Selection.Callback<I, boolean> : Field<T[K]>)
   }
 }
 

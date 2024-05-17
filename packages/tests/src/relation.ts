@@ -8,6 +8,7 @@ interface User {
   profile?: Relation<Profile>
   posts?: Relation<Post[]>
   successor?: Relation<{ id: number }>
+  predecessor?: Relation<{ id: number }>
 }
 
 interface Profile {
@@ -60,6 +61,7 @@ function RelationTests(database: Database<Tables>) {
     successor: {
       type: 'oneToOne',
       table: 'user',
+      target: 'predecessor',
     },
     profile: {
       type: 'oneToOne',
@@ -309,7 +311,9 @@ namespace RelationTests {
       })))
 
       await expect(database.get('post', {
-        author: 1,
+        author: {
+          id: 1,
+        },
       })).to.eventually.have.shape(posts.map(post => ({
         ...post,
         author: users.find(user => post.author?.id === user.id),
@@ -486,6 +490,48 @@ namespace RelationTests {
           profile: profiles.find(profile => user.id === profile.id),
         })),
       )
+    })
+
+    it('existence', async () => {
+      await setup(database, 'user', userTable)
+      await setup(database, 'profile', profileTable)
+      await setup(database, 'post', postTable)
+
+      await expect(database.select('user', { successor: null }, null).execute()).to.eventually.have.shape([
+        { id: 1 },
+        { id: 3 },
+      ])
+
+      await expect(database.select('user', { predecessor: null }, null).execute()).to.eventually.have.shape([
+        { id: 2 },
+        { id: 3 },
+      ])
+
+      await database.set('user', 1, { profile: null })
+      await expect(database.select('user', { profile: null }, null).execute()).to.eventually.have.shape([
+        { id: 1 },
+      ])
+
+      await database.set('user', 2, {
+        posts: {
+          $disconnect: {
+            id: 3,
+          },
+        },
+      })
+      await expect(database.select('post', { author: null }, null).execute()).to.eventually.have.shape([
+        { id: 3 },
+      ])
+      await expect(database.select('user', {
+        posts: {
+          $every: {
+            author: null,
+          },
+        },
+      }, null).execute()).to.eventually.have.shape([
+        { id: 2 },
+        { id: 3 },
+      ])
     })
   }
 
