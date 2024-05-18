@@ -1,5 +1,5 @@
 import { defineProperty, isNullable, mapValues } from 'cosmokit'
-import { Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row } from './utils.ts'
+import { AtomicTypes, Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Field, Relation } from './model.ts'
 import { Query } from './query.ts'
@@ -24,18 +24,18 @@ export function hasSubquery(value: any): boolean {
   })
 }
 
+type UnevalObject<S> = {
+  [K in keyof S]?: (undefined extends S[K] ? null : never) | Uneval<Exclude<S[K], undefined>, boolean>
+}
+
 export type Uneval<U, A extends boolean> =
-  | U extends (infer T extends object)[] ? Relation.Modifier<T> | T[]
-  : U extends object ? Eval.Term<Partial<U>, A>
-  : U extends number ? Eval.Term<number, A>
-  : U extends string ? Eval.Term<string, A>
-  : U extends boolean ? Eval.Term<boolean, A>
-  : U extends Date ? Eval.Term<Date, A>
-  : U extends RegExp ? Eval.Term<RegExp, A>
+  | U extends Values<AtomicTypes> ? Eval.Term<U, A>
+  : U extends (infer T extends object)[] ? Relation.Modifier<T> | Eval.Array<T, A>
+  : U extends object ? Eval.Expr<U, A> | UnevalObject<Flatten<U>>
   : any
 
 export type Eval<U> =
-  | U extends Comparable ? U
+  | U extends Values<AtomicTypes> ? U
   : U extends Eval.Expr<infer T> ? T
   : never
 
@@ -328,11 +328,7 @@ Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(
 
 export { Eval as $ }
 
-type MapUneval<S> = {
-  [K in keyof S]?: null | Uneval<Exclude<S[K], undefined>, boolean>
-}
-
-export type Update<T = any> = MapUneval<Flatten<T>>
+export type Update<T = any> = UnevalObject<Flatten<T>>
 
 function getRecursive(args: string | string[], data: any): any {
   if (typeof args === 'string') {

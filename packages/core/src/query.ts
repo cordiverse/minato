@@ -62,12 +62,12 @@ export namespace Query {
 
   export type Field<T = any> = FieldExpr<T> | Shorthand<T>
 
-  type NonNullableExpr<T> = T extends Values<AtomicTypes> | any[] ? Field<T> : T extends object
+  type NonNullExpr<T> = T extends Values<AtomicTypes> | any[] ? Field<T> : T extends object
     ? Expr<Flatten<T>> | Selection.Callback<T, boolean>
     : Field<T>
 
   export type Expr<T = any> = LogicalExpr<T> & {
-    [K in keyof T]?: (undefined extends T[K] ? null : never) | NonNullableExpr<Exclude<T[K], undefined>>
+    [K in keyof T]?: (undefined extends T[K] ? null : never) | NonNullExpr<Exclude<T[K], undefined>>
   }
 }
 
