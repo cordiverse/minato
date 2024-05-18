@@ -1,7 +1,7 @@
 import { Binary, clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, isEvalExpr, Update } from './eval.ts'
-import { AtomicTypes, FlatKeys, Flatten, Keys, Row, unravel, Values } from './utils.ts'
+import { DeepPartial, FlatKeys, Flatten, Keys, Row, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 import { Query } from './query.ts'
@@ -9,8 +9,6 @@ import { Selection } from './selection.ts'
 
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
-
-export type Relation<T extends object = object> = Partial<T> & Relation.Marker
 
 export namespace Relation {
   const Marker = Symbol('minato.relation')
@@ -35,20 +33,9 @@ export namespace Relation {
     fields?: MaybeArray<K>
   }
 
-  type UnArray<T> = T extends (infer I)[] ? I : T
-
-  export type Include<S> = boolean | {
-    [P in Keys<S, Relation>]?: S[P] extends Relation<infer T> | undefined ? Include<UnArray<T>> : never
+  export type Include<T, S> = boolean | {
+    [P in keyof T]?: T[P] extends MaybeArray<infer U extends S> | undefined ? Include<U, S> : never
   }
-
-  export type Create<S> = S
-    | (S extends Values<AtomicTypes> ? never
-    : S extends Relation<(infer T)[]> ? Partial<Create<T>>[]
-    : S extends Relation<infer T> ? Partial<Create<T>>
-    : S extends any[] ? never
-    : string extends keyof S ? never
-    : S extends object ? { [K in keyof S]: Create<S[K]> }
-    : never)
 
   export type SetExpr<S extends object = any> = Row.Computed<S, Update<S>> | {
     where: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
@@ -56,7 +43,7 @@ export namespace Relation {
   }
 
   export interface Modifier<S extends object = any> {
-    $create?: MaybeArray<Partial<Create<S>>>
+    $create?: MaybeArray<DeepPartial<S>>
     $set?: MaybeArray<SetExpr<S>>
     $remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
     $connect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
@@ -121,15 +108,14 @@ export namespace Field {
 
   export type Type<T = any> =
     | T extends Primary ? 'primary'
-    : T extends Relation ? Relation.Type
     : T extends number ? 'integer' | 'unsigned' | 'float' | 'double' | 'decimal'
     : T extends string ? 'char' | 'string' | 'text'
     : T extends boolean ? 'boolean'
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends ArrayBuffer ? 'binary'
     : T extends bigint ? 'bigint'
-    : T extends unknown[] ? 'list' | 'json'
-    : T extends object ? 'json'
+    : T extends unknown[] ? 'list' | 'json' | 'oneToMany' | 'manyToMany'
+    : T extends object ? 'json' | 'oneToOne' | 'manyToOne'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
@@ -168,7 +154,11 @@ export namespace Field {
   } & Omit<Field<T>, 'type'>
 
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: O[K] extends Relation | undefined ? Relation.Definition<FlatKeys<O>>: (Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>)
+    [K in keyof O]?:
+      | Literal<O[K], N>
+      | Definition<O[K], N>
+      | Transform<O[K], any, N>
+      | (O[K] extends object ? Relation.Definition<FlatKeys<O>> : never)
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>

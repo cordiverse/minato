@@ -1,6 +1,6 @@
 import { defineProperty, Dict, filterKeys, makeArray, mapValues, MaybeArray, noop, omit } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel } from './utils.ts'
+import { DeepPartial, FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
 import { Driver } from './driver.ts'
@@ -267,10 +267,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   select<T>(table: Selection<T>, query?: Query<T>): Selection<T>
-  select<K extends Keys<S>, R extends Relation.Include<S[K]>>(
+  select<K extends Keys<S>>(
     table: K,
     query?: Query<S[K]>,
-    cursor?: R | null
+    cursor?: Relation.Include<S[K], Values<S>> | null,
   ): Selection<S[K]>
 
   select(table: any, query?: any, cursor?: any) {
@@ -471,7 +471,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: Partial<Relation.Create<S[K]>>): Promise<S[K]>
+  async create<K extends Keys<S>>(table: K, data: DeepPartial<S[K]>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const sel = this.select(table)
     const { primary, autoInc, fields } = sel.model

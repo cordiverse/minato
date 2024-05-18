@@ -1,6 +1,6 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval.ts'
-import { Comparable, Flatten, Indexable, isComparable, makeRegExp } from './utils.ts'
+import { AtomicTypes, Comparable, Flatten, Indexable, isComparable, makeRegExp, Values } from './utils.ts'
 import { Selection } from './selection.ts'
 
 export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
@@ -62,7 +62,7 @@ export namespace Query {
 
   export type Field<T = any> = FieldExpr<T> | Shorthand<T>
 
-  type NonNullableExpr<T> = T extends any[] ? Field<T> : T extends object
+  type NonNullableExpr<T> = T extends Values<AtomicTypes> | any[] ? Field<T> : T extends object
     ? Expr<Flatten<T>> | Selection.Callback<T, boolean>
     : Field<T>
 

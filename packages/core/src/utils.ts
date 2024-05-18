@@ -16,6 +16,12 @@ export type FlatPick<O, K extends FlatKeys<O>> = {
     : FlatPick<O[P], Extract<K extends `${any}.${infer R}` ? R : never, FlatKeys<O[P]>>>
 }
 
+export type DeepPartial<T> =
+  | T extends Values<AtomicTypes> ? T
+  : T extends (infer U)[] ? DeepPartial<U>[]
+  : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> }
+  : T
+
 export interface AtomicTypes {
   Number: number
   String: string
