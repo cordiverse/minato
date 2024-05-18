@@ -1,8 +1,7 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval.ts'
-import { Comparable, Flatten, Indexable, isComparable, makeRegExp, Row } from './utils.ts'
+import { Comparable, Flatten, Indexable, isComparable, makeRegExp } from './utils.ts'
 import { Selection } from './selection.ts'
-import { Relation } from './model.ts'
 
 export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
 
@@ -42,9 +41,10 @@ export namespace Query {
     $bitsAnyClear?: Extract<T, number>
     $bitsAnySet?: Extract<T, number>
 
-    $some?: T extends Relation<(infer I)[]> ? Query<I> : never
-    $none?: T extends Relation<(infer I)[]> ? Query<I> : never
-    $every?: T extends Relation<(infer I)[]> ? Query<I> : never
+    // relation
+    $some?: T extends (infer U)[] ? Query<U> : never
+    $none?: T extends (infer U)[] ? Query<U> : never
+    $every?: T extends (infer U)[] ? Query<U> : never
   }
 
   export interface LogicalExpr<T = any> {
@@ -62,11 +62,12 @@ export namespace Query {
 
   export type Field<T = any> = FieldExpr<T> | Shorthand<T>
 
-  export type Callback<T = any> = (row: Row<T>) => Expr<Flatten<T>>
+  type NonNullableExpr<T> = T extends any[] ? Field<T> : T extends object
+    ? Expr<Flatten<T>> | Selection.Callback<T, boolean>
+    : Field<T>
 
   export type Expr<T = any> = LogicalExpr<T> & {
-    [K in keyof T]?: null | (T[K] extends Relation<infer I> | undefined ? I extends any[] ? Field<T[K]>
-      : Query.Expr<Flatten<I>> | Selection.Callback<I, boolean> : Field<T[K]>)
+    [K in keyof T]?: (undefined extends T[K] ? null : never) | NonNullableExpr<Exclude<T[K], undefined>>
   }
 }
 

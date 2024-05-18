@@ -25,8 +25,8 @@ export function hasSubquery(value: any): boolean {
 }
 
 export type Uneval<U, A extends boolean> =
-  | U extends Relation<(infer T)[]> ? T extends object ? Relation.Modifier<T> | T[] : never
-  : U extends Relation<infer T> ? Eval.Term<Partial<T>, A>
+  | U extends (infer T extends object)[] ? Relation.Modifier<T> | T[]
+  : U extends object ? Eval.Term<Partial<U>, A>
   : U extends number ? Eval.Term<number, A>
   : U extends string ? Eval.Term<string, A>
   : U extends boolean ? Eval.Term<boolean, A>

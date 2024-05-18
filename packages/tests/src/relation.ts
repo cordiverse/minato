@@ -1,44 +1,44 @@
-import { $, Database, Relation } from 'minato'
+import { $, Database, Query, Relation } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
 
 interface User {
   id: number
   value?: number
-  profile?: Relation<Profile>
-  posts?: Relation<Post[]>
-  successor?: Relation<{ id: number }>
-  predecessor?: Relation<{ id: number }>
+  profile?: Profile
+  posts?: Post[]
+  successor?: { id: number }
+  predecessor?: { id: number }
 }
 
 interface Profile {
   id: number
   name?: string
-  user?: Relation<User>
+  user?: User
 }
 
 interface Post {
   id: number
   score?: number
-  author?: Relation<User>
+  author?: User
   content?: string
 
-  tags?: Relation<Tag[]>
-  _tags?: Relation<Post2Tag[]>
+  tags?: Tag[]
+  _tags?: Post2Tag[]
 }
 
 interface Tag {
   id: number
   name: string
-  posts?: Relation<Post[]>
-  _posts?: Relation<Post2Tag[]>
+  posts?: Post[]
+  _posts?: Post2Tag[]
 }
 
 interface Post2Tag {
   postId: number
   tagId: number
-  post?: Relation<Post>
-  tag?: Relation<Tag>
+  post?: Post
+  tag?: Tag
 }
 
 interface Tables {
