@@ -119,7 +119,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (!Relation.Type.includes(def.type)) return
       const [relation, inverse] = Relation.parse(def, key, model, this.tables[def.table ?? key])
       if (!this.tables[relation.table]) throw new Error(`relation table ${relation.table} does not exist`)
-      ;(model.fields[key] ??= Field.parse('expr')).relation = relation
+      ;(model.fields[key] = Field.parse('expr')).relation = relation
       if (def.target) {
         (this.tables[relation.table].fields[def.target] ??= Field.parse('expr')).relation = inverse
       }
@@ -276,7 +276,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   select(table: any, query?: any, cursor?: any) {
     let sel = new Selection(this.getDriver(table), table, query)
     if (typeof table !== 'string') return sel
-    const whereOnly = cursor === null, skipQuery: string[] = []
+    const whereOnly = cursor === null
     const rawquery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
     if (cursor) cursor = filterKeys(cursor, (key) => !!modelFields[key]?.relation)
@@ -288,7 +288,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         if (sel.query[key] && typeof sel.query[key] !== 'function' && typeof sel.query[key] === 'object'
           && Object.keys(sel.query[key]).every(x => modelFields[key]!.relation!.fields.includes(`${key}.${x}`))) {
           Object.entries(sel.query[key]).forEach(([k, v]) => sel.query[`${key}.${k}`] = v)
-          skipQuery.push(key)
+          delete sel.query[key]
         }
         if (sel.query.$not?.[key] === null && !modelFields[key].relation.required) {
           sel.query.$not[key] = Object.fromEntries(modelFields[key]!.relation!.references.map(k => [k, null]))
@@ -296,9 +296,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         if (sel.query.$not?.[key] && typeof sel.query.$not[key] !== 'function' && typeof sel.query.$not[key] === 'object'
           && Object.keys(sel.query.$not[key]).every(x => modelFields[key]!.relation!.fields.includes(`${key}.${x}`))) {
           Object.entries(sel.query.$not[key]).forEach(([k, v]) => sel.query.$not![`${key}.${k}`] = v)
-          skipQuery.push(key)
+          delete sel.query.$not[key]
         }
-        if (!cursor || !Object.getOwnPropertyNames(cursor).includes(key)) {
+        if ((sel.query[key] !== undefined || sel.query.$not?.[key] !== undefined) && (!cursor || !Object.getOwnPropertyNames(cursor).includes(key))) {
           (cursor ??= {})[key] = true
         }
       }
@@ -314,7 +314,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
       const extraFields: string[] = []
       const applyQuery = (sel: Selection, key: string) => {
-        if (skipQuery.includes(key)) return sel
         const query2 = rawquery(sel.row)
         const relquery = query2[key] !== undefined ? query2[key]
           : query2.$not?.[key] !== undefined ? { $not: query2.$not?.[key] }
