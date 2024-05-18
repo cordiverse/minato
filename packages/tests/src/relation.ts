@@ -316,20 +316,15 @@ namespace RelationTests {
         },
       })).to.eventually.have.shape(posts.map(post => ({
         ...post,
-        author: {
-          id: users.find(user => post.author?.id === user.id)?.id,
-        },
+        author: users.find(user => post.author?.id === user.id),
       })).filter(post => post.author?.id === 1))
 
       await expect(database.get('post', {
         author: {
           id: 1,
-          value: 0,
+          value: 1,
         },
-      })).to.eventually.have.shape(posts.map(post => ({
-        ...post,
-        author: users.find(user => post.author?.id === user.id),
-      })).filter(post => post.author?.id === 1))
+      })).to.eventually.have.length(0)
     })
 
     it('oneToMany', async () => {

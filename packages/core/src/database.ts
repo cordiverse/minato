@@ -298,7 +298,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           Object.entries(sel.query.$not[key]).forEach(([k, v]) => sel.query.$not![`${key}.${k}`] = v)
           delete sel.query.$not[key]
         }
-        if ((sel.query[key] !== undefined || sel.query.$not?.[key] !== undefined) && (!cursor || !Object.getOwnPropertyNames(cursor).includes(key))) {
+        if (!cursor || !Object.getOwnPropertyNames(cursor).includes(key)) {
           (cursor ??= {})[key] = true
         }
       }
