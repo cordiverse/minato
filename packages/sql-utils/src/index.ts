@@ -195,10 +195,6 @@ export class Builder {
     }
   }
 
-  protected unescapeId(value: string) {
-    return value.slice(1, value.length - 1)
-  }
-
   protected createNullQuery(key: string, value: boolean) {
     return `${key} is ${value ? 'not ' : ''}null`
   }
@@ -231,7 +227,7 @@ export class Builder {
   }
 
   protected isJsonQuery(key: string) {
-    return isSqlJson(this.state.tables![this.state.table!].fields![this.unescapeId(key)]?.type)
+    return Type.fromTerm(this.state.expr)?.type === 'json' || this.isEncoded(key)
   }
 
   protected comparator(operator: string) {
@@ -347,7 +343,6 @@ export class Builder {
 
   protected parseFieldQuery(key: string, query: Query.Field) {
     const conditions: string[] = []
-    if (this.modifiedTable) key = `${this.escapeId(this.modifiedTable)}.${key}`
 
     // query shorthand
     if (Array.isArray(query)) {
@@ -383,7 +378,9 @@ export class Builder {
       } else if (key === '$expr') {
         conditions.push(this.parseEval(query.$expr))
       } else {
-        conditions.push(this.parseFieldQuery(this.escapeId(key), query[key]))
+        const model = this.state.tables![this.state.table!] ?? Object.values(this.state.tables!)[0]
+        const expr = Eval('', [Object.keys(this.state.tables!)[0], key], model.getType(key)!)
+        conditions.push(this.parseFieldQuery(this.parseEval(expr), query[key]))
       }
     }
 

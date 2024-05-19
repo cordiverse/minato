@@ -46,28 +46,28 @@ export class PostgresBuilder extends Builder {
 
     this.evalOperators = {
       ...this.evalOperators,
-      $select: (args) => `${args.map(arg => this.parseEval(arg, this.getLiteralType(arg))).join(', ')}`,
+      $select: (args) => `${args.map(arg => this.parseEval(arg, this.transformType(arg))).join(', ')}`,
       $if: (args) => {
-        const type = this.getLiteralType(args[1]) ?? this.getLiteralType(args[2]) ?? 'text'
+        const type = this.transformType(args[1]) ?? this.transformType(args[2]) ?? 'text'
         return `(SELECT CASE WHEN ${this.parseEval(args[0], 'boolean')} THEN ${this.parseEval(args[1], type)} ELSE ${this.parseEval(args[2], type)} END)`
       },
       $ifNull: (args) => {
-        const type = args.map(this.getLiteralType).find(x => x) ?? 'text'
+        const type = args.map(this.transformType).find(x => x) ?? 'text'
         return `coalesce(${args.map(arg => this.parseEval(arg, type)).join(', ')})`
       },
 
-      $regex: ([key, value]) => `${this.parseEval(key)} ~ ${this.parseEval(value)}`,
+      $regex: ([key, value]) => `(${this.parseEval(key)} ~ ${this.parseEval(value)})`,
 
       // number
       $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,
       $multiply: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' * ')})`,
       $modulo: ([left, right]) => {
         const dividend = this.parseEval(left, 'double precision'), divisor = this.parseEval(right, 'double precision')
-        return `${dividend} - (${divisor} * floor(${dividend} / ${divisor}))`
+        return `(${dividend} - (${divisor} * floor(${dividend} / ${divisor})))`
       },
       $log: ([left, right]) => isNullable(right)
         ? `ln(${this.parseEval(left, 'double precision')})`
-        : `ln(${this.parseEval(left, 'double precision')}) / ln(${this.parseEval(right, 'double precision')})`,
+        : `(ln(${this.parseEval(left, 'double precision')}) / ln(${this.parseEval(right, 'double precision')}))`,
       $random: () => `random()`,
 
       $or: (args) => {
@@ -91,8 +91,6 @@ export class PostgresBuilder extends Builder {
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' # ')})`
       },
 
-      $eq: this.binary('=', 'text'),
-
       $number: (arg) => {
         const value = this.parseEval(arg)
         const type = Type.fromTerm(arg)
@@ -109,7 +107,7 @@ export class PostgresBuilder extends Builder {
         value => this.isEncoded() ? this.jsonLength(value) : this.asEncoded(`COALESCE(ARRAY_LENGTH(${value}, 1), 0)`, false),
       ),
 
-      $concat: (args) => `${args.map(arg => this.parseEval(arg, 'text')).join('||')}`,
+      $concat: (args) => `(${args.map(arg => this.parseEval(arg, 'text')).join('||')})`,
     }
 
     this.transformers['boolean'] = {
@@ -167,19 +165,20 @@ export class PostgresBuilder extends Builder {
     this.modifiedTable = table
   }
 
-  protected binary(operator: string, eltype: string = 'double precision') {
+  protected binary(operator: string, eltype: true | string = 'double precision') {
     return ([left, right]) => {
-      const type = this.getLiteralType(left) ?? this.getLiteralType(right) ?? eltype
+      const type = this.transformType(left) ?? this.transformType(right) ?? eltype
       return `(${this.parseEval(left, type)} ${operator} ${this.parseEval(right, type)})`
     }
   }
 
-  private getLiteralType(expr: any) {
-    const type = Type.fromTerm(expr)
-    if (Field.string.includes(type.type) || typeof expr === 'string') return 'text'
-    else if (Field.number.includes(type.type) || typeof expr === 'number') return 'double precision'
-    else if (Field.boolean.includes(type.type) || typeof expr === 'boolean') return 'boolean'
+  private transformType(source: any) {
+    const type = Type.isType(source) ? source : Type.fromTerm(source)
+    if (Field.string.includes(type.type) || typeof source === 'string') return 'text'
+    else if (Field.number.includes(type.type) || typeof source === 'number') return 'double precision'
+    else if (Field.boolean.includes(type.type) || typeof source === 'boolean') return 'boolean'
     else if (type.type === 'json') return 'jsonb'
+    else if (type.type !== 'expr') return true
   }
 
   parseEval(expr: any, outtype: boolean | string = true): string {
@@ -225,8 +224,9 @@ export class PostgresBuilder extends Builder {
     return this.asEncoded(`(${obj} @> ${value})`, false)
   }
 
-  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type, outtype?: string) {
-    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
+  protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type, outtype?: true | string) {
+    outtype ??= this.transformType(type)
+    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value // `${value}${typeof outtype === 'string' ? `::${outtype}` : ''}`
       : encoded ? `to_jsonb(${this.transform(value, type, 'encode')})`
         : this.transform(`(jsonb_build_object('v', ${value})->>'v')`, type, 'decode') + `${typeof outtype === 'string' ? `::${outtype}` : ''}`
     , pure ? undefined : encoded)

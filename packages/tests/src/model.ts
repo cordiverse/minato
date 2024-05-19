@@ -464,6 +464,25 @@ namespace ModelOperations {
       ))
     })
 
+    it('object query', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await expect(database.get('dtypes', {
+        'object.num': 10,
+      })).to.eventually.have.shape([table[4]])
+
+      await expect(database.get('dtypes', {
+        'object.num': {
+          $gte: 10,
+        },
+      })).to.eventually.have.shape([table[4]])
+
+      // await expect(database.get('dtypes', {
+      //   object: {
+      //     num: 10,
+      //   },
+      // })).to.eventually.deep.equal(table[4])
+    })
+
     it('recursive type', async () => {
       const table = await setup(database, 'recurxs', [{ id: 1, y: { id: 2, x: { id: 3, y: { id: 4, x: { id: 5 } } } } }])
       await expect(database.get('recurxs', {})).to.eventually.have.deep.members(table)

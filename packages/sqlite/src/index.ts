@@ -305,8 +305,9 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async remove(sel: Selection.Mutable) {
-    const { query, table } = sel
-    const filter = this.sql.parseQuery(query)
+    const { query, table, tables } = sel
+    const builder = new SQLiteBuilder(this, tables)
+    const filter = builder.parseQuery(query)
     if (filter === '0') return {}
     const result = this._run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this._get(`SELECT changes() AS count`))
     return { matched: result.count, removed: result.count }
@@ -330,13 +331,13 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   _update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
-    const { ref, table } = sel
-    const model = this.model(table)
+    const { ref, table, tables, model } = sel
+    const builder = new SQLiteBuilder(this, tables)
     executeUpdate(data, update, ref)
-    const row = this.sql.dump(data, model)
+    const row = builder.dump(data, model)
     const assignment = updateFields.map((key) => `${escapeId(key)} = ?`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
-    const filter = this.sql.parseQuery(query)
+    const filter = builder.parseQuery(query)
     this._run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key] ?? null))
   }
 
