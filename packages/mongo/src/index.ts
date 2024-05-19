@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
 import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Builder } from './builder'
 import zhCN from './locales/zh-CN.yml'
@@ -53,7 +53,12 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     this.db.admin().serverInfo().then((doc) => this.version = +doc.version.split('.')[0]).catch(noop)
     await this.client.withSession((session) => session.withTransaction(
       () => this.db.collection('_fields').findOne({}, { session }),
-    )).catch(() => this._replSet = false)
+    )).catch(() => {
+      this._replSet = false
+      this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
+      Convert to replicaSet to enable the feature.
+      See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
+    })
 
     this.define<ArrayBuffer, ArrayBuffer>({
       types: ['binary'],
@@ -115,8 +120,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const virtualKey = this.getVirtualKey(table)
     for (const key in fields) {
       if (virtualKey === key) continue
-      const { initial, legacy = [], deprecated } = fields[key]!
-      if (deprecated) continue
+      const { initial, legacy = [] } = fields[key]!
+      if (!Field.available(fields[key])) continue
       const filter = { [key]: { $exists: false } }
       for (const oldKey of legacy) {
         bulk
@@ -310,10 +315,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
-      .toArray().then(rows => {
-        // console.dir(rows, { depth: 8 })
-        return rows.map(row => this.builder.load(row, sel.model))
-      })
+      .toArray().then(rows => rows.map(row => this.builder.load(row, sel.model)))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {
@@ -485,9 +487,6 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     if (this._replSet) {
       await this.client.withSession((session) => session.withTransaction(() => callback(session)))
     } else {
-      this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
-Convert to replicaSet to enable the feature.
-See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
       await callback(undefined)
     }
   }

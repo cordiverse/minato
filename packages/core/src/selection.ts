@@ -1,7 +1,7 @@
 import { defineProperty, Dict, filterKeys } from 'cosmokit'
 import { Driver } from './driver.ts'
-import { Eval, executeEval } from './eval.ts'
-import { Model } from './model.ts'
+import { Eval, executeEval, isAggrExpr, isEvalExpr } from './eval.ts'
+import { Field, Model } from './model.ts'
 import { Query } from './query.ts'
 import { FlatKeys, FlatPick, Flatten, Keys, randomId, Row } from './utils.ts'
 import { Type } from './type.ts'
@@ -57,7 +57,7 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
         .map(([k, field]) => [k.slice(prefix.length + key.length + 1), Type.fromField(field!)])))
     } else {
       // unknown field inside json
-      type = Type.fromField('expr')
+      type = model?.getType(`${prefix}${key}`) ?? Type.fromField('expr')
     }
 
     const row = createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
@@ -85,8 +85,11 @@ class Executable<S = any, T = any> {
 
   protected resolveQuery(query?: Query<S>): Query.Expr<S>
   protected resolveQuery(query: Query<S> = {}): any {
-    if (typeof query === 'function') return { $expr: query(this.row) }
-    if (Array.isArray(query) || query instanceof RegExp || ['string', 'number'].includes(typeof query)) {
+    if (typeof query === 'function') {
+      const expr = query(this.row)
+      return expr['$expr'] ? expr : isEvalExpr(expr) ? { $expr: expr } : expr
+    }
+    if (Array.isArray(query) || query instanceof RegExp || ['string', 'number', 'bigint'].includes(typeof query)) {
       const { primary } = this.model
       if (Array.isArray(primary)) {
         throw new TypeError('invalid shorthand for composite primary key')
@@ -121,7 +124,7 @@ class Executable<S = any, T = any> {
     } else {
       const entries = Object.entries(fields).flatMap(([key, field]) => {
         const expr = this.resolveField(field)
-        if (expr['$object']) {
+        if (expr['$object'] && !Type.fromTerm(expr).ignoreNull) {
           return Object.entries(expr['$object']).map(([key2, expr2]) => [`${key}.${key2}`, expr2])
         }
         return [[key, expr]]
@@ -242,18 +245,39 @@ export class Selection<S = any> extends Executable<S, S[]> {
     return new Selection(this.driver, this)
   }
 
+  join<K extends string, U>(
+    name: K,
+    selection: Selection<U>,
+    callback: (self: Row<S>, other: Row<U>) => Eval.Expr<boolean> = () => Eval.and(),
+    optional: boolean = false,
+  ): Selection<S & { [P in K]: U}> {
+    const fields = Object.fromEntries(Object.entries(this.model.fields)
+      .filter(([key, field]) => Field.available(field) && !key.startsWith(name + '.'))
+      .map(([key]) => [key, (row) => key.split('.').reduce((r, k) => r[k], row[this.ref])]))
+    if (optional) {
+      return this.driver.database
+        .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]), { [this.ref]: false, [name]: true })
+        .project({ ...fields, [name]: (row) => Eval.ignoreNull(row[name]) }) as any
+    } else {
+      return this.driver.database
+        .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]))
+        .project({ ...fields, [name]: (row) => Eval.ignoreNull(row[name]) }) as any
+    }
+  }
+
   _action(type: Executable.Action, ...args: any[]) {
     return new Executable(this.driver, { ...this, type, args })
   }
 
   evaluate<T>(callback: Selection.Callback<S, T, true>): Eval.Expr<T, true>
-  evaluate<K extends Keys<S>>(field: K): Eval.Expr<S[K][], boolean>
+  evaluate<K extends Keys<S>>(field: K): Eval.Expr<S[K][], false>
+  evaluate<K extends Keys<S>>(field: K[]): Eval.Expr<any[][], false>
   evaluate(): Eval.Expr<S[], boolean>
   evaluate(callback?: any): any {
     const selection = new Selection(this.driver, this)
     if (!callback) callback = (row: any) => Eval.array(Eval.object(row))
-    const expr = this.resolveField(callback)
-    if (expr['$']) defineProperty(expr, Type.kType, Type.Array(Type.fromTerm(expr)))
+    const expr = Array.isArray(callback) ? Eval.select(...callback.map(x => this.resolveField(x))) : this.resolveField(callback)
+    if (isAggrExpr(expr)) defineProperty(expr, Type.kType, Type.Array(Type.fromTerm(expr)))
     return Eval.exec(selection._action('eval', expr))
   }
 

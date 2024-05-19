@@ -1,12 +1,88 @@
-import { Binary, clone, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
+import { Binary, clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
-import { Eval, isEvalExpr } from './eval.ts'
-import { Flatten, Keys, unravel } from './utils.ts'
+import { Eval, isEvalExpr, Update } from './eval.ts'
+import { DeepPartial, FlatKeys, Flatten, Keys, Row, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
+import { Query } from './query.ts'
+import { Selection } from './selection.ts'
 
-export const Primary = Symbol('Primary')
+const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
+
+export namespace Relation {
+  const Marker = Symbol('minato.relation')
+  export type Marker = { [Marker]: true }
+
+  export const Type = ['oneToOne', 'oneToMany', 'manyToOne', 'manyToMany'] as const
+  export type Type = typeof Type[number]
+
+  export interface Config<S extends any = any, T extends Keys<S> = Keys<S>, K extends string = string> {
+    type: Type
+    table: T
+    references: Keys<S[T]>[]
+    fields: K[]
+    required: boolean
+  }
+
+  export interface Definition<K extends string = string> {
+    type: 'oneToOne' | 'manyToOne' | 'manyToMany'
+    table?: string
+    target?: string
+    references?: MaybeArray<string>
+    fields?: MaybeArray<K>
+  }
+
+  export type Include<T, S> = boolean | {
+    [P in keyof T]?: T[P] extends MaybeArray<infer U extends S> | undefined ? Include<U, S> : never
+  }
+
+  export type SetExpr<S extends object = any> = Row.Computed<S, Update<S>> | {
+    where: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+    update: Row.Computed<S, Update<S>>
+  }
+
+  export interface Modifier<S extends object = any> {
+    $create?: MaybeArray<DeepPartial<S>>
+    $set?: MaybeArray<SetExpr<S>>
+    $remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+    $connect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+    $disconnect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+  }
+
+  export function buildAssociationTable(...tables: [string, string]) {
+    return '_' + tables.sort().join('To')
+  }
+
+  export function buildAssociationKey(key: string, table: string) {
+    return `${table}_${key}`
+  }
+
+  export function parse(def: Definition, key: string, model: Model, relmodel: Model): [Config, Config] {
+    const fields = def.fields ?? ((model.name === relmodel.name || def.type === 'manyToOne'
+      || (def.type === 'oneToOne' && !makeArray(relmodel.primary).every(key => !relmodel.fields[key]?.nullable)))
+      ? makeArray(relmodel.primary).map(x => `${key}.${x}`) : model.primary)
+    const relation: Config = {
+      type: def.type,
+      table: def.table ?? relmodel.name,
+      fields: makeArray(fields),
+      references: makeArray(def.references ?? relmodel.primary),
+      required: def.type !== 'manyToOne' && model.name !== relmodel.name
+        && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
+    }
+    const inverse: Config = {
+      type: relation.type === 'oneToMany' ? 'manyToOne'
+        : relation.type === 'manyToOne' ? 'oneToMany'
+          : relation.type,
+      table: model.name,
+      fields: relation.references,
+      references: relation.fields,
+      required: relation.type !== 'oneToMany' && !relation.required
+        && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key)),
+    }
+    return [relation, inverse]
+  }
+}
 
 export interface Field<T = any> {
   type: Type<T>
@@ -19,6 +95,7 @@ export interface Field<T = any> {
   expr?: Eval.Expr
   legacy?: string[]
   deprecated?: boolean
+  relation?: Relation.Config
   transformers?: Driver.Transformer[]
 }
 
@@ -37,8 +114,8 @@ export namespace Field {
     : T extends Date ? 'timestamp' | 'date' | 'time'
     : T extends ArrayBuffer ? 'binary'
     : T extends bigint ? 'bigint'
-    : T extends unknown[] ? 'list' | 'json'
-    : T extends object ? 'json'
+    : T extends unknown[] ? 'list' | 'json' | 'oneToMany' | 'manyToMany'
+    : T extends object ? 'json' | 'oneToOne' | 'manyToOne'
     : 'expr'
 
   type Shorthand<S extends string> = S | `${S}(${any})`
@@ -77,12 +154,16 @@ export namespace Field {
   } & Omit<Field<T>, 'type'>
 
   type MapField<O = any, N = any> = {
-    [K in keyof O]?: Literal<O[K], N> | Definition<O[K], N> | Transform<O[K], any, N>
+    [K in keyof O]?:
+      | Literal<O[K], N>
+      | Definition<O[K], N>
+      | Transform<O[K], any, N>
+      | (O[K] extends object ? Relation.Definition<FlatKeys<O>> : never)
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
 
-  const NewType = Symbol('newtype')
+  const NewType = Symbol('minato.newtype')
   export type NewType<T> = string & { [NewType]: T }
 
   export type Config<O = any> = {
@@ -131,6 +212,10 @@ export namespace Field {
       if (type === 'json') return {}
     }
     return initial
+  }
+
+  export function available(field?: Field) {
+    return !!field && !field.deprecated && !field.relation
   }
 }
 
@@ -239,7 +324,7 @@ export class Model<S = any> {
   }
 
   format(source: object, strict = true, prefix = '', result = {} as S) {
-    const fields = Object.keys(this.fields)
+    const fields = Object.keys(this.fields).filter(key => !this.fields[key].relation)
     Object.entries(source).map(([key, value]) => {
       key = prefix + key
       if (value === undefined) return
@@ -251,18 +336,18 @@ export class Model<S = any> {
       if (field) {
         result[key] = value
       } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
-        if (strict) {
+        if (strict && (typeof value !== 'object' || Object.keys(value).length)) {
           throw new TypeError(`unknown field "${key}" in model ${this.name}`)
         }
       } else {
         this.format(value, strict, key + '.', result)
       }
     })
-    return prefix === '' ? this.resolveModel(result) : result
+    return (strict && prefix === '') ? this.resolveModel(result) : result
   }
 
   parse(source: object, strict = true, prefix = '', result = {} as S) {
-    const fields = Object.keys(this.fields)
+    const fields = Object.keys(this.fields).filter(key => !this.fields[key].relation)
     if (strict && prefix === '') {
       // initialize object layout
       Object.assign(result as any, unravel(Object.fromEntries(fields
@@ -293,20 +378,24 @@ export class Model<S = any> {
         }
       }
     }
-    return prefix === '' ? this.resolveModel(result) : result
+    return (strict && prefix === '') ? this.resolveModel(result) : result
   }
 
   create(data?: {}) {
     const result = {} as S
     const keys = makeArray(this.primary)
     for (const key in this.fields) {
-      const { initial, deprecated } = this.fields[key]!
-      if (deprecated) continue
+      if (!Field.available(this.fields[key])) continue
+      const { initial } = this.fields[key]!
       if (!keys.includes(key) && !isNullable(initial)) {
         result[key] = clone(initial)
       }
     }
     return this.parse({ ...result, ...data })
+  }
+
+  avaiableFields() {
+    return filterKeys(this.fields, (_, field) => Field.available(field))
   }
 
   getType(): Type<S>

@@ -285,6 +285,89 @@ namespace SelectionTests {
         .join(['foo', 'bar'], (foo, bar) => $.eq(foo.value, bar.value))
         .execute()
       ).to.eventually.have.length(2)
+
+      await expect(database.select('foo')
+        .join('bar', database.select('bar'), (foo, bar) => $.eq(foo.value, bar.value))
+        .execute()
+      ).to.eventually.have.length(2)
+    })
+
+    it('left join', async () => {
+      await expect(database
+        .join(['foo', 'bar'], (foo, bar) => $.eq(foo.value, bar.value), [false, true])
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          foo: { value: 0, id: 1 },
+          bar: { uid: 1, pid: 1, value: 0, id: 1 },
+        },
+        {
+          foo: { value: 0, id: 1 },
+          bar: { uid: 1, pid: 2, value: 0, id: 3 },
+        },
+        { foo: { value: 2, id: 2 }, bar: {} },
+        { foo: { value: 2, id: 3 }, bar: {} },
+      ])
+
+      await expect(database
+        .join(['foo', 'bar'], (foo, bar) => $.eq(foo.value, bar.value), [true, false])
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          bar: { uid: 1, pid: 1, value: 0, id: 1 },
+          foo: { value: 0, id: 1 },
+        },
+        { bar: { uid: 1, pid: 1, value: 1, id: 2 }, foo: {} },
+        {
+          bar: { uid: 1, pid: 2, value: 0, id: 3 },
+          foo: { value: 0, id: 1 },
+        },
+        { bar: { uid: 1, pid: 3, value: 1, id: 4 }, foo: {} },
+        { bar: { uid: 2, pid: 1, value: 1, id: 5 }, foo: {} },
+        { bar: { uid: 2, pid: 1, value: 1, id: 6 }, foo: {} },
+      ])
+
+      await expect(database.select('foo')
+        .join('bar', database.select('bar'), (foo, bar) => $.eq(foo.value, bar.value), true)
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          value: 0, id: 1,
+          bar: { uid: 1, pid: 1, value: 0, id: 1 },
+        },
+        {
+          value: 0, id: 1,
+          bar: { uid: 1, pid: 2, value: 0, id: 3 },
+        },
+        { value: 2, id: 2 },
+        { value: 2, id: 3 },
+      ])
+
+      await expect(database.select('bar')
+        .join('foo', database.select('foo'), (bar, foo) => $.eq(foo.value, bar.value), true)
+        .execute()
+      ).to.eventually.have.shape([
+        {
+          uid: 1, pid: 1, value: 0, id: 1,
+          foo: { value: 0, id: 1 },
+        },
+        { uid: 1, pid: 1, value: 1, id: 2 },
+        {
+          uid: 1, pid: 2, value: 0, id: 3,
+          foo: { value: 0, id: 1 },
+        },
+        { uid: 1, pid: 3, value: 1, id: 4 },
+        { uid: 2, pid: 1, value: 1, id: 5 },
+        { uid: 2, pid: 1, value: 1, id: 6 },
+      ])
+    })
+
+    it('duplicate', async () => {
+      await expect(database.select('foo')
+        .project(['value'])
+        .join('bar', database.select('bar'), (foo, bar) => $.eq(foo.value, bar.uid))
+        .execute()
+      ).to.eventually.have.length(4)
     })
 
     it('left join', async () => {
@@ -362,6 +445,12 @@ namespace SelectionTests {
         }, ({ t1, t2, t3 }) => $.gt($.add(t1.id, t2.id, t3.id), 14))
         .execute()
       ).to.eventually.have.length(4)
+
+      await expect(database.select('bar').where(row => $.gt(row.pid, 1))
+        .join('t2', database.select('bar').where(row => $.gt(row.uid, 1)))
+        .join('t3', database.select('bar').where(row => $.gt(row.id, 4)), (self, t3) => $.gt($.add(self.id, self.t2.id, t3.id), 14))
+        .execute()
+      ).to.eventually.have.length(4)
     })
 
     it('aggregate', async () => {
@@ -404,6 +493,20 @@ namespace SelectionTests {
     it('where', async () => {
       await expect(database.get('foo', row => $.in(
         row.id, database.select('foo').project({ x: row => $.add(row.id, 1) }).evaluate('x')
+      ))).to.eventually.deep.equal([
+        { id: 2, value: 2 },
+        { id: 3, value: 2 },
+      ])
+
+      await expect(database.get('foo', row => $.in(
+        [row.id, row.id], database.select('foo').project({ x: row => $.add(row.id, 1) }).evaluate(['x', 'x'])
+      ))).to.eventually.deep.equal([
+        { id: 2, value: 2 },
+        { id: 3, value: 2 },
+      ])
+
+      await expect(database.get('foo', row => $.in(
+        [row.id, row.id], [[2, 2], [3, 3]]
       ))).to.eventually.deep.equal([
         { id: 2, value: 2 },
         { id: 3, value: 2 },

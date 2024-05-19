@@ -1,6 +1,6 @@
 import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
+import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
 
 export interface Compat {
   maria?: boolean
@@ -33,6 +33,14 @@ export class MySQLBuilder extends Builder {
     super(driver, tables)
     this._dbTimezone = compat.timezone ?? 'SYSTEM'
 
+    this.evalOperators.$select = (args) => {
+      if (compat.maria || compat.mysql57) {
+        return this.asEncoded(`json_object(${args.map(arg => this.parseEval(arg, false)).flatMap((x, i) => [`${i}`, x]).join(', ')})`, true)
+      } else {
+        return `${args.map(arg => this.parseEval(arg, false)).join(', ')}`
+      }
+    }
+
     this.evalOperators.$sum = (expr) => this.createAggr(expr, value => `ifnull(sum(${value}), 0)`, undefined, value => `ifnull(minato_cfunc_sum(${value}), 0)`)
     this.evalOperators.$avg = (expr) => this.createAggr(expr, value => `avg(${value})`, undefined, value => `minato_cfunc_avg(${value})`)
     this.evalOperators.$min = (expr) => this.createAggr(expr, value => `min(${value})`, undefined, value => `minato_cfunc_min(${value})`)
@@ -47,22 +55,22 @@ export class MySQLBuilder extends Builder {
     }
 
     this.evalOperators.$or = (args) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
       else return `cast(${args.map(arg => this.parseEval(arg)).join(' | ')} as signed)`
     }
     this.evalOperators.$and = (args) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
       else return `cast(${args.map(arg => this.parseEval(arg)).join(' & ')} as signed)`
     }
     this.evalOperators.$not = (arg) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
       else return `cast(~(${this.parseEval(arg)}) as signed)`
     }
     this.evalOperators.$xor = (args) => {
-      const type = this.state.type!
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
       if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
       else return `cast(${args.map(arg => this.parseEval(arg)).join(' ^ ')} as signed)`
     }
@@ -122,6 +130,18 @@ export class MySQLBuilder extends Builder {
     }
   }
 
+  protected createMemberQuery(key: string, value: any, notStr = '') {
+    if (Array.isArray(value) && Array.isArray(value[0]) && (this.compat.maria || this.compat.mysql57)) {
+      const vals = `json_array(${value.map((val: any[]) => `(${this.evalOperators.$select!(val)})`).join(', ')})`
+      return this.jsonContains(vals, key)
+    }
+    if (value.$exec && (this.compat.maria || this.compat.mysql57)) {
+      const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
+      return notStr ? this.logicalNot(res) : res
+    }
+    return super.createMemberQuery(key, value, notStr)
+  }
+
   escapePrimitive(value: any, type?: Type) {
     if (value instanceof Date) {
       value = Time.template('yyyy-MM-dd hh:mm:ss.SSS', value)
@@ -158,20 +178,24 @@ export class MySQLBuilder extends Builder {
     return this.asEncoded(`ifnull(${res}, json_array())`, true)
   }
 
-  protected parseSelection(sel: Selection) {
-    if (!this.compat.maria && !this.compat.mysql57) return super.parseSelection(sel)
+  protected parseSelection(sel: Selection, inline: boolean = false) {
+    if (!this.compat.maria && !this.compat.mysql57) return super.parseSelection(sel, inline)
     const { args: [expr], ref, table, tables } = sel
     const restore = this.saveState({ wrappedSubquery: true, tables })
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
+    const fields = expr['$select']?.map(x => this.getRecursive(x['$']))
+    const where = fields && this.logicalAnd(fields.map(x => `(${x} is not null)`))
     const refFields = this.state.refFields
     restore()
     let query: string
-    if (!(sel.args[0] as any).$) {
-      query = `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    if (inline || !isAggrExpr(expr as any)) {
+      query = `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''}${where ? ` WHERE ${where}` : ''})`
     } else {
-      query = `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      query = [
+        `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,
+        `FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`,
+      ].join(' ')
     }
     if (Object.keys(refFields ?? {}).length) {
       const funcname = `minato_tfunc_${randomId()}`

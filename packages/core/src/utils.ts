@@ -1,4 +1,4 @@
-import { Intersect } from 'cosmokit'
+import { Intersect, isNullable } from 'cosmokit'
 import { Eval } from './eval.ts'
 
 export type Values<S> = S[keyof S]
@@ -16,6 +16,12 @@ export type FlatPick<O, K extends FlatKeys<O>> = {
     : FlatPick<O[P], Extract<K extends `${any}.${infer R}` ? R : never, FlatKeys<O[P]>>>
 }
 
+export type DeepPartial<T> =
+  | T extends Values<AtomicTypes> ? T
+  : T extends (infer U)[] ? DeepPartial<U>[]
+  : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> }
+  : T
+
 export interface AtomicTypes {
   Number: number
   String: string
@@ -32,7 +38,7 @@ export interface AtomicTypes {
 export type Indexable = string | number | bigint
 export type Comparable = string | number | boolean | bigint | Date
 
-type FlatWrap<S, A extends 0[], P extends string> = { [K in P]?: S }
+type FlatWrap<S, A extends 0[], P extends string> = { [K in P]: S }
   // rule out atomic types
   | (S extends Values<AtomicTypes> ? never
   // rule out array types
@@ -90,4 +96,13 @@ export function unravel(source: object, init?: (value) => any) {
     node[segments[0]] = source[key]
   }
   return result
+}
+
+export function isEmpty(value: any) {
+  if (isNullable(value)) return true
+  if (typeof value !== 'object') return false
+  for (const key in value) {
+    if (!isEmpty(value[key])) return false
+  }
+  return true
 }

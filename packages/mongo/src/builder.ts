@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Eval, Field, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
+import { Eval, Field, isAggrExpr, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -88,7 +88,7 @@ export class Builder {
   public pipeline: any[] = []
   protected lookups: any[] = []
   public evalKey?: string
-  private evalType?: Type
+  private evalExpr?: Eval.Expr
   private refTables: string[] = []
   private refVirtualKeys: Dict<string> = {}
   private joinTables: Dict<string> = {}
@@ -119,10 +119,11 @@ export class Builder {
           throw new Error(`$ not transformed: ${JSON.stringify(arg)}`)
         }
       },
+      $select: (args, group) => args.map(val => this.eval(val, group)),
       $if: (arg, group) => ({ $cond: arg.map(val => this.eval(val, group)) }),
 
       $and: (args, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return { $and: args.map(arg => this.eval(arg, group)) }
         else if (this.driver.version >= 7) return { $bitAnd: args.map(arg => this.eval(arg, group)) }
         else if (Field.number.includes(type.type)) {
@@ -146,7 +147,7 @@ export class Builder {
         }
       },
       $or: (args, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return { $or: args.map(arg => this.eval(arg, group)) }
         else if (this.driver.version >= 7) return { $bitOr: args.map(arg => this.eval(arg, group)) }
         else if (Field.number.includes(type.type)) {
@@ -170,7 +171,7 @@ export class Builder {
         }
       },
       $not: (arg, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return { $not: this.eval(arg, group) }
         else if (this.driver.version >= 7) return { $bitNot: this.eval(arg, group) }
         else if (Field.number.includes(type.type)) {
@@ -194,7 +195,7 @@ export class Builder {
         }
       },
       $xor: (args, group) => {
-        const type = this.evalType!
+        const type = Type.fromTerm(this.evalExpr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return args.map(arg => this.eval(arg, group)).reduce((prev, curr) => ({ $ne: [prev, curr] }))
         else if (this.driver.version >= 7) return { $bitXor: args.map(arg => this.eval(arg, group)) }
         else if (Field.number.includes(type.type)) {
@@ -269,7 +270,7 @@ export class Builder {
           },
         }, {
           $set: {
-            [name]: !(sel.args[0] as any).$ ? {
+            [name]: !isAggrExpr(sel.args[0] as any) ? {
               $getField: {
                 input: {
                   $ifNull: [
@@ -311,7 +312,7 @@ export class Builder {
 
     for (const key in expr) {
       if (this.evalOperators[key]) {
-        this.evalType = Type.fromTerm(expr)
+        this.evalExpr = expr
         return this.evalOperators[key](expr[key], group)
       } else if (key?.startsWith('$') && Eval[key.slice(1)]) {
         return mapValues(expr, (value) => {
@@ -473,6 +474,7 @@ export class Builder {
     } else {
       const $project: Dict = { _id: 0 }
       for (const key in model.fields) {
+        if (!Field.available(model.fields[key])) continue
         $project[key] = key === this.virtualKey ? '$_id' : 1
       }
       stages.push({ $project })
@@ -579,15 +581,7 @@ export class Builder {
 
     const converter = this.driver.types[type?.type]
     let res = value
-
-    if (!isNullable(res) && type.inner) {
-      if (Type.isArray(type)) {
-        res = res.map(x => this.dump(x, Type.getInner(type)!))
-      } else {
-        res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type, k)))
-      }
-    }
-
+    res = Type.transform(res, type, (value, type) => this.dump(value, type))
     res = converter?.dump ? converter.dump(res) : res
     const ancestor = this.driver.database.types[type.type]?.type
     res = this.dump(res, ancestor ? Type.fromField(ancestor) : undefined)
@@ -603,14 +597,7 @@ export class Builder {
       const ancestor = this.driver.database.types[type.type]?.type
       let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined)
       res = converter?.load ? converter.load(res) : res
-
-      if (!isNullable(res) && type.inner) {
-        if (Type.isArray(type)) {
-          res = res.map(x => this.load(x, Type.getInner(type as Type)))
-        } else {
-          res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k)))
-        }
-      }
+      res = Type.transform(res, type, (value, type) => this.load(value, type))
       return res
     }
 

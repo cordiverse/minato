@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
+import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -46,6 +46,7 @@ export class PostgresBuilder extends Builder {
 
     this.evalOperators = {
       ...this.evalOperators,
+      $select: (args) => `${args.map(arg => this.parseEval(arg, this.getLiteralType(arg))).join(', ')}`,
       $if: (args) => {
         const type = this.getLiteralType(args[1]) ?? this.getLiteralType(args[2]) ?? 'text'
         return `(SELECT CASE WHEN ${this.parseEval(args[0], 'boolean')} THEN ${this.parseEval(args[1], type)} ELSE ${this.parseEval(args[2], type)} END)`
@@ -70,22 +71,22 @@ export class PostgresBuilder extends Builder {
       $random: () => `random()`,
 
       $or: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg, 'boolean')))
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' | ')})`
       },
       $and: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg, 'boolean')))
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' & ')})`
       },
       $not: (arg) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg, 'boolean'))
         else return `(~(${this.parseEval(arg, 'bigint')}))`
       },
       $xor: (args) => {
-        const type = this.state.type!
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
         if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg, 'boolean')).reduce((prev, curr) => `(${prev} != ${curr})`)
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' # ')})`
       },
@@ -186,7 +187,7 @@ export class PostgresBuilder extends Builder {
     if (typeof expr === 'string' || typeof expr === 'number' || typeof expr === 'boolean' || expr instanceof Date || expr instanceof RegExp) {
       return this.escape(expr)
     }
-    return outtype ? `(${this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)})`
+    return outtype ? this.encode(this.parseEvalExpr(expr), false, false, Type.fromTerm(expr), typeof outtype === 'string' ? outtype : undefined)
       : this.parseEvalExpr(expr)
   }
 
@@ -241,24 +242,28 @@ export class PostgresBuilder extends Builder {
       }
       return `jsonb_build_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, ''), true)
+    return this.asEncoded(_groupObject(unravel(_fields), Type.fromTerm(this.state.expr), ''), true)
   }
 
   protected groupArray(value: string) {
     return this.asEncoded(`coalesce(jsonb_agg(${value}), '[]'::jsonb)`, true)
   }
 
-  protected parseSelection(sel: Selection) {
+  protected parseSelection(sel: Selection, inline: boolean = false) {
     const { args: [expr], ref, table, tables } = sel
     const restore = this.saveState({ tables })
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
+    const fields = expr['$select']?.map(x => this.getRecursive(x['$']))
+    const where = fields && this.logicalAnd(fields.map(x => `(${x} is not null)`))
     restore()
-    if (!(sel.args[0] as any).$) {
-      return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    if (inline || !isAggrExpr(expr as any)) {
+      return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''}${where ? ` WHERE ${where}` : ''})`
     } else {
-      return `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`
+      return [
+        `(coalesce((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,
+        `FROM ${inner} ${isBracketed(inner) ? ref : ''}), '[]'::jsonb))`,
+      ].join(' ')
     }
   }
 

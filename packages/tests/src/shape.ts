@@ -82,7 +82,7 @@ export default (({ Assertion }) => {
     }
 
     for (const prop in expect) {
-      if (typeof actual[prop] === 'undefined' && typeof expect[prop] !== 'undefined') {
+      if (isNullable(actual[prop]) && !isNullable(expect[prop])) {
         return `expected "${prop}" field to be defined at path ${path}`
       }
       const message = checkShape(expect[prop], actual[prop], `${path}${prop}/`, ordered)

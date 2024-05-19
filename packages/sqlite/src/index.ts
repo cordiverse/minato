@@ -73,7 +73,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     // field definitions
     for (const key in model.fields) {
-      if (model.fields[key]!.deprecated) {
+      if (!Field.available(model.fields[key])) {
         if (dropKeys?.includes(key)) shouldMigrate = true
         continue
       }
@@ -342,7 +342,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async set(sel: Selection.Mutable, update: {}) {
     const { model, table, query } = sel
-    const { primary, fields } = model
+    const { primary } = model, fields = model.avaiableFields()
     const updateFields = [...new Set(Object.keys(update).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -387,9 +387,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, ref } = sel
+    const fields = model.avaiableFields()
     const result = { inserted: 0, matched: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
-      return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
+      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     let updateFields = difference(dataFields, keys)
     if (!updateFields.length) updateFields = [dataFields[0]]
