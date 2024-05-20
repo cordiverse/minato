@@ -51,7 +51,7 @@ export namespace Relation {
   }
 
   export function buildAssociationTable(...tables: [string, string]) {
-    return '_' + tables.sort().join('To')
+    return '_' + tables.sort().join('_')
   }
 
   export function buildAssociationKey(key: string, table: string) {
