@@ -74,7 +74,7 @@ export class SQLiteBuilder extends Builder {
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return encoded ? super.encode(value, encoded, pure, type)
       : (encoded === this.isEncoded() && !pure) ? value
-        : this.asEncoded(`(${value} ->> '$')`, pure ? undefined : false)
+        : this.asEncoded(this.transform(`(${value} ->> '$')`, type, 'decode'), pure ? undefined : false)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {

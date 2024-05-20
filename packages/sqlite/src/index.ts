@@ -403,7 +403,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
         $or: chunk.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
       })
       for (const item of chunk) {
-        const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
+        const row = results.find(row => {
+          // flatten key to respect model
+          row = model.format(row)
+          return keys.every(key => deepEqual(row[key], item[key], true))
+        })
         if (row) {
           this._update(sel, keys, updateFields, item, row)
           result.matched++

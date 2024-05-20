@@ -70,6 +70,7 @@ export function isComparable(value: any): value is Comparable {
   return typeof value === 'string'
     || typeof value === 'number'
     || typeof value === 'boolean'
+    || typeof value === 'bigint'
     || value instanceof Date
 }
 
@@ -116,10 +117,15 @@ export function flatten(source: object, prefix = '', ignore: (value: any) => boo
     if (ignore(value)) {
       result[`${prefix}${key}`] = value
     } else {
-      Object.assign(result, flatten(value, `${prefix}${key}.`))
+      Object.assign(result, flatten(value, `${prefix}${key}.`, ignore))
     }
   }
   return result
+}
+
+export function getCell(row: any, key: any): any {
+  if (key in row) return row[key]
+  return key.split('.').reduce((r, k) => r === undefined ? undefined : r[k], row)
 }
 
 export function isEmpty(value: any) {

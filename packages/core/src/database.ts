@@ -1,6 +1,6 @@
 import { defineProperty, Dict, filterKeys, makeArray, mapValues, MaybeArray, noop, omit } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { DeepPartial, FlatKeys, FlatPick, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
+import { DeepPartial, FlatKeys, FlatPick, getCell, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
 import { Driver } from './driver.ts'
@@ -42,10 +42,6 @@ export namespace Join2 {
   }
 
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
-}
-
-function getCell(row: any, key: any): any {
-  return key.split('.').reduce((r, k) => r[k], row)
 }
 
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
@@ -476,7 +472,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const { primary, autoInc, fields } = sel.model
     if (!autoInc) {
       const keys = makeArray(primary)
-      if (keys.some(key => !(key in data))) {
+      if (keys.some(key => getCell(data, key) === undefined)) {
         throw new Error('missing primary key')
       }
     }

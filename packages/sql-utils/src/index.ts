@@ -295,7 +295,7 @@ export class Builder {
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
       : encoded ? `cast(${this.transform(value, type, 'encode')} as json)`
-        : `json_unquote(${this.transform(value, type, 'decode')})`, pure ? undefined : encoded)
+        : this.transform(`json_unquote(${value})`, type, 'decode'), pure ? undefined : encoded)
   }
 
   protected isEncoded(key?: string) {
