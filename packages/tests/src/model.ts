@@ -506,7 +506,7 @@ namespace ModelOperations {
     })
   }
 
-  const object = function ObjectFields(database: Database<Tables, Types>, options: ModelOptions = {}) {
+  export const object = function ObjectFields(database: Database<Tables, Types>, options: ModelOptions = {}) {
     const { aggregateNull = true, typeModel = true } = options
 
     it('basic', async () => {

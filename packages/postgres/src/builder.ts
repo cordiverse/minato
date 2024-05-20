@@ -227,7 +227,7 @@ export class PostgresBuilder extends Builder {
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type, outtype?: true | string) {
     outtype ??= this.transformType(type)
-    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value // `${value}${typeof outtype === 'string' ? `::${outtype}` : ''}`
+    return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
       : encoded ? `to_jsonb(${this.transform(value, type, 'encode')})`
         : this.transform(`(jsonb_build_object('v', ${value})->>'v')`, type, 'decode') + `${typeof outtype === 'string' ? `::${outtype}` : ''}`
     , pure ? undefined : encoded)
