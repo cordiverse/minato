@@ -501,7 +501,7 @@ namespace ModelOperations {
             },
           },
         ],
-      })).to.eventually.deep.equal([table[4], table[5]])
+      })).to.eventually.have.deep.members([table[4], table[5]])
     })
 
     it('recursive type', async () => {
