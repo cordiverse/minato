@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Eval, Field, isAggrExpr, isComparable, isEvalExpr, Model, Query, Selection, Type, unravel } from 'minato'
+import { Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -406,10 +406,14 @@ export class Builder {
       } else if (key === '$expr') {
         additional.push({ $expr: this.eval(value) })
       } else {
-        const actualKey = this.getActualKey(key)
-        const query = transformFieldQuery(value, actualKey, additional)
-        if (query === false) return
-        if (query !== true) filter[actualKey] = query
+        const ignore = (value: any) => isFlat(value) || value instanceof ObjectId
+        const flattenQuery = ignore(value) ? { [key]: value } : flatten(value, `${key}.`, ignore)
+        for (const key in flattenQuery) {
+          const value = flattenQuery[key], actualKey = this.getActualKey(key)
+          const query = transformFieldQuery(value, actualKey, additional)
+          if (query === false) return
+          if (query !== true) filter[actualKey] = query
+        }
       }
     }
     if (additional.length) {

@@ -76,8 +76,8 @@ export class MySQLBuilder extends Builder {
     }
 
     this.transformers['boolean'] = {
-      encode: value => `if(${value}=b'1', 1, 0)`,
-      decode: value => `if(${value}=1, b'1', b'0')`,
+      encode: value => `if(${value}=true, 1, 0)`,
+      decode: value => `if(${value}=1, true, false)`,
       load: value => isNullable(value) ? value : !!value,
       dump: value => isNullable(value) ? value : value ? 1 : 0,
     }

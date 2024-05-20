@@ -151,7 +151,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       meta.autoInc += 1
       data[primary] = meta.autoInc
     } else {
-      const duplicated = await this.database.get(table, pick(data, makeArray(primary)))
+      const duplicated = await this.database.get(table, pick(model.format(data), makeArray(primary)))
       if (duplicated.length) {
         throw new RuntimeError('duplicate-entry')
       }

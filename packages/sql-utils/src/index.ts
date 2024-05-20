@@ -1,5 +1,8 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Driver, Eval, Field, isAggrExpr, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type, unravel } from 'minato'
+import {
+  Driver, Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat,
+  Model, Modifier, Query, randomId, Selection, Type, unravel,
+} from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -195,10 +198,6 @@ export class Builder {
     }
   }
 
-  protected unescapeId(value: string) {
-    return value.slice(1, value.length - 1)
-  }
-
   protected createNullQuery(key: string, value: boolean) {
     return `${key} is ${value ? 'not ' : ''}null`
   }
@@ -231,7 +230,7 @@ export class Builder {
   }
 
   protected isJsonQuery(key: string) {
-    return isSqlJson(this.state.tables![this.state.table!].fields![this.unescapeId(key)]?.type)
+    return Type.fromTerm(this.state.expr)?.type === 'json' || this.isEncoded(key)
   }
 
   protected comparator(operator: string) {
@@ -296,7 +295,7 @@ export class Builder {
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
       : encoded ? `cast(${this.transform(value, type, 'encode')} as json)`
-        : `json_unquote(${this.transform(value, type, 'decode')})`, pure ? undefined : encoded)
+        : this.transform(`json_unquote(${value})`, type, 'decode'), pure ? undefined : encoded)
   }
 
   protected isEncoded(key?: string) {
@@ -347,7 +346,6 @@ export class Builder {
 
   protected parseFieldQuery(key: string, query: Query.Field) {
     const conditions: string[] = []
-    if (this.modifiedTable) key = `${this.escapeId(this.modifiedTable)}.${key}`
 
     // query shorthand
     if (Array.isArray(query)) {
@@ -383,7 +381,12 @@ export class Builder {
       } else if (key === '$expr') {
         conditions.push(this.parseEval(query.$expr))
       } else {
-        conditions.push(this.parseFieldQuery(this.escapeId(key), query[key]))
+        const flattenQuery = isFlat(query[key]) ? { [key]: query[key] } : flatten(query[key], `${key}.`)
+        for (const key in flattenQuery) {
+          const model = this.state.tables![this.state.table!] ?? Object.values(this.state.tables!)[0]
+          const expr = Eval('', [Object.keys(this.state.tables!)[0], key], model.getType(key)!)
+          conditions.push(this.parseFieldQuery(this.parseEval(expr), flattenQuery[key]))
+        }
       }
     }
 

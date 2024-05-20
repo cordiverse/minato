@@ -1,6 +1,6 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval.ts'
-import { AtomicTypes, Comparable, Flatten, Indexable, isComparable, makeRegExp, Values } from './utils.ts'
+import { AtomicTypes, Comparable, Flatten, flatten, getCell, Indexable, isComparable, isFlat, makeRegExp, Values } from './utils.ts'
 import { Selection } from './selection.ts'
 
 export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
@@ -148,13 +148,10 @@ export function executeQuery(data: any, query: Query.Expr, ref: string, env: any
 
     // execute field query
     try {
-      return executeFieldQuery(value, getCell(data, key))
+      const flattenQuery = isFlat(query[key]) ? { [key]: query[key] } : flatten(query[key], `${key}.`)
+      return Object.entries(flattenQuery).every(([key, value]) => executeFieldQuery(value, getCell(data, key)))
     } catch {
       return false
     }
   })
-}
-
-function getCell(row: any, key: any): any {
-  return key.split('.').reduce((r, k) => r[k], row)
 }

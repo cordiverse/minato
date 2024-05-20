@@ -22,6 +22,7 @@ interface DType {
     embed?: {
       bool?: boolean
       bigint?: bigint
+      int64?: bigint
       custom?: Custom
       bstr?: string
     }
@@ -189,6 +190,7 @@ function ModelOperations(database: Database<Tables, Types>) {
               type: 'boolean',
               initial: false,
             },
+            int64: 'bigint',
             bigint: 'bigint2',
             custom: { type: 'custom' },
             bstr: bstr,
@@ -280,7 +282,7 @@ namespace ModelOperations {
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
     { id: 4, list: ['1', '1', '4'], array: [1, 1, 4] },
-    { id: 5, object: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n, bstr: 'world' } } },
+    { id: 5, object: { num: 10, text: 'ab', embed: { bool: true, bigint: 90n, int64: 100n, bstr: 'world' } } },
     { id: 6, object2: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n } } },
     { id: 7, timestamp: magicBorn },
     { id: 8, date: magicBorn },
@@ -462,6 +464,55 @@ namespace ModelOperations {
           .execute()
         ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
       ))
+    })
+
+    it('object query', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await expect(database.get('dtypes', {
+        'object.embed.bool': true,
+      })).to.eventually.have.shape([table[4]])
+
+      await expect(database.get('dtypes', {
+        'object.num': {
+          $gte: 10,
+        },
+      })).to.eventually.have.shape([table[4]])
+
+      table[4].object!.embed!.bool = false
+      await expect(database.set('dtypes', {
+        object: {
+          embed: {
+            int64: 100n,
+          },
+        },
+      }, {
+        'object.embed.bool': false,
+      })).to.eventually.fulfilled
+
+      await expect(database.get('dtypes', {
+        object: {
+          embed: {
+            int64: 100n,
+          },
+        },
+      })).to.eventually.deep.equal([table[4]])
+
+      await expect(database.get('dtypes', {
+        $or: [
+          {
+            object: {
+              num: 10,
+            },
+          },
+          {
+            object2: {
+              num: {
+                $gte: 10,
+              },
+            },
+          },
+        ],
+      })).to.eventually.have.deep.members([table[4], table[5]])
     })
 
     it('recursive type', async () => {
