@@ -478,6 +478,17 @@ namespace ModelOperations {
         },
       })).to.eventually.have.shape([table[4]])
 
+      table[4].object!.embed!.bool = false
+      await expect(database.set('dtypes', {
+        object: {
+          embed: {
+            int64: 100n,
+          },
+        },
+      }, {
+        'object.embed.bool': false,
+      })).to.eventually.fulfilled
+
       await expect(database.get('dtypes', {
         object: {
           embed: {
