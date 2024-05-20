@@ -1,7 +1,7 @@
-import { Binary, clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
+import { clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
-import { Eval, isEvalExpr, Update } from './eval.ts'
-import { DeepPartial, FlatKeys, Flatten, Keys, Row, unravel } from './utils.ts'
+import { Eval, Update } from './eval.ts'
+import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 import { Query } from './query.ts'
@@ -335,7 +335,7 @@ export class Model<S = any> {
       const field = fields.find(field => key.startsWith(field + '.'))
       if (field) {
         result[key] = value
-      } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Object.keys(value).length === 0) {
+      } else if (isFlat(value)) {
         if (strict && (typeof value !== 'object' || Object.keys(value).length)) {
           throw new TypeError(`unknown field "${key}" in model ${this.name}`)
         }
@@ -367,7 +367,7 @@ export class Model<S = any> {
         const field = fields.find(field => fullKey === field || fullKey.startsWith(field + '.'))
         if (field) {
           node[segments[0]] = value
-        } else if (!value || typeof value !== 'object' || isEvalExpr(value) || Array.isArray(value) || Binary.is(value) || Object.keys(value).length === 0) {
+        } else if (isFlat(value)) {
           if (strict) {
             throw new TypeError(`unknown field "${fullKey}" in model ${this.name}`)
           } else {

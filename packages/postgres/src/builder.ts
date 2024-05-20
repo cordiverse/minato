@@ -175,6 +175,7 @@ export class PostgresBuilder extends Builder {
   private transformType(source: any) {
     const type = Type.isType(source) ? source : Type.fromTerm(source)
     if (Field.string.includes(type.type) || typeof source === 'string') return 'text'
+    else if (['integer', 'unsigned', 'bigint'].includes(type.type) || typeof source === 'bigint') return 'bigint'
     else if (Field.number.includes(type.type) || typeof source === 'number') return 'double precision'
     else if (Field.boolean.includes(type.type) || typeof source === 'boolean') return 'boolean'
     else if (type.type === 'json') return 'jsonb'

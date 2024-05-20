@@ -476,11 +476,28 @@ namespace ModelOperations {
         },
       })).to.eventually.have.shape([table[4]])
 
-      // await expect(database.get('dtypes', {
-      //   object: {
-      //     num: 10,
-      //   },
-      // })).to.eventually.deep.equal(table[4])
+      await expect(database.get('dtypes', {
+        object: {
+          num: 10,
+        },
+      })).to.eventually.deep.equal([table[4]])
+
+      await expect(database.get('dtypes', {
+        $or: [
+          {
+            object: {
+              num: 10,
+            },
+          },
+          {
+            object2: {
+              num: {
+                $gte: 10,
+              },
+            },
+          },
+        ],
+      })).to.eventually.deep.equal([table[4], table[5]])
     })
 
     it('recursive type', async () => {
@@ -489,7 +506,7 @@ namespace ModelOperations {
     })
   }
 
-  export const object = function ObjectFields(database: Database<Tables, Types>, options: ModelOptions = {}) {
+  const object = function ObjectFields(database: Database<Tables, Types>, options: ModelOptions = {}) {
     const { aggregateNull = true, typeModel = true } = options
 
     it('basic', async () => {

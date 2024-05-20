@@ -1,5 +1,8 @@
 import { Dict, isNullable } from 'cosmokit'
-import { Driver, Eval, Field, isAggrExpr, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type, unravel } from 'minato'
+import {
+  Driver, Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat,
+  Model, Modifier, Query, randomId, Selection, Type, unravel,
+} from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -378,9 +381,12 @@ export class Builder {
       } else if (key === '$expr') {
         conditions.push(this.parseEval(query.$expr))
       } else {
-        const model = this.state.tables![this.state.table!] ?? Object.values(this.state.tables!)[0]
-        const expr = Eval('', [Object.keys(this.state.tables!)[0], key], model.getType(key)!)
-        conditions.push(this.parseFieldQuery(this.parseEval(expr), query[key]))
+        const flattenQuery = isFlat(query[key]) ? { [key]: query[key] } : flatten(query[key], `${key}.`)
+        for (const key in flattenQuery) {
+          const model = this.state.tables![this.state.table!] ?? Object.values(this.state.tables!)[0]
+          const expr = Eval('', [Object.keys(this.state.tables!)[0], key], model.getType(key)!)
+          conditions.push(this.parseFieldQuery(this.parseEval(expr), flattenQuery[key]))
+        }
       }
     }
 

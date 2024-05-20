@@ -1,5 +1,5 @@
-import { Intersect, isNullable } from 'cosmokit'
-import { Eval } from './eval.ts'
+import { Binary, Intersect, isNullable } from 'cosmokit'
+import { Eval, isEvalExpr } from './eval.ts'
 
 export type Values<S> = S[keyof S]
 
@@ -73,6 +73,17 @@ export function isComparable(value: any): value is Comparable {
     || value instanceof Date
 }
 
+export function isFlat(value: any): value is Values<AtomicTypes> {
+  return !value
+    || typeof value !== 'object'
+    || isEvalExpr(value)
+    || Object.keys(value).length === 0
+    || Array.isArray(value)
+    || value instanceof Date
+    || value instanceof RegExp
+    || Binary.isSource(value)
+}
+
 const letters = 'abcdefghijklmnopqrstuvwxyz'
 
 export function randomId() {
@@ -94,6 +105,19 @@ export function unravel(source: object, init?: (value) => any) {
       if (init) node = init(node)
     }
     node[segments[0]] = source[key]
+  }
+  return result
+}
+
+export function flatten(source: object, prefix = '', ignore: (value: any) => boolean = isFlat) {
+  const result = {}
+  for (const key in source) {
+    const value = source[key]
+    if (ignore(value)) {
+      result[`${prefix}${key}`] = value
+    } else {
+      Object.assign(result, flatten(value, `${prefix}${key}.`))
+    }
   }
   return result
 }
