@@ -2,9 +2,10 @@ import { Awaitable, Dict, mapValues, remove } from 'cosmokit'
 import { Context, Logger } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
-import { Field, Model } from './model.ts'
+import { Field, Model, Relation } from './model.ts'
 import { Database } from './database.ts'
 import { Type } from './type.ts'
+import { FlatKeys } from './utils.ts'
 
 export namespace Driver {
   export interface Stats {
@@ -17,13 +18,14 @@ export namespace Driver {
     size: number
   }
 
-  export type Cursor<K extends string = never> = K[] | CursorOptions<K>
+  export type Cursor<T = any, S = any, K extends FlatKeys<T> = any> = K[] | CursorOptions<T, S, K>
 
-  export interface CursorOptions<K extends string> {
+  export interface CursorOptions<T = any, S = any, K extends FlatKeys<T> = any> {
     limit?: number
     offset?: number
     fields?: K[]
     sort?: Dict<Direction, K>
+    include?: Relation.Include<T, S>
   }
 
   export interface WriteResult {

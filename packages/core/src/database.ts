@@ -1,6 +1,6 @@
-import { defineProperty, Dict, filterKeys, makeArray, mapValues, MaybeArray, noop, omit } from 'cosmokit'
+import { defineProperty, Dict, filterKeys, isNullable, makeArray, mapValues, MaybeArray, noop, omit } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
-import { DeepPartial, FlatKeys, FlatPick, getCell, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
+import { AtomicTypes, DeepPartial, FlatKeys, FlatPick, getCell, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
 import { Driver } from './driver.ts'
@@ -43,6 +43,13 @@ export namespace Join2 {
 
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
 }
+
+export type Create<T, S> =
+  | T extends Values<AtomicTypes> ? T
+  : T extends (infer U)[] ? DeepPartial<U>[]
+  : T extends Values<S> ? { $create: { [K in keyof T]?: Create<T[K], S> } } | { [K in keyof T]?: Create<T[K], S> }
+  : T extends object ? { [K in keyof T]?: Create<T[K], S> }
+  : T
 
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
@@ -131,10 +138,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       } else if (relation.type === 'manyToMany') {
         const assocTable = Relation.buildAssociationTable(relation.table, name)
         if (this.tables[assocTable]) return
-        const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]?.deftype] as const)
+        const shared = Object.keys(relation.shared).map(x => [x, model.fields[x]!.deftype] as const)
+        const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]!.deftype] as const)
         const references = relation.references.map((x, i) => [Relation.buildAssociationKey(x, relation.table), fields[i][1]] as const)
         this.extend(assocTable as any, {
-          ...Object.fromEntries([...fields, ...references]),
+          ...Object.fromEntries([...shared, ...fields, ...references]),
+          // [`${relation.table}.extraFields`]: 'string',
+          [`${name}.extraFields`]: 'string',
           [name]: {
             type: 'manyToOne',
             table: name,
@@ -148,10 +158,14 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             references: relation.fields,
           },
         } as any, {
-          primary: [...fields.map(x => x[0]), ...references.map(x => x[0])],
+          primary: [...shared, ...fields, ...references].map(x => x[0]),
         })
       }
     })
+    // use relation field as primary
+    if (Array.isArray(model.primary) && model.primary.every(key => model.fields[key]?.relation)) {
+      model.primary = model.primary.map(key => model.fields[key]!.relation!.fields).flat()
+    }
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
   }
@@ -398,12 +412,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   async get<K extends Keys<S>, P extends FlatKeys<S[K]> = any>(
     table: K,
     query: Query<S[K]>,
-    cursor?: Driver.Cursor<P>,
+    cursor?: Driver.Cursor<S[K], Values<S>, P>,
   ): Promise<FlatPick<S[K], P>[]>
 
   async get<K extends Keys<S>>(table: K, query: Query<S[K]>, cursor?: any) {
-    const fields = Array.isArray(cursor) ? cursor : cursor?.fields
-    return this.select(table, query, fields && Object.fromEntries(fields.map(x => [x, true])) as any).execute(cursor) as any
+    let fields = Array.isArray(cursor) ? cursor : cursor?.fields
+    fields = fields ? Object.fromEntries(fields.map(x => [x, true])) : cursor?.include
+    return this.select(table, query, fields).execute(cursor) as any
   }
 
   async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T, true>, query?: Query<S[K]>): Promise<T> {
@@ -466,10 +481,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: DeepPartial<S[K]>): Promise<S[K]>
+  async create<K extends Keys<S>>(table: K, data: Create<S[K], S>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const sel = this.select(table)
-    const { primary, autoInc, fields } = sel.model
+    const { primary, autoInc } = sel.model
     if (!autoInc) {
       const keys = makeArray(primary)
       if (keys.some(key => getCell(data, key) === undefined)) {
@@ -477,50 +492,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
     }
 
-    const tasks: any[] = []
-    for (const key in data) {
-      if (data[key] && this.tables[table].fields[key]?.relation) {
-        const relation = this.tables[table].fields[key].relation
-        if (relation.type === 'oneToOne' && relation.required) {
-          const mergedData = { ...data[key] }
-          for (const k in relation.fields) {
-            mergedData[relation.references[k]] = getCell(data, relation.fields[k])
-          }
-          tasks.push([relation.table, [mergedData], relation.references])
-        } else if (relation.type === 'oneToMany' && Array.isArray(data[key])) {
-          const mergedData = data[key].map(row => {
-            const mergedData = { ...row }
-            for (const k in relation.fields) {
-              mergedData[relation.references[k]] = getCell(data, relation.fields[k])
-            }
-            return mergedData
-          })
-
-          tasks.push([relation.table, mergedData])
-        } else {
-          // handle shadowed fields
-          data = {
-            ...omit(data, [key]),
-            ...Object.fromEntries(Object.entries(data[key]).map(([k, v]) => {
-              if (!fields[`${key}.${k}`]) {
-                throw new Error(`field ${key}.${k} does not exist`)
-              }
-              return [`${key}.${k}`, v]
-            })),
-          }
-          continue
-        }
-        data = omit(data, [key]) as any
-      }
-    }
-
-    if (tasks.length) {
+    const tasks = this.transformUpsert(sel, table, [data])
+    if (Object.keys(tasks).length > 1) {
       return this.ensureTransaction(async (database) => {
-        for (const [table, data, keys] of tasks) {
-          await database.upsert(table, data, keys)
+        for (const [key, { table, upsert, keys }] of Object.entries(tasks)) {
+          if (!key) continue
+          await database.upsert(table as any, upsert, keys as any)
         }
-        return database.create(table, data)
+        return database.create(table, tasks[''].upsert[0])
       })
+    } else {
+      data = tasks[''].upsert[0]
     }
     return sel._action('create', sel.model.create(data)).execute()
   }
@@ -533,61 +515,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const sel = this.select(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     else {
-      const buildKey = (relation: Relation.Config) => [relation.table, ...relation.references].join('__')
-      const tasks: Dict<{
-        table: string
-        upsert: any[]
-        keys?: string[]
-      }> = {}
-
-      const upsert2 = (upsert as any[]).map(data => {
-        for (const key in data) {
-          if (data[key] && this.tables[table].fields[key]?.relation) {
-            const relation = this.tables[table].fields[key].relation
-            if (relation.type === 'oneToOne' && relation.required) {
-              const mergedData = { ...data[key] }
-              for (const k in relation.fields) {
-                mergedData[relation.references[k]] = data[relation.fields[k]]
-              }
-              ;(tasks[buildKey(relation)] ??= {
-                table: relation.table,
-                upsert: [],
-                keys: relation.references,
-              }).upsert.push(mergedData)
-            } else if (relation.type === 'oneToMany' && Array.isArray(data[key])) {
-              const mergedData = data[key].map(row => {
-                const mergedData = { ...row }
-                for (const k in relation.fields) {
-                  mergedData[relation.references[k]] = data[relation.fields[k]]
-                }
-                return mergedData
-              })
-
-            ;(tasks[relation.table] ??= { table: relation.table, upsert: [] }).upsert.push(...mergedData)
-            } else {
-              // handle shadowed fields
-              data = {
-                ...omit(data, [key]),
-                ...Object.fromEntries(Object.entries(data[key]).map(([k, v]) => {
-                  if (!sel.model.fields[`${key}.${k}`]) throw new Error(`field ${key}.${k} does not exist`)
-                  return [`${key}.${k}`, v]
-                })),
-              }
-              continue
-            }
-            data = omit(data, [key]) as any
-          }
-        }
-        return data
-      })
-
-      if (Object.keys(tasks).length) {
+      const tasks = this.transformUpsert(sel, table, upsert, keys)
+      if (Object.keys(tasks).length > 1) {
         return this.ensureTransaction(async (database) => {
-          for (const { table, upsert, keys } of Object.values(tasks)) {
+          for (const [key, { table, upsert, keys }] of Object.entries(tasks)) {
+            if (!key) continue
             await database.upsert(table as any, upsert, keys as any)
           }
-          return database.upsert(table, upsert2)
+          return database.upsert(table, tasks[''].upsert, keys)
         })
+      } else {
+        upsert = tasks[''].upsert
       }
     }
     upsert = upsert.map(item => sel.model.format(item))
@@ -743,6 +681,95 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return { $expr: Eval.and(...results) } as any
   }
 
+  private transformUpsert(sel: Selection, table: string, upsert: any[], keys?: MaybeArray<string>) {
+    const tasks: Dict<{
+        table: string
+        upsert: any[]
+        keys: string[]
+      }> = {}
+
+    const pushTask = (table: string, upsert: any[], keys?: MaybeArray<string>, key?: string) => {
+      keys = makeArray(keys ?? this.tables[table].primary)
+      key ??= [table, ...keys].join('_$_')
+      ;(tasks[key] ??= {
+        table,
+        upsert: [],
+        keys,
+      }).upsert.push(...upsert)
+    }
+
+    const upsert2 = upsert.map(data => {
+      for (const key in data) {
+        if (data[key] && this.tables[table].fields[key]?.relation) {
+          const relation = this.tables[table].fields[key].relation
+          if (relation.type === 'oneToOne' && relation.required) {
+            const mergedData = { ...data[key] }
+            for (const k in relation.fields) {
+              mergedData[relation.references[k]] = data[relation.fields[k]]
+            }
+            pushTask(relation.table, [mergedData], relation.references)
+          } else if (relation.type === 'manyToOne' && data[key].$create) {
+            pushTask(relation.table, [data[key].$create], relation.references)
+            data = {
+              ...omit(data, [key]),
+              ...Object.fromEntries(Object.entries(data[key].$create)
+                .filter(([k]) => sel.model.fields[`${key}.${k}`])
+                .map(([k, v]) => [`${key}.${k}`, v])),
+            }
+            continue
+          } else if (relation.type === 'oneToMany' && Array.isArray(data[key])) {
+            const mergedData = data[key].map(row => {
+              const mergedData = { ...row }
+              for (const k in relation.fields) {
+                mergedData[relation.references[k]] = data[relation.fields[k]]
+              }
+              return mergedData
+            })
+            pushTask(relation.table, mergedData)
+          } else if (relation.type === 'manyToMany') {
+            const assocTable: any = Relation.buildAssociationTable(table, relation.table)
+            const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
+            const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
+            pushTask(assocTable, data[key].map(r => ({
+              ...Object.fromEntries(fields.map((k, i) => [k, getCell(data, relation.fields[i])])),
+              ...Object.fromEntries(references.map((k, i) => [k, getCell(r, relation.references[i])])),
+            })))
+            pushTask(relation.table, data[key])
+          } else {
+            // handle shadowed fields
+            data = {
+              ...omit(data, [key]),
+              ...Object.fromEntries(Object.entries(data[key])
+                .filter(([k]) => sel.model.fields[`${key}.${k}`])
+                .map(([k, v]) => [`${key}.${k}`, v])),
+            }
+            continue
+          }
+          data = omit(data, [key])
+        }
+      }
+      return data
+    })
+    pushTask(table, upsert2, keys, '')
+    Object.values(tasks).forEach(task => {
+      const result: any[] = [], added = new Set()
+      task.upsert.map(data => {
+        const primary = task.keys.map(k => getCell(data, k))
+        if (primary.some(isNullable)) {
+          result.push(data)
+        } else {
+          const key = primary.join('_$_')
+          if (!added.has(key)) {
+            result.push(data)
+            added.add(key)
+          }
+        }
+      })
+      task.upsert = result
+    })
+    return tasks
+  }
+
   private async processRelationUpdate(table: any, row: any, key: any, modifier: Relation.Modifier) {
     const relation: Relation.Config<S> = this.tables[table].fields[key]!.relation! as any
     if (Array.isArray(modifier)) {
@@ -796,7 +823,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (relation.type === 'oneToMany') {
         await this.set(relation.table,
           (r: any) => Eval.query(r, {
-            ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
+            ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
             ...(typeof modifier.$disconnect === 'function' ? { $expr: modifier.$disconnect } : modifier.$disconnect),
           } as any),
           Object.fromEntries(relation.references.map((k, i) => [k, null])) as any,
@@ -806,12 +833,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
         const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
         const rows = await this.select(assocTable, {
-          ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])) as any,
+          ...Object.fromEntries(fields.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
           [relation.table]: modifier.$disconnect,
         }, null).execute()
         await this.remove(assocTable, r => Eval.in(
           [...fields.map(x => r[x]), ...references.map(x => r[x])],
-          rows.map(r => [...fields.map(x => r[x]), ...references.map(x => r[x])]),
+          rows.map(r => [...fields.map(x => getCell(r, x)), ...references.map(x => getCell(r, x))]),
         ))
       }
     }
@@ -825,8 +852,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const assocTable: any = Relation.buildAssociationTable(table, relation.table)
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
         const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
-        const rows = await this.get(relation.table, modifier.$connect)
+        const rows = await this.get(relation.table, (r: any) => Eval.query(r, {
+          ...Object.fromEntries(Object.entries(relation.shared).map(([k, v]) => [v, getCell(row, k)])),
+          ...(typeof modifier.$connect === 'function' ? { $expr: modifier.$connect(r) } : modifier.$connect),
+        }) as any)
         await this.upsert(assocTable, rows.map(r => ({
+          ...mapValues(relation.shared, (v, k) => getCell(row, k)),
           ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
           ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i] as any]])),
         })) as any)

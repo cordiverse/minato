@@ -1,5 +1,5 @@
 import { defineProperty, isNullable, mapValues } from 'cosmokit'
-import { AtomicTypes, Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row, Values } from './utils.ts'
+import { AtomicTypes, Comparable, DeepPartial, Flatten, isComparable, isEmpty, makeRegExp, Row, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Field, Relation } from './model.ts'
 import { Query } from './query.ts'
@@ -31,7 +31,7 @@ type UnevalObject<S> = {
 export type Uneval<U, A extends boolean> =
   | U extends Values<AtomicTypes> ? Eval.Term<U, A>
   : U extends (infer T extends object)[] ? Relation.Modifier<T> | Eval.Array<T, A>
-  : U extends object ? Eval.Expr<U, A> | UnevalObject<Flatten<U>>
+  : U extends object ? Eval.Expr<U, A> | UnevalObject<Flatten<U>> | { $create: DeepPartial<U> }
   : any
 
 export type Eval<U> =

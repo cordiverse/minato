@@ -22,6 +22,8 @@ export namespace Relation {
     table: T
     references: Keys<S[T]>[]
     fields: K[]
+    shared: Record<K, Keys<S[T]>>
+    mixin?: K[]
     required: boolean
   }
 
@@ -31,10 +33,11 @@ export namespace Relation {
     target?: string
     references?: MaybeArray<string>
     fields?: MaybeArray<K>
+    shared?: MaybeArray<K> | Record<K, string>
   }
 
   export type Include<T, S> = boolean | {
-    [P in keyof T]?: T[P] extends MaybeArray<infer U extends S> | undefined ? Include<U, S> : never
+    [P in keyof T]?: T[P] extends MaybeArray<infer U> | undefined ? U extends S ? Include<U, S> : never : never
   }
 
   export type SetExpr<S extends object = any> = Row.Computed<S, Update<S>> | {
@@ -51,14 +54,21 @@ export namespace Relation {
   }
 
   export function buildAssociationTable(...tables: [string, string]) {
-    return '_' + tables.sort().join('To')
+    return '_' + tables.sort().join('_')
   }
 
   export function buildAssociationKey(key: string, table: string) {
-    return `${table}_${key}`
+    return `${table}.${key}`
+  }
+
+  export function transformAssoicationFields(fields: string[], table: string) {
   }
 
   export function parse(def: Definition, key: string, model: Model, relmodel: Model): [Config, Config] {
+    const shared = !def.shared ? {}
+      : typeof def.shared === 'string' ? { [def.shared]: def.shared }
+        : Array.isArray(def.shared) ? Object.fromEntries(def.shared.map(x => [x, x]))
+          : def.shared
     const fields = def.fields ?? ((model.name === relmodel.name || def.type === 'manyToOne'
       || (def.type === 'oneToOne' && !makeArray(relmodel.primary).every(key => !relmodel.fields[key]?.nullable)))
       ? makeArray(relmodel.primary).map(x => `${key}.${x}`) : model.primary)
@@ -66,10 +76,15 @@ export namespace Relation {
       type: def.type,
       table: def.table ?? relmodel.name,
       fields: makeArray(fields),
+      shared: mapValues(shared, (_, k) => k),
       references: makeArray(def.references ?? relmodel.primary),
       required: def.type !== 'manyToOne' && model.name !== relmodel.name
         && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
     }
+    Object.entries(shared).forEach(([k, v]) => {
+      relation.fields = relation.fields.filter(x => x !== k)
+      relation.references = relation.references.filter(x => x !== v)
+    })
     const inverse: Config = {
       type: relation.type === 'oneToMany' ? 'manyToOne'
         : relation.type === 'manyToOne' ? 'oneToMany'
@@ -77,6 +92,7 @@ export namespace Relation {
       table: model.name,
       fields: relation.references,
       references: relation.fields,
+      shared,
       required: relation.type !== 'oneToMany' && !relation.required
         && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key)),
     }
@@ -215,7 +231,7 @@ export namespace Field {
   }
 
   export function available(field?: Field) {
-    return !!field && !field.deprecated && !field.relation
+    return !!field && !field.deprecated && !field.relation && field.deftype !== 'expr'
   }
 }
 

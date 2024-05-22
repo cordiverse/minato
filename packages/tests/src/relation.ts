@@ -95,6 +95,10 @@ function RelationTests(database: Database<Tables>) {
     id: 'unsigned',
     score: 'unsigned',
     content: 'string',
+    extraFields: {
+      type: 'expr',
+      nullable: true,
+    },
     author: {
       type: 'manyToOne',
       table: 'user',
@@ -107,6 +111,10 @@ function RelationTests(database: Database<Tables>) {
   database.extend('tag', {
     id: 'unsigned',
     name: 'string',
+    extraFields: {
+      type: 'expr',
+      nullable: true,
+    },
     posts: {
       type: 'manyToMany',
       table: 'post',
