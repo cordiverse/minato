@@ -1,5 +1,5 @@
 import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat, Model, Query, Selection, Type, unravel } from 'minato'
+import { Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat, makeRegExp, Model, Query, Selection, Type, unravel } from 'minato'
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
@@ -53,12 +53,15 @@ function transformFieldQuery(query: Query.Field, key: string, filters: Filter<an
       const child = transformFieldQuery(query[prop]!, key, filters)
       if (child === false) return false
       if (child !== true) result.$elemMatch = child!
+    } else if (prop === '$regex') {
+      return { $regex: typeof query[prop] === 'string' ? query[prop] : makeRegExp(query[prop]) }
     } else if (prop === '$regexFor') {
       filters.push({
         $expr: {
           $regexMatch: {
-            input: query[prop],
+            input: query[prop].input ?? query[prop],
             regex: '$' + key,
+            ...(query[prop].flags ? { options: query[prop].flags } : {}),
           },
         },
       })

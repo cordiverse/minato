@@ -91,8 +91,13 @@ export function randomId() {
   return Array(8).fill(0).map(() => letters[Math.floor(Math.random() * letters.length)]).join('')
 }
 
-export function makeRegExp(source: string | RegExp, flags?: string) {
-  return (source instanceof RegExp && !flags) ? source : new RegExp(source, flags)
+export interface RegExpLike {
+  source: string
+  flags?: string
+}
+
+export function makeRegExp(source: string | RegExpLike, flags?: string) {
+  return (source instanceof RegExp && !flags) ? source : new RegExp((source as any).source ?? source, flags ?? (source as any).flags)
 }
 
 export function unravel(source: object, init?: (value) => any) {

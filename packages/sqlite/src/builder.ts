@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable } from 'cosmokit'
-import { Driver, Field, Model, randomId, Type } from 'minato'
+import { Driver, Field, Model, randomId, RegExpLike, Type } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -10,11 +10,13 @@ export class SQLiteBuilder extends Builder {
   constructor(protected driver: Driver, tables?: Dict<Model>) {
     super(driver, tables)
 
-    this.queryOperators.$regexFor = (key, value) => `${this.escape(value)} regexp ${key}`
+    this.queryOperators.$regexFor = (key, value) => typeof value === 'string' ? `${this.escape(value)} regexp ${key}`
+      : value.flags?.includes('i') ? `regexp2(${key}, ${this.escape(value.input)}, 'i')`
+        : `${this.escape(value.input)} regexp ${key}`
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
-    this.evalOperators.$regex = ([key, value, flags]) => (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i')))
-      ? `regexp2(${this.parseEval(value)}, ${this.parseEval(key)}, ${this.escape(flags ?? (value as RegExp).flags)})`
+    this.evalOperators.$regex = ([key, value, flags]: any) => (flags?.includes('i') || (typeof value.source === 'string' && value.flags?.includes('i')))
+      ? `regexp2(${this.parseEval(value)}, ${this.parseEval(key)}, ${this.escape(flags ?? value.flags)})`
       : `regexp(${this.parseEval(value)}, ${this.parseEval(key)})`
 
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
@@ -69,8 +71,8 @@ export class SQLiteBuilder extends Builder {
     }
   }
 
-  protected createRegExpQuery(key: string, value: string | RegExp) {
-    if (typeof value !== 'string' && value.flags.includes('i')) {
+  protected createRegExpQuery(key: string, value: string | RegExpLike) {
+    if (typeof value !== 'string' && value.flags?.includes('i')) {
       return `regexp2(${this.escape(typeof value === 'string' ? value : value.source)}, ${key}, ${this.escape(value.flags)})`
     } else {
       return `regexp(${this.escape(typeof value === 'string' ? value : value.source)}, ${key})`

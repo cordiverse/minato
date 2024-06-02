@@ -1,5 +1,5 @@
 import { defineProperty, isNullable, mapValues } from 'cosmokit'
-import { AtomicTypes, Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row, Values } from './utils.ts'
+import { AtomicTypes, Comparable, Flatten, isComparable, isEmpty, makeRegExp, RegExpLike, Row, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Field, Relation } from './model.ts'
 import { Query } from './query.ts'
@@ -122,7 +122,8 @@ export namespace Eval {
 
     // string
     concat: Multi<string, string>
-    regex<A extends boolean>(x: Term<string, A>, y: Term<string, A> | Term<RegExp, A>, flags?: string): Expr<boolean, A>
+    regex<A extends boolean>(x: Term<string, A>, y: RegExpLike): Expr<boolean, A>
+    regex<A extends boolean>(x: Term<string, A>, y: Term<string, A>, flags?: string): Expr<boolean, A>
 
     // logical / bitwise
     and: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
