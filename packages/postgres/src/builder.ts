@@ -57,8 +57,8 @@ export class PostgresBuilder extends Builder {
         return `coalesce(${args.map(arg => this.parseEval(arg, type)).join(', ')})`
       },
 
-      $regex: ([key, value, flags]: any) => `(${this.parseEval(key)} ${
-        (flags?.includes('i') || (typeof value.source === 'string' && value.flags.includes('i'))) ? '~*' : '~'
+      $regex: ([key, value, flags]) => `(${this.parseEval(key)} ${
+        (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i'))) ? '~*' : '~'
       } ${this.parseEval(value)})`,
 
       // number

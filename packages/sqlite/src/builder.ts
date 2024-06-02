@@ -15,8 +15,8 @@ export class SQLiteBuilder extends Builder {
         : `${this.escape(value.input)} regexp ${key}`
 
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
-    this.evalOperators.$regex = ([key, value, flags]: any) => (flags?.includes('i') || (typeof value.source === 'string' && value.flags?.includes('i')))
-      ? `regexp2(${this.parseEval(value)}, ${this.parseEval(key)}, ${this.escape(flags ?? value.flags)})`
+    this.evalOperators.$regex = ([key, value, flags]) => (flags?.includes('i') || (value instanceof RegExp && value.flags?.includes('i')))
+      ? `regexp2(${this.parseEval(value)}, ${this.parseEval(key)}, ${this.escape(flags ?? (value as any).flags)})`
       : `regexp(${this.parseEval(value)}, ${this.parseEval(key)})`
 
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`

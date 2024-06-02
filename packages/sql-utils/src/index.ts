@@ -149,8 +149,8 @@ export class Builder {
 
       // string
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,
-      $regex: ([key, value, flags]: any) => `(${this.parseEval(key)} ${
-        (flags?.includes('i') || (typeof value.source === 'string' && value.flags.includes('i'))) ? 'regexp' : 'collate utf8mb4_bin regexp'
+      $regex: ([key, value, flags]) => `(${this.parseEval(key)} ${
+        (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i'))) ? 'regexp' : 'collate utf8mb4_bin regexp'
       } ${this.parseEval(value)})`,
 
       // logical / bitwise
