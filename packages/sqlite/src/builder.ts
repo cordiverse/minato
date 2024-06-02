@@ -10,7 +10,13 @@ export class SQLiteBuilder extends Builder {
   constructor(protected driver: Driver, tables?: Dict<Model>) {
     super(driver, tables)
 
+    this.queryOperators.$regexFor = (key, value) => `${this.escape(value)} regexp ${key}`
+
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
+    this.evalOperators.$regex = ([key, value, flags]) => (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i')))
+      ? `regexp2(${this.parseEval(value)}, ${this.parseEval(key)}, ${this.escape(flags ?? (value as RegExp).flags)})`
+      : `regexp(${this.parseEval(value)}, ${this.parseEval(key)})`
+
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
     this.evalOperators.$modulo = ([left, right]) => `modulo(${this.parseEval(left)}, ${this.parseEval(right)})`
     this.evalOperators.$log = ([left, right]) => isNullable(right)
@@ -60,6 +66,14 @@ export class SQLiteBuilder extends Builder {
       return this.jsonContains(key, this.escape(value, 'json'))
     } else {
       return `(',' || ${key} || ',') LIKE ${this.escape('%,' + value + ',%')}`
+    }
+  }
+
+  protected createRegExpQuery(key: string, value: string | RegExp) {
+    if (typeof value !== 'string' && value.flags.includes('i')) {
+      return `regexp2(${this.escape(typeof value === 'string' ? value : value.source)}, ${key}, ${this.escape(value.flags)})`
+    } else {
+      return `regexp(${this.escape(typeof value === 'string' ? value : value.source)}, ${key})`
     }
   }
 

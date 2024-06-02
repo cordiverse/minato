@@ -98,7 +98,7 @@ const queryOperators: QueryOperators = {
 
   // regexp
   $regex: (query, data) => makeRegExp(query).test(data),
-  $regexFor: (query, data) => new RegExp(data, 'i').test(query),
+  $regexFor: (query, data) => new RegExp(data).test(query),
 
   // bitwise
   $bitsAllSet: (query, data) => (query & data) === query,

@@ -221,7 +221,13 @@ export class Builder {
 
       $object: (arg, group) => mapValues(arg as any, x => this.transformEvalExpr(x)),
 
-      $regex: (arg, group) => ({ $regexMatch: { input: this.eval(arg[0], group), regex: this.eval(arg[1], group) } }),
+      $regex: ([value, regex, flags], group) => ({
+        $regexMatch: {
+          input: this.eval(value, group),
+          regex: this.eval(regex, group),
+          ...(flags ? { options: flags } : {}),
+        },
+      }),
 
       $length: (arg, group) => ({ $size: this.eval(arg, group) }),
       $nin: (arg, group) => ({ $not: { $in: arg.map(val => this.eval(val, group)) } }),

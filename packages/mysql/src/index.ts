@@ -551,9 +551,9 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       case 'unsigned':
       case 'char':
       case 'string':
-        return !!field.length && !!column.CHARACTER_MAXIMUM_LENGTH && column.CHARACTER_MAXIMUM_LENGTH !== field.length
+        return !!field.length && !!column.CHARACTER_MAXIMUM_LENGTH && +column.CHARACTER_MAXIMUM_LENGTH !== field.length
       case 'decimal':
-        return column.NUMERIC_PRECISION !== field.precision || column.NUMERIC_SCALE !== field.scale
+        return +column.NUMERIC_PRECISION !== field.precision || +column.NUMERIC_SCALE !== field.scale
       case 'text':
       case 'list':
       case 'json':

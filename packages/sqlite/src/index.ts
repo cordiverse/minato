@@ -187,6 +187,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       }
     }
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    this.db.create_function('regexp2', (pattern, str, flags) => +new RegExp(pattern, flags).test(str))
     this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
     this.db.create_function('modulo', (left, right) => left % right)
     this.db.create_function('rand', () => Math.random())

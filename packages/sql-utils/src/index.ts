@@ -94,7 +94,7 @@ export class Builder {
 
       // regexp
       $regex: (key, value) => this.createRegExpQuery(key, value),
-      $regexFor: (key, value) => `${this.escape(value)} regexp ${key}`,
+      $regexFor: (key, value) => `${this.escape(value)} collate utf8mb4_bin regexp ${key}`,
 
       // bitwise
       $bitsAllSet: (key, value) => `${key} & ${this.escape(value)} = ${this.escape(value)}`,
@@ -148,7 +148,9 @@ export class Builder {
 
       // string
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,
-      $regex: ([key, value]) => `${this.parseEval(key)} regexp ${this.parseEval(value)}`,
+      $regex: ([key, value, flags]) => `(${this.parseEval(key)} ${
+        (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i'))) ? 'regexp' : 'collate utf8mb4_bin regexp'
+      } ${this.parseEval(value)})`,
 
       // logical / bitwise
       $or: (args) => {
@@ -218,7 +220,11 @@ export class Builder {
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
-    return `${key} regexp ${this.escape(typeof value === 'string' ? value : value.source)}`
+    if (typeof value !== 'string' && value.flags.includes('i')) {
+      return `${key} regexp ${this.escape(value.source)}`
+    } else {
+      return `${key} collate utf8mb4_bin regexp ${this.escape(typeof value === 'string' ? value : value.source)}`
+    }
   }
 
   protected createElementQuery(key: string, value: any) {

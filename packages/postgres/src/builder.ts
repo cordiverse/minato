@@ -56,7 +56,9 @@ export class PostgresBuilder extends Builder {
         return `coalesce(${args.map(arg => this.parseEval(arg, type)).join(', ')})`
       },
 
-      $regex: ([key, value]) => `(${this.parseEval(key)} ~ ${this.parseEval(value)})`,
+      $regex: ([key, value, flags]) => `(${this.parseEval(key)} ${
+        (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i'))) ? '~*' : '~'
+      } ${this.parseEval(value)})`,
 
       // number
       $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,
@@ -192,7 +194,11 @@ export class PostgresBuilder extends Builder {
   }
 
   protected createRegExpQuery(key: string, value: string | RegExp) {
-    return `${key} ~ ${this.escape(typeof value === 'string' ? value : value.source)}`
+    if (typeof value !== 'string' && value.flags.includes('i')) {
+      return `${key} ~* ${this.escape(typeof value === 'string' ? value : value.source)}`
+    } else {
+      return `${key} ~ ${this.escape(typeof value === 'string' ? value : value.source)}`
+    }
   }
 
   protected createElementQuery(key: string, value: any) {

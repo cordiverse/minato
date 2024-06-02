@@ -206,6 +206,7 @@ namespace QueryOperators {
       await database.create('temp1', { text: 'awesome foo', regex: 'foo' })
       await database.create('temp1', { text: 'awesome bar', regex: 'bar' })
       await database.create('temp1', { text: 'awesome foo bar', regex: 'baz' })
+      await database.create('temp1', { text: 'xxx', regex: 'bAz' })
     })
 
     regexFor && it('$regexFor', async () => {
@@ -226,6 +227,14 @@ namespace QueryOperators {
       await expect(database.get('temp1', {
         text: { $regex: /^.*bar$/ },
       })).eventually.to.have.length(2)
+
+      await expect(database.get('temp1', {
+        text: { $regex: /^.*bAr$/ },
+      })).eventually.to.have.length(0)
+
+      await expect(database.get('temp1', {
+        text: { $regex: /^.*bAr$/i },
+      })).eventually.to.have.length(2)
     })
 
     regexBy && it('shorthand syntax', async () => {
@@ -240,6 +249,9 @@ namespace QueryOperators {
       await expect(database.get('temp1', row => $.regex(row.text, /^.*foo.*$/))).eventually.to.have.length(2)
       await expect(database.get('temp1', row => $.regex(row.text, /^.*bar.*$/))).eventually.to.have.length(2)
       await expect(database.get('temp1', row => $.regex(row.text, row.regex))).eventually.to.have.length(2)
+      await expect(database.get('temp1', row => $.regex(row.text, /^.*bAr.*$/i))).eventually.to.have.length(2)
+      await expect(database.get('temp1', row => $.regex(row.text, /^.*bAr.*$/))).eventually.to.have.length(0)
+      await expect(database.get('temp1', row => $.regex(row.text, /^.*bAr.*$/, 'i'))).eventually.to.have.length(2)
     })
   }
 
