@@ -1,6 +1,6 @@
 import { Builder, isBracketed } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, Selection, Type, unravel } from 'minato'
+import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, RegExpLike, Selection, Type, unravel } from 'minato'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'
@@ -33,7 +33,8 @@ export class PostgresBuilder extends Builder {
     this.queryOperators = {
       ...this.queryOperators,
       $regex: (key, value) => this.createRegExpQuery(key, value),
-      $regexFor: (key, value) => `${this.escape(value)} ~ ${key}`,
+      $regexFor: (key, value) => typeof value === 'string' ? `${this.escape(value)} ~ ${key}`
+        : `${this.escape(value.input)} ${value.flags?.includes('i') ? '~*' : '~'} ${key}`,
       $size: (key, value) => {
         if (this.isJsonQuery(key)) {
           return `${this.jsonLength(key)} = ${this.escape(value)}`
@@ -56,7 +57,9 @@ export class PostgresBuilder extends Builder {
         return `coalesce(${args.map(arg => this.parseEval(arg, type)).join(', ')})`
       },
 
-      $regex: ([key, value]) => `(${this.parseEval(key)} ~ ${this.parseEval(value)})`,
+      $regex: ([key, value, flags]) => `(${this.parseEval(key)} ${
+        (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i'))) ? '~*' : '~'
+      } ${this.parseEval(value)})`,
 
       // number
       $add: (args) => `(${args.map(arg => this.parseEval(arg, 'double precision')).join(' + ')})`,
@@ -191,8 +194,12 @@ export class PostgresBuilder extends Builder {
       : this.parseEvalExpr(expr)
   }
 
-  protected createRegExpQuery(key: string, value: string | RegExp) {
-    return `${key} ~ ${this.escape(typeof value === 'string' ? value : value.source)}`
+  protected createRegExpQuery(key: string, value: string | RegExpLike) {
+    if (typeof value !== 'string' && value.flags?.includes('i')) {
+      return `${key} ~* ${this.escape(typeof value === 'string' ? value : value.source)}`
+    } else {
+      return `${key} ~ ${this.escape(typeof value === 'string' ? value : value.source)}`
+    }
   }
 
   protected createElementQuery(key: string, value: any) {
