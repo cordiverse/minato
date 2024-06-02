@@ -479,10 +479,36 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: Create<S[K], S>, options?: Driver.CreateOptions): Promise<S[K]>
-  async create<K extends Keys<S>>(table: K, data: any, options?: any): Promise<S[K]> {
+  async create<K extends Keys<S>>(table: K, data: Create<S[K], S>): Promise<S[K]>
+  async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const sel = this.select(table)
+    const tasks = ['']
+    for (const key in data) {
+      if (data[key] && this.tables[table].fields[key]?.relation) {
+        const relation = this.tables[table].fields[key].relation
+        if (relation.type === 'oneToOne' && relation.required) tasks.push(key)
+        else if (relation.type === 'oneToMany') tasks.push(key)
+        else if (relation.type === 'manyToOne' && isEvalExpr(data[key])) tasks.unshift(key)
+        else if (relation.type === 'manyToMany') tasks.push(key)
+      }
+    }
 
+    if (tasks.length === 1) {
+      const { primary, autoInc } = sel.model
+      if (!autoInc) {
+        const keys = makeArray(primary)
+        if (keys.some(key => getCell(data, key) === undefined)) {
+          throw new Error('missing primary key')
+        }
+      }
+      return sel._action('create', sel.model.create(data)).execute()
+    } else {
+      return this.ensureTransaction(database => database._createOrUpdate(table, data))
+    }
+  }
+
+  private async _createOrUpdate<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
+    const sel = this.select(table)
     data = { ...data }
     const tasks = ['']
     for (const key in data) {
@@ -498,15 +524,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     for (const key of tasks) {
       if (!key) {
         // create the plain data, with or without upsert
-        const { primary, autoInc } = sel.model, keys = makeArray(primary)
+        const { primary, autoInc } = sel.model
+        const keys = makeArray(primary)
+        let upsert = true
         if (keys.some(key => getCell(data, key) === undefined)) {
           if (!autoInc) {
             throw new Error('missing primary key')
           } else {
-            (options ??= {}).upsert = false
+            upsert = false
           }
         }
-        if (options?.upsert) {
+        if (upsert) {
           await sel._action('upsert', [sel.model.format(omit(data, tasks))], keys).execute()
         } else {
           Object.assign(data, await sel._action('create', sel.model.create(omit(data, tasks))).execute())
@@ -516,10 +544,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       const value = data[key]
       const relation = this.tables[table].fields[key]!.relation!
       if (relation.type === 'oneToOne') {
-        await this.create(relation.table as any, {
+        await this._createOrUpdate(relation.table as any, {
           ...value.$create ?? value,
           ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])),
-        } as any, { upsert: true })
+        } as any)
         // if (value.$create) {
 
         // } else if (value.$upsert) {
@@ -530,10 +558,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       } else if (relation.type === 'oneToMany') {
         if (value.$create || !isEvalExpr(value)) {
           for (const item of makeArray(value.$create ?? value)) {
-            await this.create(relation.table as any, {
+            await this._createOrUpdate(relation.table as any, {
               ...item,
               ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])),
-            }, { upsert: true })
+            })
           }
         }
         if (value.$upsert) {
@@ -544,7 +572,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         }
       } else if (relation.type === 'manyToOne') {
         if (value.$create) {
-          const result = await this.create(relation.table as any, value.$create, { upsert: true })
+          const result = await this._createOrUpdate(relation.table as any, value.$create)
           relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result, k))
         } else if (value.$upsert) {
           await this.upsert(relation.table as any, [value.$upsert])
@@ -566,10 +594,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const result: any[] = []
         if (value.$create) {
           for (const item of makeArray(value.$create)) {
-            result.push(await this.create(relation.table as any, {
+            result.push(await this._createOrUpdate(relation.table as any, {
               ...item,
               ...Object.fromEntries(shared.map(([, v]) => [v.reference, getCell(item, v.reference) ?? getCell(data, v.field)])),
-            }, { upsert: true }))
+            }))
           }
         }
         if (value.$upsert) {
@@ -763,10 +791,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (value === null) {
         await this.remove(relation.table as any, Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])) as any)
       } else if (value.$create) {
-        const result = await this.create(relation.table, {
+        const result = await this._createOrUpdate(relation.table, {
           ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
           ...value.$create,
-        }, { upsert: true })
+        })
         if (!relation.fields.some(x => x in makeArray(model.primary))) {
           relation.references.forEach((k, i) => row[relation.fields[i]] = getCell(result, k))
         }
@@ -784,12 +812,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
     } else if (relation.type === 'manyToOne') {
       if (value === null) {
-        // relation.fields.forEach((x, i) => row[x] = null)
         await this.set(
           table,
           pick(model.format(row), makeArray(model.primary)),
           Object.fromEntries(relation.fields.map((k, i) => [k, null])) as any,
         )
+        // relation.fields.forEach((x, i) => row[x] = null)
       }
       if (!isEvalExpr(value)) {
         value = { $upsert: value } as any
@@ -805,8 +833,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         )
       }
       if (value.$create) {
-        // throw new Error('cannot create manyToOne relation in set')
-        const result = await this.create(relation.table as any, value.$create, { upsert: true })
+        const result = await this._createOrUpdate(relation.table as any, value.$create)
         await this.set(
           table,
           omit(model.format(row), makeArray(model.primary)),
@@ -828,7 +855,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         )
       }
       if (value.$connect) {
-        const result = await this.get(relation.table as any, value.$connect)?.[0]
+        const result = (await this.get(relation.table as any, value.$connect))?.[0]
         if (!result) throw new Error('cannot find relation')
         await this.set(
           table,
@@ -838,14 +865,23 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
     } else if (relation.type === 'oneToMany') {
       if (Array.isArray(value)) {
-        // When should we do upsert
-        value = { $remove: {}, $create: value }
+        // default to upsert, this will block nested relation update
+        value = { $remove: {}, $upsert: value }
       }
       if (value.$remove) {
         await this.remove(relation.table, (r: any) => Eval.query(r, {
           ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
           ...(typeof value.$remove === 'function' ? { $expr: value.$remove(r) } : value.$remove),
         }) as any)
+      }
+      if (value.$disconnect) {
+        await this.set(relation.table,
+          (r: any) => Eval.query(r, {
+            ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
+            ...(typeof value.$disconnect === 'function' ? { $expr: value.$disconnect } : value.$disconnect),
+          } as any),
+          Object.fromEntries(relation.references.map((k, i) => [k, null])) as any,
+        )
       }
       if (value.$set) {
         for (const setexpr of makeArray(value.$set) as any[]) {
@@ -861,10 +897,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
       if (value.$create) {
         for (const item of makeArray(value.$create)) {
-          await this.create(relation.table, {
+          await this._createOrUpdate(relation.table, {
             ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
             ...item,
-          }, { upsert: true })
+          })
         }
       }
       if (value.$upsert) {
@@ -872,15 +908,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
           ...r,
         })))
-      }
-      if (value.$disconnect) {
-        await this.set(relation.table,
-          (r: any) => Eval.query(r, {
-            ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
-            ...(typeof value.$disconnect === 'function' ? { $expr: value.$disconnect } : value.$disconnect),
-          } as any),
-          Object.fromEntries(relation.references.map((k, i) => [k, null])) as any,
-        )
       }
       if (value.$connect) {
         await this.set(relation.table,
@@ -897,14 +924,14 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         reference: y,
       }] as const)
       if (Array.isArray(value)) {
-        // When should we do upsert
-        value = { $disconnect: {}, $connect: value }
+        // default to upsert, this will block nested relation update
+        value = { $disconnect: {}, $upsert: value }
       }
       if (value.$remove) {
         const rows = await this.select(assocTable, {
           ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(row, v.field)])),
           ...Object.fromEntries(fields.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
-          [relation.table]: value.$disconnect,
+          [relation.table]: value.$remove,
         }, null).execute()
         await this.remove(assocTable, r => Eval.in(
           [...shared.map(([k, v]) => r[k]), ...fields.map(x => r[x]), ...references.map(x => r[x])],
@@ -913,6 +940,17 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         await this.remove(relation.table, (r) => Eval.in(
           [...shared.map(([k, v]) => r[v.reference]), ...relation.references.map(x => r[x])],
           rows.map(r => [...shared.map(([k, v]) => getCell(r, k)), ...references.map(x => getCell(r, x))]),
+        ))
+      }
+      if (value.$disconnect) {
+        const rows = await this.select(assocTable, {
+          ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(row, v.field)])),
+          ...Object.fromEntries(fields.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
+          [relation.table]: value.$disconnect,
+        }, null).execute()
+        await this.remove(assocTable, r => Eval.in(
+          [...shared.map(([k, v]) => r[k]), ...fields.map(x => r[x]), ...references.map(x => r[x])],
+          rows.map(r => [...shared.map(([k, v]) => getCell(r, k)), ...fields.map(x => getCell(r, x)), ...references.map(x => getCell(r, x))]),
         ))
       }
       if (value.$set) {
@@ -935,10 +973,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (value.$create) {
         const result: any[] = []
         for (const item of makeArray(value.$create)) {
-          result.push(await this.create(relation.table, {
+          result.push(await this._createOrUpdate(relation.table, {
             ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
             ...item,
-          }, { upsert: true }))
+          }))
         }
         await this.upsert(assocTable, result.map(r => ({
           ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(row, v.field)])),
@@ -951,17 +989,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
           ...r,
         })))
-      }
-      if (value.$disconnect) {
-        const rows = await this.select(assocTable, {
+        await this.upsert(assocTable, makeArray(value.$upsert).map(r => ({
           ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(row, v.field)])),
-          ...Object.fromEntries(fields.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
-          [relation.table]: value.$disconnect,
-        }, null).execute()
-        await this.remove(assocTable, r => Eval.in(
-          [...shared.map(([k, v]) => r[k]), ...fields.map(x => r[x]), ...references.map(x => r[x])],
-          rows.map(r => [...shared.map(([k, v]) => getCell(r, k)), ...fields.map(x => getCell(r, x)), ...references.map(x => getCell(r, x))]),
-        ))
+          ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
+          ...Object.fromEntries(references.map((k, i) => [k, r[relation.references[i] as any]])),
+        })) as any)
       }
       if (value.$connect) {
         const rows = await this.get(relation.table, (r: any) => Eval.query(r, {

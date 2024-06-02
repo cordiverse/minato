@@ -1086,14 +1086,20 @@ namespace RelationTests {
       await setup(database, 'profile', profileTable)
       const posts = await setup(database, 'post', postTable)
 
-      posts.push(database.tables['post'].create({ id: posts.length + 1, author: { id: 2 }, content: 'post1' }))
-      posts.push(database.tables['post'].create({ id: posts.length + 1, author: { id: 2 }, content: 'post2' }))
+      posts.push(database.tables['post'].create({ id: 4, author: { id: 2 }, content: 'post1' }))
+      posts.push(database.tables['post'].create({ id: 5, author: { id: 2 }, content: 'post2' }))
+      posts.push(database.tables['post'].create({ id: 6, author: { id: 2 }, content: 'post1' }))
+      posts.push(database.tables['post'].create({ id: 7, author: { id: 2 }, content: 'post2' }))
 
       await database.set('user', 2, {
         posts: {
           $create: [
             { id: 4, content: 'post1' },
             { id: 5, content: 'post2' },
+          ],
+          $upsert: [
+            { id: 6, content: 'post1' },
+            { id: 7, content: 'post2' },
           ],
         },
       })
@@ -1149,6 +1155,30 @@ namespace RelationTests {
         },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+
+      await database.set('post', 2, {
+        author: {
+          $remove: {},
+          $connect: { id: 2 },
+        },
+      })
+      await database.set('post', 3, {
+        author: {
+          $disconnect: {},
+        },
+      })
+      await expect(database.get('user', {}, { include: { posts: true } })).to.eventually.have.shape([
+        {
+          id: 2,
+          posts: [
+            { id: 2 },
+          ],
+        },
+        {
+          id: 3,
+          posts: [],
+        },
+      ])
     })
 
     it('override oneToMany', async () => {
@@ -1189,7 +1219,7 @@ namespace RelationTests {
       }])
     })
 
-    it('create/set manyToMany', async () => {
+    it('modify manyToMany', async () => {
       await setup(database, 'user', userTable)
       await setup(database, 'profile', profileTable)
       await setup(database, 'post', postTable)
@@ -1203,21 +1233,50 @@ namespace RelationTests {
             id: 1,
             name: 'Tag1',
           },
+          $upsert: [
+            {
+              id: 2,
+              name: 'Tag2',
+            },
+            {
+              id: 3,
+              name: 'Tag3',
+            },
+          ],
         },
       })
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([
         { id: 1, name: 'Tag1' },
+        { id: 2, name: 'Tag2' },
+        { id: 3, name: 'Tag3' },
       ])
 
       await database.set('post', 2, row => ({
         tags: {
           $set: r => ({
-            name: $.concat(r.name, '2'),
+            name: $.concat(r.name, row.content, '2'),
           }),
+          $remove: {
+            id: 3,
+          },
         },
       }))
       await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([
-        { id: 1, name: 'Tag12' },
+        { id: 1, name: 'Tag1B22' },
+        { id: 2, name: 'Tag2B22' },
+      ])
+
+      await database.set('post', 2, {
+        tags: [
+          { id: 1, name: 'Tag1' },
+          { id: 2, name: 'Tag2' },
+          { id: 3, name: 'Tag3' },
+        ],
+      })
+      await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([
+        { id: 1, name: 'Tag1' },
+        { id: 2, name: 'Tag2' },
+        { id: 3, name: 'Tag3' },
       ])
     })
 

@@ -60,7 +60,7 @@ export namespace Relation {
 
   export interface Modifier<T extends object = any, S extends any = any> {
     $create?: MaybeArray<Create<T, S>>
-    $upsert?: DeepPartial<T>[]
+    $upsert?: MaybeArray<DeepPartial<T>>
     $set?: MaybeArray<SetExpr<T>>
     $remove?: Query.Expr<Flatten<T>> | Selection.Callback<T, boolean>
     $connect?: Query.Expr<Flatten<T>> | Selection.Callback<T, boolean>
