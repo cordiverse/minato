@@ -111,25 +111,25 @@ function RelationTests(database: Database<Tables>) {
     //   type: 'expr',
     //   nullable: true,
     // },
-    // author: {
-    //   type: 'manyToOne',
-    //   table: 'user',
-    //   target: 'posts',
-    // },
+    author: {
+      type: 'manyToOne',
+      table: 'user',
+      target: 'posts',
+    },
   }, {
     autoInc: true,
   })
 
-  database.relate({
-    many: false,
-    table: 'user',
-    field: 'posts',
-  }, {
-    many: true,
-    table: 'post',
-    field: 'author',
-    nullable: true,
-  })
+  // database.relate({
+  //   many: false,
+  //   table: 'user',
+  //   field: 'posts',
+  // }, {
+  //   many: true,
+  //   table: 'post',
+  //   field: 'author',
+  //   nullable: true,
+  // })
 
   database.extend('tag', {
     id: 'unsigned',
