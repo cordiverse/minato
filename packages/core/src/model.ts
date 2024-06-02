@@ -1,11 +1,12 @@
 import { clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, Update } from './eval.ts'
-import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel } from './utils.ts'
+import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel, Values } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 import { Query } from './query.ts'
 import { Selection } from './selection.ts'
+import { Create } from './database.ts'
 
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
@@ -23,7 +24,6 @@ export namespace Relation {
     references: Keys<S[T]>[]
     fields: K[]
     shared: Record<K, Keys<S[T]>>
-    mixin?: K[]
     required: boolean
   }
 
@@ -36,21 +36,35 @@ export namespace Relation {
     shared?: MaybeArray<K> | Record<K, string>
   }
 
+  export interface Options<S extends any = any, K extends Keys<S> = Keys<S>> {
+    many: boolean
+    table: K
+    field?: Keys<S[K], Values<S>> | Keys<S[K], Values<S>[]>
+    ref?: MaybeArray<Keys<S[K]>>
+    nullable?: boolean
+  }
+
+  export interface Extra {
+    shared?: string[]
+    extra?: object
+  }
+
   export type Include<T, S> = boolean | {
     [P in keyof T]?: T[P] extends MaybeArray<infer U> | undefined ? U extends S ? Include<U, S> : never : never
   }
 
-  export type SetExpr<S extends object = any> = Row.Computed<S, Update<S>> | {
+  export type SetExpr<S extends object = any> = ((row: Row<S>) => Update<S>) | {
     where: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
     update: Row.Computed<S, Update<S>>
   }
 
-  export interface Modifier<S extends object = any> {
-    $create?: MaybeArray<DeepPartial<S>>
-    $set?: MaybeArray<SetExpr<S>>
-    $remove?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
-    $connect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
-    $disconnect?: Query.Expr<Flatten<S>> | Selection.Callback<S, boolean>
+  export interface Modifier<T extends object = any, S extends any = any> {
+    $create?: MaybeArray<Create<T, S>>
+    $upsert?: DeepPartial<T>[]
+    $set?: MaybeArray<SetExpr<T>>
+    $remove?: Query.Expr<Flatten<T>> | Selection.Callback<T, boolean>
+    $connect?: Query.Expr<Flatten<T>> | Selection.Callback<T, boolean>
+    $disconnect?: Query.Expr<Flatten<T>> | Selection.Callback<T, boolean>
   }
 
   export function buildAssociationTable(...tables: [string, string]) {
@@ -61,7 +75,8 @@ export namespace Relation {
     return `${table}.${key}`
   }
 
-  export function transformAssoicationFields(fields: string[], table: string) {
+  export function buildSharedKey(field: string, reference: string) {
+    return [field, reference].sort().join('_')
   }
 
   export function parse(def: Definition, key: string, model: Model, relmodel: Model): [Config, Config] {
@@ -76,11 +91,12 @@ export namespace Relation {
       type: def.type,
       table: def.table ?? relmodel.name,
       fields: makeArray(fields),
-      shared: mapValues(shared, (_, k) => k),
+      shared,
       references: makeArray(def.references ?? relmodel.primary),
       required: def.type !== 'manyToOne' && model.name !== relmodel.name
         && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
     }
+    // remove shared keys from fields and references
     Object.entries(shared).forEach(([k, v]) => {
       relation.fields = relation.fields.filter(x => x !== k)
       relation.references = relation.references.filter(x => x !== v)
@@ -92,7 +108,7 @@ export namespace Relation {
       table: model.name,
       fields: relation.references,
       references: relation.fields,
-      shared,
+      shared: Object.fromEntries(Object.entries(shared).map(([k, v]) => [v, k])),
       required: relation.type !== 'oneToMany' && !relation.required
         && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key)),
     }

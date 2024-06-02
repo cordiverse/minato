@@ -28,6 +28,11 @@ export namespace Driver {
     include?: Relation.Include<T, S>
   }
 
+  export interface CreateOptions {
+    upsert?: boolean
+    include?: any
+  }
+
   export interface WriteResult {
     inserted?: number
     matched?: number
