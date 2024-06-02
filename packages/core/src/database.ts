@@ -44,22 +44,24 @@ export namespace Join2 {
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
 }
 
+type CreateMap<T, S> = { [K in keyof T]?: Create<T[K], S> }
+
 export type Create<T, S> =
   | T extends Values<AtomicTypes> ? T
-  : T extends Values<S>[] ? { [K in keyof T]?: Create<T[K], S> } |
+  : T extends (infer I extends Values<S>)[] ? CreateMap<I, S>[] |
     {
-      $create?: MaybeArray<{ [K in keyof T]?: Create<T[K], S> }>
-      $upsert?: MaybeArray<{ [K in keyof T]?: Create<T[K], S> }>
-      $connect?: Query.Expr<Flatten<T>>
+      $create?: MaybeArray<CreateMap<I, S>>
+      $upsert?: MaybeArray<CreateMap<I, S>>
+      $connect?: Query.Expr<Flatten<I>>
     }
-  : T extends Values<S> ? { [K in keyof T]?: Create<T[K], S> } |
+  : T extends Values<S> ? CreateMap<T, S> |
     {
-      $create?: { [K in keyof T]?: Create<T[K], S> }
-      $upsert?: { [K in keyof T]?: Create<T[K], S> }
+      $create?: CreateMap<T, S>
+      $upsert?: CreateMap<T, S>
       $connect?: Query.Expr<Flatten<T>>
     }
   : T extends (infer U)[] ? DeepPartial<U>[]
-  : T extends object ? { [K in keyof T]?: Create<T[K], S> }
+  : T extends object ? CreateMap<T, S>
   : T
 
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
@@ -548,7 +550,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           await this.upsert(relation.table as any, [value.$upsert])
           relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(value.$upsert, k))
         } else if (value.$connect) {
-          const result = relation.references.every(k => value.$connect![k] !== undefined) ? value.$connect
+          const result = relation.references.every(k => value.$connect![k] !== undefined) ? [value.$connect]
             : await this.get(relation.table as any, value.$connect as any)
           if (result.length !== 1) throw new Error('relation not found')
           relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result[0], k))

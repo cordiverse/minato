@@ -39,7 +39,6 @@ interface Post2Tag {
   tag?: Tag
 }
 
-
 interface GuildSyncRef {
   syncAt: number
 }
@@ -107,10 +106,6 @@ function RelationTests(database: Database<Tables>) {
     id: 'unsigned',
     score: 'unsigned',
     content: 'string',
-    // extraFields: {
-    //   type: 'expr',
-    //   nullable: true,
-    // },
     author: {
       type: 'manyToOne',
       table: 'user',
@@ -120,24 +115,9 @@ function RelationTests(database: Database<Tables>) {
     autoInc: true,
   })
 
-  // database.relate({
-  //   many: false,
-  //   table: 'user',
-  //   field: 'posts',
-  // }, {
-  //   many: true,
-  //   table: 'post',
-  //   field: 'author',
-  //   nullable: true,
-  // })
-
   database.extend('tag', {
     id: 'unsigned',
     name: 'string',
-    // extraFields: {
-    //   type: 'expr',
-    //   nullable: true,
-    // },
     posts: {
       type: 'manyToMany',
       table: 'post',
@@ -170,7 +150,7 @@ function RelationTests(database: Database<Tables>) {
     platform: 'string',
     name: 'string',
   }, {
-    primary: ['id', 'platform']
+    primary: ['id', 'platform'],
   })
 
   database.extend('guild', {
@@ -184,32 +164,14 @@ function RelationTests(database: Database<Tables>) {
       shared: { platform2: 'platform' },
     },
   }, {
-    primary: ['id', 'platform2']
+    primary: ['id', 'platform2'],
   })
-
-  // database.relate({
-  //   many: true,
-  //   table: 'guild',
-  //   field: 'logins',
-  // }, {
-  //   many: true,
-  //   table: 'login',
-  //   field: 'guilds',
-  //   nullable: true,
-  // }, {
-  //   shared: {
-  //     platform2: 'platform'
-  //   },
-  //   extra: {
-  //     syncAt: 'unsigned',
-  //   }
-  // })
 
   database.extend('guildSync', {
     syncAt: 'unsigned',
     platform: 'string',
-    "guild.id": 'string',
-    "login.id": 'string',
+    'guild.id': 'string',
+    'login.id': 'string',
     guild: {
       type: 'manyToOne',
       table: 'guild',
@@ -221,9 +183,9 @@ function RelationTests(database: Database<Tables>) {
       table: 'login',
       target: 'syncs',
       fields: ['login.id', 'platform'],
-    }
+    },
   }, {
-    primary: ['platform', 'guild.id', 'login.id']
+    primary: ['platform', 'guild.id', 'login.id'],
   })
 
   async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
@@ -651,7 +613,7 @@ namespace RelationTests {
         content: 'new post',
         author: {
           id: 2,
-        }
+        },
       })
 
       await expect(database.get('post', 1, ['author'])).to.eventually.have.shape([{
@@ -726,6 +688,87 @@ namespace RelationTests {
       )
     })
 
+    it('upsert / connect oneToMany / manyToOne', async () => {
+      await setup(database, 'user', [])
+      await setup(database, 'profile', [])
+      await setup(database, 'post', [])
+
+      await database.create('user', {
+        id: 1,
+        value: 1,
+        posts: {
+          $upsert: [
+            {
+              id: 1,
+              content: 'post1',
+            },
+            {
+              id: 2,
+              content: 'post2',
+            },
+          ],
+        },
+      })
+
+      await expect(database.select('user', 1, { posts: true }).execute()).to.eventually.have.shape([
+        {
+          id: 1,
+          value: 1,
+          posts: [
+            { id: 1, content: 'post1' },
+            { id: 2, content: 'post2' },
+          ],
+        },
+      ])
+
+      await database.create('user', {
+        id: 2,
+        value: 2,
+        posts: {
+          $create: [
+            {
+              id: 3,
+              content: 'post3',
+              author: {
+                $upsert: {
+                  id: 2,
+                  value: 3,
+                },
+              },
+            },
+            {
+              id: 4,
+              content: 'post4',
+              author: {
+                $connect: {
+                  id: 1,
+                },
+              },
+            },
+          ],
+        },
+      })
+
+      await expect(database.select('user', {}, { posts: true }).execute()).to.eventually.have.shape([
+        {
+          id: 1,
+          value: 1,
+          posts: [
+            { id: 1, content: 'post1' },
+            { id: 2, content: 'post2' },
+            { id: 4, content: 'post4' },
+          ],
+        },
+        {
+          id: 2,
+          value: 3,
+          posts: [
+            { id: 3, content: 'post3' },
+          ],
+        },
+      ])
+    })
+
     it('manyToOne', async () => {
       const users = await setup(database, 'user', [])
       await setup(database, 'post', [])
@@ -776,6 +819,7 @@ namespace RelationTests {
       await setup(database, 'user', [])
       await setup(database, 'post', [])
       await setup(database, 'tag', [])
+      await setup(database, Relation.buildAssociationTable('post', 'tag') as any, [])
 
       for (const user of userTable) {
         await database.create('user', {
@@ -784,7 +828,7 @@ namespace RelationTests {
             ...post,
             tags: {
               $upsert: post2TagTable.filter(p2t => p2t.post?.id === post.id).map(p2t => tagTable.find(tag => tag.id === p2t.tag?.id)).filter(x => !!x),
-            }
+            },
           })),
         })
       }
@@ -798,6 +842,73 @@ namespace RelationTests {
           })),
         })),
       )
+    })
+
+    it('manyToMany expr', async () => {
+      await setup(database, 'user', [])
+      await setup(database, 'post', [])
+      await setup(database, 'tag', [])
+      await setup(database, Relation.buildAssociationTable('post', 'tag') as any, [])
+
+      await database.create('post', {
+        id: 1,
+        content: 'post1',
+        author: {
+          $create: {
+            id: 1,
+            value: 1,
+          },
+        },
+        tags: {
+          $create: [
+            {
+              name: 'tag1',
+            },
+            {
+              name: 'tag2',
+            },
+          ],
+        },
+      })
+
+      await database.create('post', {
+        id: 2,
+        content: 'post2',
+        author: {
+          $connect: {
+            id: 1,
+          },
+        },
+        tags: {
+          $connect: {
+            name: 'tag1',
+          },
+        },
+      })
+
+      await expect(database.select('user', {}, { posts: { tags: true } }).execute()).to.eventually.have.shape([
+        {
+          id: 1,
+          value: 1,
+          posts: [
+            {
+              id: 1,
+              content: 'post1',
+              tags: [
+                { name: 'tag1' },
+                { name: 'tag2' },
+              ],
+            },
+            {
+              id: 2,
+              content: 'post2',
+              tags: [
+                { name: 'tag1' },
+              ],
+            },
+          ],
+        },
+      ])
     })
 
     it('explicit manyToMany', async () => {
@@ -819,7 +930,7 @@ namespace RelationTests {
               syncAt: 123,
               guild: {
                 $connect: { id: '1' },
-              }
+              },
             },
           ],
         },
@@ -831,7 +942,6 @@ namespace RelationTests {
       }, {
         include: { syncs: { guild: true } },
       })).to.eventually.have.nested.property('[0].syncs').with.length(1)
-
     })
   }
 
@@ -916,7 +1026,7 @@ namespace RelationTests {
       await database.set('user', 1, {
         profile: {
           $set: r => ({
-            name: $.concat(r.name, '3')
+            name: $.concat(r.name, '3'),
           }),
         },
       })
@@ -924,7 +1034,6 @@ namespace RelationTests {
         [{ id: 1, value: 0, profile: { name: 'Apple23' } }],
       )
     })
-
 
     ignoreNullObject && it('manyToOne expr', async () => {
       await setup(database, 'user', [])
@@ -946,8 +1055,8 @@ namespace RelationTests {
                 name: 'Apple',
               },
             },
-          }
-        }
+          },
+        },
       })
       await expect(database.select('user', {}, { posts: true, profile: true }).execute()).to.eventually.have.shape(
         [{ id: 1, value: 0, profile: { name: 'Apple' }, posts: [{ id: 1, content: 'Post1' }] }],
@@ -983,8 +1092,8 @@ namespace RelationTests {
       await database.set('user', 2, {
         posts: {
           $create: [
-            { content: 'post1' },
-            { content: 'post2' },
+            { id: 4, content: 'post1' },
+            { id: 5, content: 'post2' },
           ],
         },
       })
@@ -1204,7 +1313,6 @@ namespace RelationTests {
         platform: 'sandbox',
       }, ['guilds'])).to.eventually.have.nested.property('[0].guilds').with.length(1)
 
-
       await database.create('guild', {
         id: '4',
         platform2: 'sandbox',
@@ -1216,9 +1324,6 @@ namespace RelationTests {
           ],
         },
       })
-
-      // console.dir(await database.get('login', {}, { include: { guilds: true } }), { depth: 10 })
-      // console.dir(await database.get('guild', {}, { include: { logins: true } }), { depth: 10 })
 
       await expect(database.get('login', { platform: 'sandbox' }, ['id', 'guilds'])).to.eventually.have.shape([
         { id: '1', guilds: [{ id: '1' }, { id: '4' }] },
@@ -1233,50 +1338,7 @@ namespace RelationTests {
         { id: '4', logins: [{ id: '1' }, { id: '2' }] },
       ])
     })
-    // it('explicit manyToMany', async () => {
-    //   await setup(database, 'login', [
-    //     // { id: '1', platform: 'sandbox', name: 'Bot1' },
-    //     // { id: '2', platform: 'sandbox', name: 'Bot2' },
-    //     // { id: '3', platform: 'sandbox', name: 'Bot3' },
-    //   ])
-    //   await setup(database, 'guild', [
-    //     { id: '1', platform2: 'sandbox', name: 'Guild1' },
-    //     { id: '2', platform2: 'sandbox', name: 'Guild2' },
-    //     { id: '3', platform2: 'sandbox', name: 'Guild3' },
-    //   ])
-    //   await setup(database, Relation.buildAssociationTable('login', 'guild') as any, [])
-    // })
   }
-
-  //   export function misc(database: Database<Tables>) {
-  //     it('unsupported', async () => {
-  //       await setup(database, 'user', userTable)
-  //       await setup(database, 'post', postTable)
-  //       await setup(database, 'tag', tagTable)
-
-  //       await expect(database.set('post', 1, {
-  //         tags: [],
-  //       })).to.eventually.be.rejected
-
-  //       await expect(database.set('post', 1, {
-  //         tags: {
-  //           $remove: {},
-  //         },
-  //       })).to.eventually.be.rejected
-
-  //       await expect(database.set('post', 1, {
-  //         tags: {
-  //           $set: {},
-  //         },
-  //       })).to.eventually.be.rejected
-
-  //       await expect(database.set('post', 1, {
-  //         tags: {
-  //           $create: {},
-  //         },
-  //       })).to.eventually.be.rejected
-  //     })
-  //   }
 }
 
 export default RelationTests
