@@ -720,7 +720,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           if (!relation.required) {
             const result = relation.references.every(k => value.$connect![k] !== undefined) ? [value.$connect]
               : await this.get(relation.table, value.$connect as any)
-            if (result.length !== 1) throw new Error('related row not found or not unique ')
+            if (result.length !== 1) throw new Error('related row not found or not unique')
             relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result[0], k))
           } else {
             await this.set(relation.table,
@@ -760,7 +760,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         } else if (value.$connect) {
           const result = relation.references.every(k => value.$connect![k] !== undefined) ? [value.$connect]
             : await this.get(relation.table, value.$connect as any)
-          if (result.length !== 1) throw new Error('related row not found or not unique ')
+          if (result.length !== 1) throw new Error('related row not found or not unique')
           relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result[0], k))
         }
       } else if (relation.type === 'manyToMany') {
@@ -867,9 +867,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
           )
         } else {
-          const result = relation.references.every(k => value.$connect![k as any] !== undefined) ? [value.$connect]
-            : await this.get(relation.table, value.$connect as any)
-          if (result.length !== 1) throw new Error('related row not found or not unique ')
+          const result = await this.get(relation.table, value.$connect as any)
+          if (result.length !== 1) throw new Error('related row not found or not unique')
           await this.set(
             table,
             pick(model.format(row), makeArray(model.primary)),
@@ -916,8 +915,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         })))
       }
       if (value.$connect) {
-        const result = (await this.get(relation.table, value.$connect))
-        if (result.length !== 1) throw new Error('cannot find relation')
+        const result = await this.get(relation.table, value.$connect)
+        if (result.length !== 1) throw new Error('related row not found or not unique')
         await this.set(
           table,
           pick(model.format(row), makeArray(model.primary)),
