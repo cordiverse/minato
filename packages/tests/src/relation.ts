@@ -421,7 +421,7 @@ namespace RelationTests {
 
       await expect(database.get('user', {
         posts: {
-          $some: row => $.eq(row.id, 1),
+          $some: row => $.eq(row.id2, 1),
         },
       })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
         ...user,
