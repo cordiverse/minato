@@ -447,7 +447,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     update: Row.Computed<S[K], Update<S[K]>>,
   ): Promise<Driver.WriteResult> {
     const rawupdate = typeof update === 'function' ? update : () => update
-    const sel = this.select(table, query, null)
+    let sel = this.select(table, query, null)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)
     if (primary.some(key => key in update)) {
@@ -460,7 +460,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     if (relations.length) {
       return await this.ensureTransaction(async (database) => {
         const rows = await database.get(table, query)
-        let baseUpdate = omit(update, relations.map(([key]) => key) as any)
+        sel = database.select(table, query, null)
+        let baseUpdate = omit(rawupdate(sel.row), relations.map(([key]) => key) as any)
         baseUpdate = sel.model.format(baseUpdate)
         for (const [key] of relations) {
           await Promise.all(rows.map(row => database.processRelationUpdate(table, row, key, rawupdate(row as any)[key])))
@@ -482,18 +483,18 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   async create<K extends Keys<S>>(table: K, data: Create<S[K], S>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const sel = this.select(table)
-    const tasks = ['']
+    let hasRelation = false
     for (const key in data) {
-      if (data[key] && this.tables[table].fields[key]?.relation) {
+      if (data[key] !== undefined && this.tables[table].fields[key]?.relation) {
         const relation = this.tables[table].fields[key].relation
-        if (relation.type === 'oneToOne' && (relation.required || isEvalExpr(data[key]))) tasks.push(key)
-        else if (relation.type === 'oneToMany') tasks.push(key)
-        else if (relation.type === 'manyToOne' && isEvalExpr(data[key])) tasks.unshift(key)
-        else if (relation.type === 'manyToMany') tasks.push(key)
+        if (relation.type === 'oneToOne' && !relation.required && !isEvalExpr(data[key])) continue
+        if (relation.type === 'manyToOne' && !isEvalExpr(data[key])) continue
+        hasRelation = true
+        break
       }
     }
 
-    if (tasks.length === 1) {
+    if (!hasRelation) {
       const { primary, autoInc } = sel.model
       if (!autoInc) {
         const keys = makeArray(primary)
@@ -672,7 +673,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     data = { ...data }
     const tasks = ['']
     for (const key in data) {
-      if (data[key] && this.tables[table].fields[key]?.relation) {
+      if (data[key] !== undefined && this.tables[table].fields[key]?.relation) {
         const relation = this.tables[table].fields[key].relation
         if (relation.type === 'oneToOne' && relation.required) tasks.push(key)
         else if (relation.type === 'oneToOne' && isEvalExpr(data[key])) tasks.unshift(key)
@@ -845,8 +846,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
           ...value.$create,
         })
-        if (!relation.fields.some(x => x in makeArray(model.primary))) {
-          relation.references.forEach((k, i) => row[relation.fields[i]] = getCell(result, k))
+        if (!relation.required) {
+          await this.set(
+            table,
+            pick(model.format(row), makeArray(model.primary)),
+            Object.fromEntries(relation.fields.map((k, i) => [k, getCell(result, relation.references[i])])) as any,
+          )
         }
       }
       if (value.$upsert) {
@@ -856,18 +861,19 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         })))
       }
       if (value.$connect) {
-        if (!relation.required) {
-          const result = await this.get(relation.table, value.$connect as any)
+        if (relation.required) {
+          await this.set(relation.table,
+            value.$connect,
+            Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
+          )
+        } else {
+          const result = relation.references.every(k => value.$connect![k as any] !== undefined) ? [value.$connect]
+            : await this.get(relation.table, value.$connect as any)
           if (result.length !== 1) throw new Error('related row not found or not unique ')
           await this.set(
             table,
             pick(model.format(row), makeArray(model.primary)),
-              Object.fromEntries(relation.fields.map((k, i) => [k, getCell(result[0], relation.references[i])])) as any,
-          )
-        } else {
-          await this.set(relation.table,
-            value.$connect,
-            Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
+            Object.fromEntries(relation.fields.map((k, i) => [k, getCell(result[0], relation.references[i])])) as any,
           )
         }
       }

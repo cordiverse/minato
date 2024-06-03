@@ -279,7 +279,7 @@ namespace RelationTests {
       await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape(
         users.map(user => ({
           ...user,
-          successor: users.find(successor => successor.id === user.successor?.id),
+          successor: users.find(successor => successor.id === user.successor?.id) ?? null,
         })),
       )
     })
@@ -688,10 +688,17 @@ namespace RelationTests {
             value: 2,
           },
         },
+        predecessor: {
+          $create: {
+            id: 6,
+            value: 6,
+          },
+        },
       })
-      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+      await expect(database.select('user', {}, { successor: true }).orderBy('id').execute()).to.eventually.have.shape([
         { id: 1, value: 1, successor: { id: 2, value: 2 } },
-        { id: 2, value: 2 },
+        { id: 2, value: 2, successor: null },
+        { id: 6, value: 6, successor: { id: 1, value: 1 } },
       ])
 
       await database.create('user', {
@@ -704,11 +711,12 @@ namespace RelationTests {
           },
         },
       })
-      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+      await expect(database.select('user', {}, { successor: true }).orderBy('id').execute()).to.eventually.have.shape([
         { id: 1, value: 1, successor: { id: 2, value: 2 } },
         { id: 2, value: 2, successor: null },
         { id: 3, value: 3, successor: null },
         { id: 4, value: 4, successor: { id: 3, value: 3 } },
+        { id: 6, value: 6 },
       ])
 
       await database.remove('user', [2, 4])
@@ -745,6 +753,7 @@ namespace RelationTests {
         { id: 3, value: 3, successor: { id: 4, value: 4 } },
         { id: 4, value: 4, successor: null },
         { id: 5, value: 5, successor: { id: 3, value: 3 } },
+        { id: 6, value: 6, successor: { id: 1, value: 1 } },
       ])
     })
 
@@ -1124,9 +1133,21 @@ namespace RelationTests {
       await database.upsert('user', [
         { id: 1, value: 1, successor: { id: 2 } },
         { id: 2, value: 2, successor: { id: 1 } },
-        { id: 3, value: 3, successor: { id: 4 } },
-        { id: 4, value: 4, successor: { id: 3 } },
+        { id: 3, value: 3 },
       ])
+      await database.set('user', 3, {
+        successor: {
+          $create: {
+            id: 4,
+            value: 4,
+          },
+        },
+        predecessor: {
+          $connect: {
+            id: 4,
+          },
+        },
+      })
       await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
         { id: 1, value: 1, successor: { id: 2, value: 2 } },
         { id: 2, value: 2, successor: { id: 1, value: 1 } },
