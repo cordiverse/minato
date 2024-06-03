@@ -1,7 +1,7 @@
 import { clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, Update } from './eval.ts'
-import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel, Values } from './utils.ts'
+import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
 import { Query } from './query.ts'
@@ -34,19 +34,6 @@ export namespace Relation {
     references?: MaybeArray<string>
     fields?: MaybeArray<K>
     shared?: MaybeArray<K> | Record<K, string>
-  }
-
-  export interface Options<S extends any = any, K extends Keys<S> = Keys<S>> {
-    many: boolean
-    table: K
-    field?: Keys<S[K], Values<S>> | Keys<S[K], Values<S>[]>
-    ref?: MaybeArray<Keys<S[K]>>
-    nullable?: boolean
-  }
-
-  export interface Extra {
-    shared?: string[]
-    extra?: object
   }
 
   export type Include<T, S> = boolean | {
