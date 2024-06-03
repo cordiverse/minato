@@ -122,7 +122,8 @@ export namespace Eval {
 
     // string
     concat: Multi<string, string>
-    regex<A extends boolean>(x: Term<string, A>, y: Term<string, A> | Term<RegExp, A>): Expr<boolean, A>
+    regex<A extends boolean>(x: Term<string, A>, y: RegExp): Expr<boolean, A>
+    regex<A extends boolean>(x: Term<string, A>, y: Term<string, A>, flags?: string): Expr<boolean, A>
 
     // logical / bitwise
     and: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
@@ -240,7 +241,7 @@ operators.$nin = ([value, array], data) => {
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''), Type.String)
-Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(data, regex)).test(executeEval(data, value)), Type.Boolean)
+Eval.regex = multary('regex', ([value, regex, flags], data) => makeRegExp(executeEval(data, regex), flags).test(executeEval(data, value)), Type.Boolean)
 
 // logical / bitwise
 Eval.and = multary('and', (args, data) => {
