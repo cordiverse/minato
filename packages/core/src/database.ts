@@ -160,13 +160,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             type: 'manyToOne',
             table: name,
             fields: [...shared, ...fields].map(x => x[0]),
-            references: [...Object.keys(relation.shared), ...relation.references],
+            references: [...Object.keys(relation.shared), ...relation.fields],
           },
           [relation.table]: {
             type: 'manyToOne',
             table: relation.table,
             fields: [...shared, ...references].map(x => x[0]),
-            references: [...Object.values(relation.shared), ...relation.fields],
+            references: [...Object.values(relation.shared), ...relation.references],
           },
         } as any, {
           primary: [...shared, ...fields, ...references].map(x => x[0]),
