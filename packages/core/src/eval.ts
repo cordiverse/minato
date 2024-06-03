@@ -8,6 +8,8 @@ export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
+export const isUpdateExpr: (value: any) => boolean = isEvalExpr
+
 export function isAggrExpr(expr: Eval.Expr): boolean {
   return expr['$'] || expr['$select']
 }

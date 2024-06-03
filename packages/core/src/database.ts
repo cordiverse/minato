@@ -4,7 +4,7 @@ import { AtomicTypes, DeepPartial, FlatKeys, FlatPick, Flatten, getCell, Indexab
 import { Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
 import { Driver } from './driver.ts'
-import { Eval, isEvalExpr, Update } from './eval.ts'
+import { Eval, isUpdateExpr, Update } from './eval.ts'
 import { Query } from './query.ts'
 import { Type } from './type.ts'
 
@@ -487,8 +487,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     for (const key in data) {
       if (data[key] !== undefined && this.tables[table].fields[key]?.relation) {
         const relation = this.tables[table].fields[key].relation
-        if (relation.type === 'oneToOne' && !relation.required && !isEvalExpr(data[key])) continue
-        if (relation.type === 'manyToOne' && !isEvalExpr(data[key])) continue
+        if (relation.type === 'oneToOne' && !relation.required && !isUpdateExpr(data[key])) continue
+        if (relation.type === 'manyToOne' && !isUpdateExpr(data[key])) continue
         hasRelation = true
         break
       }
@@ -676,9 +676,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (data[key] !== undefined && this.tables[table].fields[key]?.relation) {
         const relation = this.tables[table].fields[key].relation
         if (relation.type === 'oneToOne' && relation.required) tasks.push(key)
-        else if (relation.type === 'oneToOne' && isEvalExpr(data[key])) tasks.unshift(key)
+        else if (relation.type === 'oneToOne' && isUpdateExpr(data[key])) tasks.unshift(key)
         else if (relation.type === 'oneToMany') tasks.push(key)
-        else if (relation.type === 'manyToOne' && isEvalExpr(data[key])) tasks.unshift(key)
+        else if (relation.type === 'manyToOne' && isUpdateExpr(data[key])) tasks.unshift(key)
         else if (relation.type === 'manyToMany') tasks.push(key)
       }
     }
@@ -702,35 +702,45 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         }
         continue
       }
-      let value = data[key]
+      const value: Relation.Modifier = data[key]
       const relation: Relation.Config<S> = this.tables[table].fields[key]!.relation! as any
       if (relation.type === 'oneToOne') {
-        if (!isEvalExpr(value)) {
-          value = { $create: value }
-        }
-        if (value.$create || value.$upsert) {
+        if (value.$create || value.$upsert || !isUpdateExpr(value)) {
           const result = await this.createOrUpdate(relation.table, {
             ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])),
-            ...value.$create ?? value.$upsert,
+            ...value.$create ?? value.$upsert ?? value,
           } as any)
           if (!relation.required) {
             relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result, k))
           }
         } else if (value.$connect) {
-          if (!relation.required) {
-            const result = relation.references.every(k => value.$connect![k] !== undefined) ? [value.$connect]
-              : await this.get(relation.table, value.$connect as any)
-            if (result.length !== 1) throw new Error('related row not found or not unique')
-            relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result[0], k))
-          } else {
+          if (relation.required) {
             await this.set(relation.table,
               value.$connect,
               Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])) as any,
             )
+          } else {
+            const result = relation.references.every(k => value.$connect![k as any] !== undefined) ? [value.$connect]
+              : await this.get(relation.table, value.$connect as any)
+            if (result.length !== 1) throw new Error('related row not found or not unique')
+            relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result[0], k))
           }
         }
+      } else if (relation.type === 'manyToOne') {
+        if (value.$create || !isUpdateExpr(value)) {
+          const result = await this.createOrUpdate(relation.table, value.$create ?? value)
+          relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result, k))
+        } else if (value.$upsert) {
+          await this.upsert(relation.table, [value.$upsert])
+          relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(value.$upsert, k))
+        } else if (value.$connect) {
+          const result = relation.references.every(k => value.$connect![k as any] !== undefined) ? [value.$connect]
+            : await this.get(relation.table, value.$connect as any)
+          if (result.length !== 1) throw new Error('related row not found or not unique')
+          relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result[0], k))
+        }
       } else if (relation.type === 'oneToMany') {
-        if (value.$create || !isEvalExpr(value)) {
+        if (value.$create || Array.isArray(value)) {
           for (const item of makeArray(value.$create ?? value)) {
             await this.createOrUpdate(relation.table, {
               ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])),
@@ -750,19 +760,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])) as any,
           )
         }
-      } else if (relation.type === 'manyToOne') {
-        if (value.$create) {
-          const result = await this.createOrUpdate(relation.table, value.$create)
-          relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result, k))
-        } else if (value.$upsert) {
-          await this.upsert(relation.table, [value.$upsert])
-          relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(value.$upsert, k))
-        } else if (value.$connect) {
-          const result = relation.references.every(k => value.$connect![k] !== undefined) ? [value.$connect]
-            : await this.get(relation.table, value.$connect as any)
-          if (result.length !== 1) throw new Error('related row not found or not unique')
-          relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result[0], k))
-        }
       } else if (relation.type === 'manyToMany') {
         const assocTable = Relation.buildAssociationTable(relation.table, table)
         const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
@@ -772,8 +769,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           reference: y,
         }] as const)
         const result: any[] = []
-        if (value.$create) {
-          for (const item of makeArray(value.$create)) {
+        if (value.$create || Array.isArray(value)) {
+          for (const item of makeArray(value.$create ?? value)) {
             result.push(await this.createOrUpdate(relation.table, {
               ...Object.fromEntries(shared.map(([, v]) => [v.reference, getCell(item, v.reference) ?? getCell(data, v.field)])),
               ...item,
@@ -781,7 +778,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           }
         }
         if (value.$upsert) {
-          const upsert = makeArray(value.$upsert ?? value.$create).map(r => ({
+          const upsert = makeArray(value.$upsert).map(r => ({
             ...Object.fromEntries(shared.map(([, v]) => [v.reference, getCell(r, v.reference) ?? getCell(data, v.field)])),
             ...r,
           }))
@@ -811,7 +808,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (value === null) {
         value = relation.required ? { $remove: {} } : { $disconnect: {} }
       }
-      if (typeof value === 'object' && !isEvalExpr(value)) {
+      if (typeof value === 'object' && !isUpdateExpr(value)) {
         value = { $upsert: value }
       }
       if (value.$remove) {
@@ -880,7 +877,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (value === null) {
         value = { $disconnect: {} }
       }
-      if (typeof value === 'object' && !isEvalExpr(value)) {
+      if (typeof value === 'object' && !isUpdateExpr(value)) {
         value = { $upsert: value } as any
       }
       if (value.$remove) {
@@ -975,7 +972,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])) as any,
         )
       }
-    } else {
+    } else if (relation.type === 'manyToMany') {
       const assocTable = Relation.buildAssociationTable(table, relation.table) as Keys<S>
       const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
       const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
