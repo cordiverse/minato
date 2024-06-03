@@ -7,8 +7,8 @@ interface User {
   value?: number
   profile?: Profile
   posts?: Post[]
-  successor?: { id: number }
-  predecessor?: { id: number }
+  successor?: { id: number } & Record<string, any>
+  predecessor?: { id: number } & Record<string, any>
 }
 
 interface Profile {
@@ -58,9 +58,6 @@ interface Guild extends GuildSyncRef {
   logins?: Login[]
   syncs?: GuildSync[]
 }
-
-// interface GuildSync extends Login { }
-// interface GuildSync extends Guild { }
 
 interface GuildSync {
   syncAt?: number
@@ -234,11 +231,11 @@ namespace RelationTests {
   ] as any
 
   export interface RelationOptions {
-    ignoreNullObject?: boolean
+    nullableComparator?: boolean
   }
 
   export function select(database: Database<Tables>, options: RelationOptions = {}) {
-    const { ignoreNullObject = true } = options
+    const { nullableComparator = true } = options
 
     it('basic support', async () => {
       const users = await setup(database, 'user', userTable)
@@ -267,7 +264,7 @@ namespace RelationTests {
       )
     })
 
-    ignoreNullObject && it('self relation', async () => {
+    nullableComparator && it('self relation', async () => {
       const users = await setup(database, 'user', userTable)
 
       await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape(
@@ -636,7 +633,9 @@ namespace RelationTests {
     })
   }
 
-  export function create(database: Database<Tables>) {
+  export function create(database: Database<Tables>, options: RelationOptions = {}) {
+    const { nullableComparator = true } = options
+
     it('basic support', async () => {
       await setup(database, 'user', [])
       await setup(database, 'profile', [])
@@ -666,6 +665,78 @@ namespace RelationTests {
           posts: postTable.filter(post => post.author?.id === user.id),
         })),
       )
+    })
+
+    nullableComparator && it('nullable oneToOne', async () => {
+      await setup(database, 'user', [])
+
+      await database.create('user', {
+        id: 1,
+        value: 1,
+        successor: {
+          $create: {
+            id: 2,
+            value: 2,
+          },
+        },
+      })
+      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 1, successor: { id: 2, value: 2 } },
+        { id: 2, value: 2 },
+      ])
+
+      await database.create('user', {
+        id: 3,
+        value: 3,
+        predecessor: {
+          $upsert: {
+            id: 4,
+            value: 4,
+          },
+        },
+      })
+      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 1, successor: { id: 2, value: 2 } },
+        { id: 2, value: 2, successor: null },
+        { id: 3, value: 3, successor: null },
+        { id: 4, value: 4, successor: { id: 3, value: 3 } },
+      ])
+
+      await database.remove('user', [2, 4])
+      await database.create('user', {
+        id: 2,
+        value: 2,
+        successor: {
+          $connect: {
+            id: 1,
+          },
+        },
+      })
+      await database.create('user', {
+        id: 4,
+        value: 4,
+        predecessor: {
+          $connect: {
+            id: 3,
+          },
+        },
+      })
+      await database.create('user', {
+        id: 5,
+        value: 5,
+        successor: {
+          $connect: {
+            value: 3,
+          },
+        },
+      })
+      await expect(database.select('user', {}, { successor: true }).orderBy('id').execute()).to.eventually.have.shape([
+        { id: 1, value: 1, successor: { id: 2, value: 2 } },
+        { id: 2, value: 2, successor: { id: 1, value: 1 } },
+        { id: 3, value: 3, successor: { id: 4, value: 4 } },
+        { id: 4, value: 4, successor: null },
+        { id: 5, value: 5, successor: { id: 3, value: 3 } },
+      ])
     })
 
     it('oneToMany', async () => {
@@ -725,6 +796,9 @@ namespace RelationTests {
         id: 2,
         value: 2,
         posts: {
+          $connect: {
+            id: 1,
+          },
           $create: [
             {
               id: 3,
@@ -754,7 +828,6 @@ namespace RelationTests {
           id: 1,
           value: 1,
           posts: [
-            { id: 1, content: 'post1' },
             { id: 2, content: 'post2' },
             { id: 4, content: 'post4' },
           ],
@@ -763,6 +836,7 @@ namespace RelationTests {
           id: 2,
           value: 3,
           posts: [
+            { id: 1, content: 'post1' },
             { id: 3, content: 'post3' },
           ],
         },
@@ -946,7 +1020,7 @@ namespace RelationTests {
   }
 
   export function modify(database: Database<Tables>, options: RelationOptions = {}) {
-    const { ignoreNullObject = true } = options
+    const { nullableComparator = true } = options
 
     it('oneToOne / manyToOne', async () => {
       const users = await setup(database, 'user', userTable)
@@ -1035,7 +1109,68 @@ namespace RelationTests {
       )
     })
 
-    ignoreNullObject && it('manyToOne expr', async () => {
+    nullableComparator && it('nullable oneToOne', async () => {
+      await setup(database, 'user', [])
+
+      await database.upsert('user', [
+        { id: 1, value: 1, successor: { id: 2 } },
+        { id: 2, value: 2, successor: { id: 1 } },
+        { id: 3, value: 3, successor: { id: 4 } },
+        { id: 4, value: 4, successor: { id: 3 } },
+      ])
+      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 1, successor: { id: 2, value: 2 } },
+        { id: 2, value: 2, successor: { id: 1, value: 1 } },
+        { id: 3, value: 3, successor: { id: 4, value: 4 } },
+        { id: 4, value: 4, successor: { id: 3, value: 3 } },
+      ])
+
+      await database.set('user', [1, 2], {
+        successor: null,
+      })
+      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 1, successor: null },
+        { id: 2, value: 2, successor: null },
+        { id: 3, value: 3, successor: { id: 4, value: 4 } },
+        { id: 4, value: 4, successor: { id: 3, value: 3 } },
+      ])
+
+      await database.set('user', 3, {
+        predecessor: {
+          $disconnect: {},
+        },
+        successor: {
+          $disconnect: {},
+        },
+      })
+      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 1, successor: null },
+        { id: 2, value: 2, successor: null },
+        { id: 3, value: 3, successor: null },
+        { id: 4, value: 4, successor: null },
+      ])
+
+      await database.set('user', 2, {
+        predecessor: {
+          $connect: {
+            id: 3,
+          },
+        },
+        successor: {
+          $connect: {
+            id: 1
+          },
+        },
+      })
+      await expect(database.select('user', {}, { successor: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 1, successor: null },
+        { id: 2, value: 2, successor: { id: 1, value: 1 } },
+        { id: 3, value: 3, successor: { id: 2, value: 2 }  },
+        { id: 4, value: 4, successor: null },
+      ])
+    })
+
+    nullableComparator && it('manyToOne expr', async () => {
       await setup(database, 'user', [])
       await setup(database, 'profile', [])
       await setup(database, 'post', [])
@@ -1143,7 +1278,7 @@ namespace RelationTests {
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
 
-    it('delete oneToMany', async () => {
+    nullableComparator && it('delete oneToMany', async () => {
       await setup(database, 'user', userTable)
       await setup(database, 'profile', profileTable)
       const posts = await setup(database, 'post', postTable)
@@ -1201,7 +1336,7 @@ namespace RelationTests {
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
     })
 
-    ignoreNullObject && it('connect / disconnect oneToMany', async () => {
+    nullableComparator && it('connect / disconnect oneToMany', async () => {
       await setup(database, 'user', userTable)
       await setup(database, 'profile', profileTable)
       await setup(database, 'post', postTable)
@@ -1322,6 +1457,33 @@ namespace RelationTests {
         score: $.add(row.score, 10),
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+    })
+
+    it('nested modify', async () => {
+      await setup(database, 'user', userTable)
+      await setup(database, 'post', postTable)
+      const profiles = await setup(database, 'profile', profileTable)
+
+      profiles[0].name = 'Evil'
+      await database.set('user', 1, {
+        posts: {
+          $set: {
+            where: { id: { $gt: 1 } },
+            update: {
+              author: {
+                $set: _ => ({
+                  profile: {
+                    $set: _ => ({
+                      name: 'Evil',
+                    }),
+                  },
+                }),
+              },
+            },
+          },
+        },
+      })
+      await expect(database.get('profile', {})).to.eventually.have.deep.members(profiles)
     })
 
     it('shared manyToMany', async () => {

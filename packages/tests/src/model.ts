@@ -182,7 +182,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       inner: {
         num: 'unsigned',
         text: 'string',
-        json: 'json',
+        json: 'object',
         embed: {
           type: 'object',
           inner: {
