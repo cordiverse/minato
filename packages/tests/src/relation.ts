@@ -1001,12 +1001,8 @@ namespace RelationTests {
 
     it('explicit manyToMany', async () => {
       await setup(database, 'login', [])
-      await setup(database, 'guild', [
-        { id: '1', platform2: 'sandbox', name: 'Guild1' },
-        { id: '2', platform2: 'sandbox', name: 'Guild2' },
-        { id: '3', platform2: 'sandbox', name: 'Guild3' },
-      ])
-      await setup(database, Relation.buildAssociationTable('login', 'guild') as any, [])
+      await setup(database, 'guild', [])
+      await setup(database, 'guildSync', [])
 
       await database.create('login', {
         id: '1',
@@ -1017,7 +1013,28 @@ namespace RelationTests {
             {
               syncAt: 123,
               guild: {
-                $connect: { id: '1' },
+                $upsert: { id: '1', platform2: 'sandbox', name: 'Guild1' },
+              },
+            },
+          ],
+        },
+      })
+
+      await database.upsert('guild', [
+        { id: '2', platform2: 'sandbox', name: 'Guild2' },
+        { id: '3', platform2: 'sandbox', name: 'Guild3' },
+      ])
+
+      await database.create('login', {
+        id: '2',
+        platform: 'sandbox',
+        name: 'Bot2',
+        syncs: {
+          $create: [
+            {
+              syncAt: 123,
+              guild: {
+                $connect: { id: '2' },
               },
             },
           ],
@@ -1025,11 +1042,33 @@ namespace RelationTests {
       })
 
       await expect(database.get('login', {
-        id: '1',
         platform: 'sandbox',
       }, {
         include: { syncs: { guild: true } },
-      })).to.eventually.have.nested.property('[0].syncs').with.length(1)
+      })).to.eventually.have.shape([
+        {
+          id: '1',
+          platform: 'sandbox',
+          name: 'Bot1',
+          syncs: [
+            {
+              syncAt: 123,
+              guild: { id: '1', platform2: 'sandbox', name: 'Guild1' },
+            },
+          ],
+        },
+        {
+          id: '2',
+          platform: 'sandbox',
+          name: 'Bot2',
+          syncs: [
+            {
+              syncAt: 123,
+              guild: { id: '2', platform2: 'sandbox', name: 'Guild2' },
+            },
+          ],
+        },
+      ])
     })
   }
 
@@ -1583,6 +1622,46 @@ namespace RelationTests {
         { id: '2', logins: [] },
         { id: '3', logins: [] },
         { id: '4', logins: [{ id: '1' }, { id: '2' }] },
+      ])
+    })
+
+    it('explicit manyToMany', async () => {
+      await setup(database, 'login', [
+        { id: '1', platform: 'sandbox', name: 'Guild1' },
+        { id: '2', platform: 'sandbox', name: 'Guild2' },
+        { id: '3', platform: 'sandbox', name: 'Guild3' },
+      ])
+      await setup(database, 'guild', [])
+      await setup(database, 'guildSync', [])
+
+      await database.set('login', {
+        id: '1',
+        platform: 'sandbox',
+      }, {
+        syncs: {
+          $create: [
+            {
+              syncAt: 123,
+              guild: {
+                $create: { id: '1', platform2: 'sandbox' },
+              },
+            },
+          ],
+        },
+      })
+
+      await expect(database.get('login', {
+        id: '1',
+        platform: 'sandbox',
+      }, {
+        include: { syncs: { guild: true } },
+      })).to.eventually.have.shape([
+        {
+          id: '1',
+          syncs: [
+            { syncAt: 123, guild: { id: '1', platform2: 'sandbox' } },
+          ],
+        },
       ])
     })
   }
