@@ -117,7 +117,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await driver.prepare(name)
   }
 
-  extend<K extends Keys<S>, T extends Field.Extension<S[K], N>>(name: K, fields: T, config: Partial<Model.Config<Keys<T>>> = {}) {
+  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<FlatKeys<S[K]>>> = {}) {
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
@@ -169,7 +169,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             references: [...Object.values(relation.shared), ...relation.references],
           },
         } as any, {
-          primary: [...shared, ...fields, ...references].map(x => x[0]),
+          primary: [...shared, ...fields, ...references].map(x => x[0]) as any,
         })
       }
     })

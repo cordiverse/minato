@@ -33,7 +33,7 @@ export namespace Relation {
     target?: string
     references?: MaybeArray<string>
     fields?: MaybeArray<K>
-    shared?: MaybeArray<K> | Record<K, string>
+    shared?: MaybeArray<K> | Partial<Record<K, string>>
   }
 
   export type Include<T, S> = boolean | {
@@ -78,7 +78,7 @@ export namespace Relation {
       type: def.type,
       table: def.table ?? relmodel.name,
       fields: makeArray(fields),
-      shared,
+      shared: shared as any,
       references: makeArray(def.references ?? relmodel.primary),
       required: def.type !== 'manyToOne' && model.name !== relmodel.name
         && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
@@ -177,7 +177,7 @@ export namespace Field {
       | Literal<O[K], N>
       | Definition<O[K], N>
       | Transform<O[K], any, N>
-      | (O[K] extends object ? Relation.Definition<FlatKeys<O>> : never)
+      | (O[K] extends object | undefined ? Relation.Definition<FlatKeys<O>> : never)
   }
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>

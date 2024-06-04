@@ -1,4 +1,4 @@
-import { $, Database, Query, Relation, Values } from 'minato'
+import { $, Database, Relation } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
 
@@ -39,11 +39,7 @@ interface Post2Tag {
   tag?: Tag & { id: number }
 }
 
-interface GuildSyncRef {
-  syncAt: number
-}
-
-interface Login extends GuildSyncRef {
+interface Login {
   id: string
   platform: string
   name?: string
@@ -51,7 +47,7 @@ interface Login extends GuildSyncRef {
   syncs?: GuildSync[]
 }
 
-interface Guild extends GuildSyncRef {
+interface Guild {
   id: string
   platform2: string
   name?: string
@@ -60,6 +56,7 @@ interface Guild extends GuildSyncRef {
 }
 
 interface GuildSync {
+  platform: string
   syncAt?: number
   guild?: Guild
   login?: Login
@@ -126,7 +123,6 @@ function RelationTests(database: Database<Tables>) {
   })
 
   database.extend('post2tag', {
-    id: 'unsigned',
     'post.id': 'unsigned',
     'tag.id': 'unsigned',
     post: {
