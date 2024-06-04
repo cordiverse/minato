@@ -133,7 +133,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
     Object.entries(fields).forEach(([key, def]: [string, Relation.Definition]) => {
       if (!Relation.Type.includes(def.type)) return
-      const [relation, inverse] = Relation.parse(def, key, model, this.tables[def.table ?? key])
+      const subprimary = !def.fields && makeArray(model.primary).includes(key)
+      const [relation, inverse] = Relation.parse(def, key, model, this.tables[def.table ?? key], subprimary)
       if (!this.tables[relation.table]) throw new Error(`relation table ${relation.table} does not exist`)
       ;(model.fields[key] = Field.parse('expr')).relation = relation
       if (def.target) {

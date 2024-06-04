@@ -66,12 +66,12 @@ export namespace Relation {
     return [field, reference].sort().join('_')
   }
 
-  export function parse(def: Definition, key: string, model: Model, relmodel: Model): [Config, Config] {
+  export function parse(def: Definition, key: string, model: Model, relmodel: Model, subprimary?: boolean): [Config, Config] {
     const shared = !def.shared ? {}
       : typeof def.shared === 'string' ? { [def.shared]: def.shared }
         : Array.isArray(def.shared) ? Object.fromEntries(def.shared.map(x => [x, x]))
           : def.shared
-    const fields = def.fields ?? ((model.name === relmodel.name || def.type === 'manyToOne'
+    const fields = def.fields ?? ((subprimary || model.name === relmodel.name || def.type === 'manyToOne'
       || (def.type === 'oneToOne' && !makeArray(relmodel.primary).every(key => !relmodel.fields[key]?.nullable)))
       ? makeArray(relmodel.primary).map(x => `${key}.${x}`) : model.primary)
     const relation: Config = {
@@ -96,9 +96,10 @@ export namespace Relation {
       fields: relation.references,
       references: relation.fields,
       shared: Object.fromEntries(Object.entries(shared).map(([k, v]) => [v, k])),
-      required: relation.type !== 'oneToMany' && !relation.required
+      required: relation.type !== 'oneToMany'
         && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key)),
     }
+    if (inverse.required) relation.required = false
     return [relation, inverse]
   }
 }

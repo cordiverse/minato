@@ -74,11 +74,6 @@ interface Tables {
 }
 
 function RelationTests(database: Database<Tables>) {
-  database.extend('profile', {
-    id: 'unsigned',
-    name: 'string',
-  })
-
   database.extend('user', {
     id: 'unsigned',
     value: 'integer',
@@ -87,13 +82,18 @@ function RelationTests(database: Database<Tables>) {
       table: 'user',
       target: 'predecessor',
     },
-    profile: {
-      type: 'oneToOne',
-      table: 'profile',
-      target: 'user',
-    },
   }, {
     autoInc: true,
+  })
+
+  database.extend('profile', {
+    id: 'unsigned',
+    name: 'string',
+    user: {
+      type: 'oneToOne',
+      table: 'user',
+      target: 'profile',
+    },
   })
 
   database.extend('post', {
@@ -164,8 +164,6 @@ function RelationTests(database: Database<Tables>) {
   database.extend('guildSync', {
     syncAt: 'unsigned',
     platform: 'string',
-    'guild.id': 'string',
-    'login.id': 'string',
     guild: {
       type: 'manyToOne',
       table: 'guild',
@@ -1233,6 +1231,27 @@ namespace RelationTests {
         { id: 3, value: 3, successor: { id: 2, value: 2 } },
         { id: 4, value: 4, successor: null },
       ])
+    })
+
+    nullableComparator && it('set null on oneToOne', async () => {
+      await setup(database, 'user', [
+        { id: 1, value: 1, profile: { name: 'A' } },
+        { id: 2, value: 2, profile: { name: 'B' } },
+        { id: 3, value: 3, profile: { name: 'B' } },
+      ] as any)
+
+      await database.set('user', 1, {
+        profile: null,
+      })
+      await expect(database.select('user', {}, { profile: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 1, profile: null },
+        { id: 2, value: 2, profile: { name: 'B' } },
+        { id: 3, value: 3, profile: { name: 'B' } },
+      ])
+
+      await expect(database.set('profile', 3, {
+        user: null,
+      })).to.be.eventually.rejected
     })
 
     nullableComparator && it('manyToOne expr', async () => {
