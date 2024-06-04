@@ -1,4 +1,4 @@
-import { defineProperty, Dict, filterKeys, makeArray, mapValues, MaybeArray, noop, omit, pick } from 'cosmokit'
+import { deduplicate, defineProperty, Dict, filterKeys, makeArray, mapValues, MaybeArray, noop, omit, pick } from 'cosmokit'
 import { Context, Service, Spread } from 'cordis'
 import { AtomicTypes, DeepPartial, FlatKeys, FlatPick, Flatten, getCell, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
 import { Selection } from './selection.ts'
@@ -175,7 +175,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     })
     // use relation field as primary
     if (Array.isArray(model.primary) && model.primary.every(key => model.fields[key]?.relation)) {
-      model.primary = model.primary.map(key => model.fields[key]!.relation!.fields).flat()
+      model.primary = deduplicate(model.primary.map(key => model.fields[key]!.relation!.fields).flat())
     }
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)

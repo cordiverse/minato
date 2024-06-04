@@ -179,7 +179,7 @@ function RelationTests(database: Database<Tables>) {
       fields: ['login.id', 'platform'],
     },
   }, {
-    primary: ['platform', 'guild.id', 'login.id'],
+    primary: ['guild', 'login'],
   })
 
   async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
@@ -605,7 +605,7 @@ namespace RelationTests {
       ])
     })
 
-    it('manyToOne fallbacck', async () => {
+    it('manyToOne fallback', async () => {
       await setup(database, 'user', [])
       await setup(database, 'profile', [])
       await setup(database, 'post', [])
