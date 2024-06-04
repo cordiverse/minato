@@ -8,6 +8,8 @@ export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
 }
 
+export const isUpdateExpr: (value: any) => boolean = isEvalExpr
+
 export function isAggrExpr(expr: Eval.Expr): boolean {
   return expr['$'] || expr['$select']
 }
@@ -31,7 +33,7 @@ type UnevalObject<S> = {
 export type Uneval<U, A extends boolean> =
   | U extends Values<AtomicTypes> ? Eval.Term<U, A>
   : U extends (infer T extends object)[] ? Relation.Modifier<T> | Eval.Array<T, A>
-  : U extends object ? Eval.Expr<U, A> | UnevalObject<Flatten<U>>
+  : U extends object ? Eval.Expr<U, A> | UnevalObject<Flatten<U>> | Relation.Modifier<U>
   : any
 
 export type Eval<U> =

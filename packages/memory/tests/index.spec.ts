@@ -32,10 +32,13 @@ describe('@minatojs/driver-memory', () => {
     },
     relation: {
       select: {
-        ignoreNullObject: false,
+        nullableComparator: false,
+      },
+      create: {
+        nullableComparator: false,
       },
       modify: {
-        ignoreNullObject: false,
+        nullableComparator: false,
       },
     },
   })

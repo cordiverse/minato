@@ -1,9 +1,9 @@
-import { defineProperty, Dict, filterKeys } from 'cosmokit'
+import { defineProperty, Dict, filterKeys, mapValues } from 'cosmokit'
 import { Driver } from './driver.ts'
 import { Eval, executeEval, isAggrExpr, isEvalExpr } from './eval.ts'
 import { Field, Model } from './model.ts'
 import { Query } from './query.ts'
-import { FlatKeys, FlatPick, Flatten, Keys, randomId, Row } from './utils.ts'
+import { FlatKeys, FlatPick, Flatten, getCell, Keys, randomId, Row } from './utils.ts'
 import { Type } from './type.ts'
 
 declare module './eval.ts' {
@@ -61,7 +61,7 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Pr
     }
 
     const row = createRow(ref, Eval('', [ref, `${prefix}${key}`], type), `${prefix}${key}.`, model)
-    if (Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {
+    if (!field && Object.keys(model?.fields!).some(k => k.startsWith(`${prefix}${key}.`))) {
       return createRow(ref, Eval.object(row), `${prefix}${key}.`, model)
     } else {
       return row
@@ -253,15 +253,20 @@ export class Selection<S = any> extends Executable<S, S[]> {
   ): Selection<S & { [P in K]: U}> {
     const fields = Object.fromEntries(Object.entries(this.model.fields)
       .filter(([key, field]) => Field.available(field) && !key.startsWith(name + '.'))
-      .map(([key]) => [key, (row) => key.split('.').reduce((r, k) => r[k], row[this.ref])]))
+      .map(([key]) => [key, (row) => getCell(row[this.ref], key)]))
+    const joinFields = Object.fromEntries(Object.entries(selection.model.fields)
+      .filter(([key, field]) => Field.available(field) || Field.available(this.model.fields[`${name}.${key}`]))
+      .map(([key]) => [key,
+        (row) => Field.available(this.model.fields[`${name}.${key}`]) ? getCell(row[this.ref], `${name}.${key}`) : getCell(row[name], key),
+      ]))
     if (optional) {
       return this.driver.database
         .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]), { [this.ref]: false, [name]: true })
-        .project({ ...fields, [name]: (row) => Eval.ignoreNull(row[name]) }) as any
+        .project({ ...fields, [name]: (row) => Eval.ignoreNull(Eval.object(mapValues(joinFields, x => x(row)))) }) as any
     } else {
       return this.driver.database
         .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]))
-        .project({ ...fields, [name]: (row) => Eval.ignoreNull(row[name]) }) as any
+        .project({ ...fields, [name]: (row) => Eval.ignoreNull(Eval.object(mapValues(joinFields, x => x(row)))) }) as any
     }
   }
 
@@ -282,7 +287,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   }
 
   execute(): Promise<S[]>
-  execute<K extends FlatKeys<S> = any>(cursor?: Driver.Cursor<K>): Promise<FlatPick<S, K>[]>
+  execute<K extends FlatKeys<S> = any>(cursor?: Driver.Cursor<S, any, K>): Promise<FlatPick<S, K>[]>
   execute<T>(callback: Selection.Callback<S, T, true>): Promise<T>
   async execute(cursor?: any) {
     if (typeof cursor === 'function') {
