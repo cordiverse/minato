@@ -53,6 +53,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     this.db.admin().serverInfo().then((doc) => this.version = +doc.version.split('.')[0]).catch(noop)
     await this.client.withSession((session) => session.withTransaction(
       () => this.db.collection('_fields').findOne({}, { session }),
+      { readPreference: 'primary' },
     )).catch(() => {
       this._replSet = false
       this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
@@ -485,7 +486,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   async withTransaction(callback: (session: any) => Promise<void>) {
     if (this._replSet) {
-      await this.client.withSession((session) => session.withTransaction(() => callback(session)))
+      await this.client.withSession((session) => session.withTransaction(() => callback(session), { readPreference: 'primary' }))
     } else {
       await callback(undefined)
     }
