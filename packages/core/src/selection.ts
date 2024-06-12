@@ -287,7 +287,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   }
 
   execute(): Promise<S[]>
-  execute<K extends FlatKeys<S> = any>(cursor?: Driver.Cursor<S, any, K>): Promise<FlatPick<S, K>[]>
+  execute<K extends FlatKeys<S> = any>(cursor?: Driver.Cursor<K, S>): Promise<FlatPick<S, K>[]>
   execute<T>(callback: Selection.Callback<S, T, true>): Promise<T>
   async execute(cursor?: any) {
     if (typeof cursor === 'function') {

@@ -18,9 +18,9 @@ export namespace Driver {
     size: number
   }
 
-  export type Cursor<T = any, S = any, K extends FlatKeys<T> = any> = K[] | CursorOptions<T, S, K>
+  export type Cursor<K extends FlatKeys<T> = any, T = any, S = any> = K[] | CursorOptions<K, T, S>
 
-  export interface CursorOptions<T = any, S = any, K extends FlatKeys<T> = any> {
+  export interface CursorOptions<K extends FlatKeys<T> = any, T = any, S = any> {
     limit?: number
     offset?: number
     fields?: K[]

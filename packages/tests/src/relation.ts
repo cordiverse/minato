@@ -382,6 +382,9 @@ namespace RelationTests {
         author: {
           id: 1,
         },
+        tags: {
+          $every: {},
+        },
       })).to.eventually.have.shape(posts.map(post => ({
         ...post,
         author: users.find(user => post.author?.id === user.id),
@@ -612,7 +615,9 @@ namespace RelationTests {
         id2: 1,
         content: 'new post',
         author: {
-          id: 2,
+          $literal: {
+            id: 2,
+          },
         },
       })
 
@@ -1234,11 +1239,14 @@ namespace RelationTests {
     })
 
     nullableComparator && it('set null on oneToOne', async () => {
-      await setup(database, 'user', [
+      await setup(database, 'user', [])
+      for (const user of [
         { id: 1, value: 1, profile: { name: 'A' } },
         { id: 2, value: 2, profile: { name: 'B' } },
         { id: 3, value: 3, profile: { name: 'B' } },
-      ] as any)
+      ]) {
+        await database.create('user', user)
+      }
 
       await database.set('user', 1, {
         profile: null,
@@ -1298,6 +1306,17 @@ namespace RelationTests {
       await expect(database.select('user', {}, { posts: true, profile: true }).execute()).to.eventually.have.shape(
         [{ id: 1, value: 123, profile: { name: 'Apple' }, posts: [] }],
       )
+
+      await database.set('post', 1, {
+        author: {
+          value: 999,
+          profile: { name: 'Banana' },
+        },
+      })
+      await expect(database.select('user', {}, { posts: true, profile: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 123, profile: { name: 'Apple' }, posts: [] },
+        { value: 999, profile: { name: 'Banana' }, posts: [{ id2: 1, content: 'Post1' }] },
+      ])
     })
 
     it('create oneToMany', async () => {
@@ -1418,6 +1437,11 @@ namespace RelationTests {
         posts: posts.slice(0, 2),
       })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+
+      await database.set('user', 1, {
+        posts: [],
+      })
+      await expect(database.get('post', {})).to.eventually.have.length(posts.length - 2)
     })
 
     nullableComparator && it('connect / disconnect oneToMany', async () => {
@@ -1661,9 +1685,7 @@ namespace RelationTests {
           $create: [
             {
               syncAt: 123,
-              guild: {
-                $create: { id: '1', platform2: 'sandbox' },
-              },
+              guild: { id: '1', platform2: 'sandbox' },
             },
           ],
         },
