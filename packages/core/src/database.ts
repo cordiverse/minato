@@ -714,13 +714,21 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         if (value.$literal) {
           data[key] = value.$literal
           remove(tasks, key)
-        } else if (value.$create || value.$upsert || !isUpdateExpr(value)) {
+        } else if (value.$create || !isUpdateExpr(value)) {
           const result = await this.createOrUpdate(relation.table, {
             ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])),
-            ...value.$create ?? value.$upsert ?? value,
+            ...value.$create ?? value,
           } as any)
           if (!relation.required) {
             relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(result, k))
+          }
+        } else if (value.$upsert) {
+          await this.upsert(relation.table, [{
+            ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(data, relation.fields[i])])),
+            ...value.$upsert,
+          }])
+          if (!relation.required) {
+            relation.references.forEach((k, i) => data[relation.fields[i]] = getCell(value.$upsert, k))
           }
         } else if (value.$connect) {
           if (relation.required) {
@@ -922,6 +930,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
           ...r,
         })))
+        await this.set(
+          table,
+          pick(model.format(row), makeArray(model.primary)),
+          Object.fromEntries(relation.fields.map((k, i) => [k, getCell(value.$upsert, relation.references[i])])) as any,
+        )
       }
       if (value.$connect) {
         const result = await this.get(relation.table, value.$connect)

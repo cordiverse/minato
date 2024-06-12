@@ -709,11 +709,17 @@ namespace RelationTests {
             value: 4,
           },
         },
+        successor: {
+          $upsert: {
+            id: 6,
+            value: 6,
+          },
+        },
       })
       await expect(database.select('user', {}, { successor: true }).orderBy('id').execute()).to.eventually.have.shape([
         { id: 1, value: 1, successor: { id: 2, value: 2 } },
         { id: 2, value: 2, successor: null },
-        { id: 3, value: 3, successor: null },
+        { id: 3, value: 3, successor: { id: 6, value: 6 } },
         { id: 4, value: 4, successor: { id: 3, value: 3 } },
         { id: 6, value: 6 },
       ])
@@ -1274,15 +1280,19 @@ namespace RelationTests {
 
       await database.set('post', 1, {
         author: {
-          $create: {
+          $upsert: {
             id: 1,
             value: 0,
-            profile: {
-              $create: {
-                name: 'Apple',
-              },
-            },
           },
+        },
+      })
+      await database.set('post', 1, {
+        author: {
+          $set: _ => ({
+            profile: {
+              name: 'Apple',
+            },
+          }),
         },
       })
       await expect(database.select('user', {}, { posts: true, profile: true }).execute()).to.eventually.have.shape(
