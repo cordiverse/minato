@@ -1369,13 +1369,20 @@ namespace RelationTests {
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
+      posts[0].score = 12
       posts[1].score = 13
       await database.set('user', 1, row => ({
         posts: {
-          $set: {
-            where: { score: { $gt: 2 } },
-            update: r => ({ score: $.add(r.score, 10) }),
-          },
+          $set: [
+            {
+              where: r => $.query(r, { score: { $gt: 2 } }),
+              update: r => ({ score: $.add(r.score, 10) }),
+            },
+            {
+              where: { score: 2 },
+              update: r => ({ score: $.add(r.score, 10) }),
+            },
+          ],
         },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
@@ -1520,6 +1527,30 @@ namespace RelationTests {
         { id: 1, name: 'Tag1' },
         { id: 2, name: 'Tag2' },
         { id: 3, name: 'Tag3' },
+      ])
+
+      await database.set('post', 2, row => ({
+        tags: {
+          $set: [
+            {
+              where: { id: 1 },
+              update: { name: 'Set1' },
+            },
+            {
+              where: r => $.query(r, { id: 2 }),
+              update: { name: 'Set2' },
+            },
+            {
+              where: r => $.eq(r.id, 3),
+              update: _ => ({ name: 'Set3' }),
+            },
+          ],
+        },
+      }))
+      await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([
+        { id: 1, name: 'Set1' },
+        { id: 2, name: 'Set2' },
+        { id: 3, name: 'Set3' },
       ])
     })
 

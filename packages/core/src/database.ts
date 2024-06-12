@@ -66,6 +66,17 @@ export type Create<T, S> =
   : T extends object ? CreateMap<T, S>
   : T
 
+function mergeQuery<T>(base: Query.FieldExpr<T>, query: Query.Expr<Flatten<T>> | ((row: Row<T>) => Query.Expr<Flatten<T>>)): Selection.Callback<T, boolean> {
+  if (typeof query === 'function') {
+    return (row: any) => {
+      const q = query(row)
+      return { $expr: true, ...base, ...(q.$expr ? q : { $expr: q }) } as any
+    }
+  } else {
+    return (_: any) => ({ $expr: true, ...base, ...query }) as any
+  }
+}
+
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
@@ -669,7 +680,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (data[key] !== undefined && this.tables[table].fields[key]?.relation) {
         const relation = this.tables[table].fields[key].relation
         if (relation.type === 'oneToOne' && relation.required) tasks.push(key)
-        else if (relation.type === 'oneToOne' && isUpdateExpr(data[key])) tasks.unshift(key)
+        else if (relation.type === 'oneToOne') tasks.unshift(key)
         else if (relation.type === 'oneToMany') tasks.push(key)
         else if (relation.type === 'manyToOne') tasks.unshift(key)
         else if (relation.type === 'manyToMany') tasks.push(key)
@@ -818,10 +829,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (value.$disconnect) {
         if (relation.required) {
           await this.set(relation.table,
-            (r: any) => Eval.query(r, {
-              ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
-              ...(typeof value.$disconnect === 'function' ? { $expr: value.$disconnect } : value.$disconnect),
-            } as any),
+            mergeQuery(Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])), value.$disconnect),
             Object.fromEntries(relation.references.map((k, i) => [k, null])) as any,
           )
         } else {
@@ -931,17 +939,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         value = { $remove: {}, $create, $upsert }
       }
       if (value.$remove) {
-        await this.remove(relation.table, (r: any) => Eval.query(r, {
-          ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
-          ...(typeof value.$remove === 'function' ? { $expr: value.$remove(r) } : value.$remove),
-        }) as any)
+        await this.remove(relation.table, mergeQuery(Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])), value.$remove))
       }
       if (value.$disconnect) {
         await this.set(relation.table,
-          (r: any) => Eval.query(r, {
-            ...Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])),
-            ...(typeof value.$disconnect === 'function' ? { $expr: value.$disconnect } : value.$disconnect),
-          } as any),
+          mergeQuery(Object.fromEntries(relation.references.map((k, i) => [k, getCell(row, relation.fields[i])])), value.$disconnect),
           Object.fromEntries(relation.references.map((k, i) => [k, null])) as any,
         )
       }
@@ -949,10 +951,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         for (const setexpr of makeArray(value.$set ?? value) as any[]) {
           const [query, update] = setexpr.update ? [setexpr.where, setexpr.update] : [{}, setexpr]
           await this.set(relation.table,
-            (r: any) => Eval.query(r, {
-              ...Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])),
-              ...(typeof query === 'function' ? { $expr: query } : query),
-            }) as any,
+            mergeQuery(Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])), query),
             update,
           )
         }
@@ -1019,11 +1018,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (value.$set) {
         for (const setexpr of makeArray(value.$set) as any[]) {
           const [query, update] = setexpr.update ? [setexpr.where, setexpr.update] : [{}, setexpr]
-          const rows = await this.select(assocTable, {
+          const rows = await this.select(assocTable, (r: any) => ({
             ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(row, v.field)])),
             ...Object.fromEntries(fields.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
-            [relation.table]: typeof query === 'function' ? { $expr: query } : query,
-          }, null).execute()
+            [relation.table]: query,
+          }), null).execute()
           await this.set(relation.table,
             (r) => Eval.in(
               [...shared.map(([k, v]) => r[v.reference]), ...relation.references.map(x => r[x])],
@@ -1059,10 +1058,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         })) as any)
       }
       if (value.$connect) {
-        const rows = await this.get(relation.table, (r: any) => Eval.query(r, {
-          ...Object.fromEntries(shared.map(([k, v]) => [v.reference, getCell(row, v.field)])),
-          ...(typeof value.$connect === 'function' ? { $expr: value.$connect(r) } : value.$connect),
-        }) as any)
+        const rows = await this.get(relation.table,
+          mergeQuery(Object.fromEntries(shared.map(([k, v]) => [v.reference, getCell(row, v.field)])), value.$connect))
         await this.upsert(assocTable, rows.map(r => ({
           ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(row, v.field)])),
           ...Object.fromEntries(fields.map((k, i) => [k, row[relation.fields[i]]])),
@@ -1075,11 +1072,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   private hasRelation<K extends Keys<S>>(table: K, data: Create<S[K], S>): boolean
   private hasRelation(table: any, data: any) {
     for (const key in data) {
-      if (data[key] !== undefined && this.tables[table].fields[key]?.relation) {
-        const relation = this.tables[table].fields[key].relation
-        if (relation.type === 'oneToOne' && !relation.required && !isUpdateExpr(data[key])) continue
-        return true
-      }
+      if (data[key] !== undefined && this.tables[table].fields[key]?.relation) return true
     }
     return false
   }
