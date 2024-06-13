@@ -1397,11 +1397,11 @@ namespace RelationTests {
         posts: {
           $set: [
             {
-              where: r => $.query(r, { score: { $gt: 2 } }),
+              where: { score: { $gt: 2 } },
               update: r => ({ score: $.add(r.score, 10) }),
             },
             {
-              where: { score: 2 },
+              where: r => $.eq(r.score, 2),
               update: r => ({ score: $.add(r.score, 10) }),
             },
           ],

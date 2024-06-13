@@ -226,6 +226,15 @@ namespace ObjectOperations {
         y: database.select('object').where(row => $.lt(row.meta.embed.b, 100)),
       }).execute(row => $.sum(1))).to.eventually.deep.equal(4)
     })
+
+    it('switch model in object query', async () => {
+      const table = await setup(database)
+      await expect(database.select('object', {
+        'meta.a': '666',
+      }).project({
+        t: 'meta',
+      }).execute()).to.eventually.have.deep.members([{ t: table[1].meta }])
+    })
   }
 }
 

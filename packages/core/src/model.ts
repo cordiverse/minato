@@ -256,7 +256,7 @@ export namespace Model {
 export interface Model extends Model.Config {}
 
 export class Model<S = any> {
-  ctx?: Context
+  declare ctx?: Context
   fields: Field.Config<S> = {}
   migrations = new Map<Model.Migration, string[]>()
 
