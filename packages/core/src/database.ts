@@ -442,7 +442,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   async get<K extends Keys<S>, P extends FlatKeys<S[K]> = any>(
     table: K,
     query: Query<S[K]>,
-    cursor?: Driver.Cursor<P, S[K], Values<S>>,
+    cursor?: Driver.Cursor<P, S, K>,
   ): Promise<FlatPick<S[K], P>[]>
 
   async get<K extends Keys<S>>(table: K, query: Query<S[K]>, cursor?: any) {
