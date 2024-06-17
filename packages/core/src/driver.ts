@@ -1,4 +1,4 @@
-import { Awaitable, Dict, mapValues, remove } from 'cosmokit'
+import { Awaitable, defineProperty, Dict, mapValues, remove } from 'cosmokit'
 import { Context, Logger, Service } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
@@ -76,7 +76,8 @@ export abstract class Driver<T = any, C extends Context = Context> {
       await this.start()
       ctx.model.drivers.push(this)
       ctx.model.refresh()
-      const database = Object.create(ctx.model)
+      const database = Object.create(ctx.model) // FIXME use original model
+      defineProperty(database, 'ctx', ctx)
       database._driver = this
       database[Service.tracker] = {
         associate: 'database',

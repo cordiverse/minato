@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/tests",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Test Cases for Minato",
   "type": "module",
   "main": "lib/index.js",
@@ -29,10 +29,10 @@
   "devDependencies": {
     "@types/chai": "^4.3.14",
     "@types/chai-as-promised": "^7.1.8",
-    "minato": "^3.4.0"
+    "minato": "^3.4.3"
   },
   "peerDependencies": {
-    "minato": "^3.4.0"
+    "minato": "^3.4.3"
   },
   "dependencies": {
     "chai": "^4.4.1",
