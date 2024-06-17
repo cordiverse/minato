@@ -80,6 +80,7 @@ function mergeQuery<T>(base: Query.FieldExpr<T>, query: Query.Expr<Flatten<T>> |
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
   static [Service.provide] = 'model'
   static [Service.immediate] = true
+
   static readonly transact = Symbol('minato.transact')
   static readonly migrate = Symbol('minato.migrate')
 
@@ -142,7 +143,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     })
     model.extend(fields, config)
     if (makeArray(model.primary).every(key => key in fields)) {
-      defineProperty(model, 'ctx', this[Context.origin])
+      defineProperty(model, 'ctx', this.ctx)
     }
     Object.entries(fields).forEach(([key, def]: [string, Relation.Definition]) => {
       if (!Relation.Type.includes(def.type)) return
@@ -285,7 +286,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const type = this._parseField(field, transformers, undefined, value => field = value)
     field.transformers = transformers
 
-    this[Context.current].effect(() => {
+    this.ctx.effect(() => {
       this.types[name] = { ...field }
       this.types[name].deftype ??= this.types[field.type]?.deftype ?? type.type as any
       return () => delete this.types[name]
@@ -305,16 +306,16 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   select<K extends Keys<S>>(
     table: K,
     query?: Query<S[K]>,
-    cursor?: Relation.Include<S[K], Values<S>> | null,
+    include?: Relation.Include<S[K], Values<S>> | null,
   ): Selection<S[K]>
 
-  select(table: any, query?: any, cursor?: any) {
+  select(table: any, query?: any, include?: any) {
     let sel = new Selection(this.getDriver(table), table, query)
     if (typeof table !== 'string') return sel
-    const whereOnly = cursor === null
+    const whereOnly = include === null
     const rawquery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
-    if (cursor) cursor = filterKeys(cursor, (key) => !!modelFields[key]?.relation)
+    if (include) include = filterKeys(include, (key) => !!modelFields[key]?.relation)
     for (const key in { ...sel.query, ...sel.query.$not }) {
       if (modelFields[key]?.relation) {
         if (sel.query[key] === null && !modelFields[key].relation.required) {
@@ -333,19 +334,19 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           Object.entries(sel.query.$not[key]).forEach(([k, v]) => sel.query.$not![`${key}.${k}`] = v)
           delete sel.query.$not[key]
         }
-        if (!cursor || !Object.getOwnPropertyNames(cursor).includes(key)) {
-          (cursor ??= {})[key] = true
+        if (!include || !Object.getOwnPropertyNames(include).includes(key)) {
+          (include ??= {})[key] = true
         }
       }
     }
 
-    sel.query = omit(sel.query, Object.keys(cursor ?? {}))
+    sel.query = omit(sel.query, Object.keys(include ?? {}))
     if (Object.keys(sel.query.$not ?? {}).length) {
-      sel.query.$not = omit(sel.query.$not!, Object.keys(cursor ?? {}))
+      sel.query.$not = omit(sel.query.$not!, Object.keys(include ?? {}))
       if (Object.keys(sel.query.$not).length === 0) Reflect.deleteProperty(sel.query, '$not')
     }
 
-    if (cursor && typeof cursor === 'object') {
+    if (include && typeof include === 'object') {
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
       const extraFields: string[] = []
       const applyQuery = (sel: Selection, key: string) => {
@@ -355,16 +356,16 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             : undefined
         return relquery === undefined ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
       }
-      for (const key in cursor) {
-        if (!cursor[key] || !modelFields[key]?.relation) continue
+      for (const key in include) {
+        if (!include[key] || !modelFields[key]?.relation) continue
         const relation: Relation.Config<S> = modelFields[key]!.relation as any
         if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
-          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, include[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
           sel = applyQuery(sel, key)
         } else if (relation.type === 'oneToMany') {
-          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, cursor[key]), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, include[key]), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
           sel = applyQuery(sel, key)
@@ -381,7 +382,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             field: x,
             reference: y,
           }] as const)
-          sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { [relation.table]: cursor[key] } as any), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { [relation.table]: include[key] } as any), (self, other) => Eval.and(
             ...shared.map(([k, v]) => Eval.eq(self[v.field], other[k])),
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
           ), true)

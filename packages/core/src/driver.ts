@@ -1,11 +1,11 @@
 import { Awaitable, Dict, mapValues, remove } from 'cosmokit'
-import { Context, Logger } from 'cordis'
+import { Context, Logger, Service } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
 import { Database } from './database.ts'
 import { Type } from './type.ts'
-import { Keys, Values } from './utils.ts'
+import { FlatKeys, Keys, Values } from './utils.ts'
 
 export namespace Driver {
   export interface Stats {
@@ -24,7 +24,7 @@ export namespace Driver {
     limit?: number
     offset?: number
     fields?: K[]
-    sort?: Dict<Direction, K>
+    sort?: Partial<Dict<Direction, FlatKeys<S[T]>>>
     include?: Relation.Include<S[T], Values<S>>
   }
 
@@ -78,6 +78,10 @@ export abstract class Driver<T = any, C extends Context = Context> {
       ctx.model.refresh()
       const database = Object.create(ctx.model)
       database._driver = this
+      database[Service.tracker] = {
+        associate: 'database',
+        property: 'ctx',
+      }
       ctx.set('database', Context.associate(database, 'database'))
     })
 
