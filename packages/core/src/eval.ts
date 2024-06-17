@@ -77,7 +77,7 @@ export namespace Eval {
 
     ignoreNull<T, A extends boolean>(value: Eval.Expr<T, A>): Eval.Expr<T, A>
     select(...args: Any[]): Expr<any[], false>
-    query<T extends object>(row: Row<T>, query: Query.Expr<T>): Expr<boolean, false>
+    query<T extends object>(row: Row<T>, query: Query.Expr<T>, expr?: Term<boolean>): Expr<boolean, false>
 
     // univeral
     if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: Term<T, A>, vElse: Term<T, A>): Expr<T, A>
@@ -194,7 +194,7 @@ operators.$switch = (args, data) => {
 
 Eval.ignoreNull = (expr) => (expr[Type.kType]!.ignoreNull = true, expr)
 Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
-Eval.query = (row, query) => ({ $expr: true, ...query }) as any
+Eval.query = (row, query, expr = true) => ({ $expr: expr, ...query }) as any
 
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)

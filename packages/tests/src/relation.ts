@@ -382,6 +382,9 @@ namespace RelationTests {
         author: {
           id: 1,
         },
+        tags: {
+          $every: {},
+        },
       })).to.eventually.have.shape(posts.map(post => ({
         ...post,
         author: users.find(user => post.author?.id === user.id),
@@ -612,7 +615,9 @@ namespace RelationTests {
         id2: 1,
         content: 'new post',
         author: {
-          id: 2,
+          $literal: {
+            id: 2,
+          },
         },
       })
 
@@ -704,11 +709,17 @@ namespace RelationTests {
             value: 4,
           },
         },
+        successor: {
+          $upsert: {
+            id: 6,
+            value: 6,
+          },
+        },
       })
       await expect(database.select('user', {}, { successor: true }).orderBy('id').execute()).to.eventually.have.shape([
         { id: 1, value: 1, successor: { id: 2, value: 2 } },
         { id: 2, value: 2, successor: null },
-        { id: 3, value: 3, successor: null },
+        { id: 3, value: 3, successor: { id: 6, value: 6 } },
         { id: 4, value: 4, successor: { id: 3, value: 3 } },
         { id: 6, value: 6 },
       ])
@@ -1164,10 +1175,22 @@ namespace RelationTests {
       await setup(database, 'user', [])
 
       await database.upsert('user', [
-        { id: 1, value: 1, successor: { id: 2 } },
-        { id: 2, value: 2, successor: { id: 1 } },
+        { id: 1, value: 1 },
+        { id: 2, value: 2 },
         { id: 3, value: 3 },
       ])
+      await database.set('user', 1, {
+        successor: {
+          $upsert: {
+            id: 2,
+          },
+        },
+        predecessor: {
+          $upsert: {
+            id: 2,
+          },
+        },
+      })
       await database.set('user', 3, {
         successor: {
           $create: {
@@ -1234,11 +1257,14 @@ namespace RelationTests {
     })
 
     nullableComparator && it('set null on oneToOne', async () => {
-      await setup(database, 'user', [
+      await setup(database, 'user', [])
+      for (const user of [
         { id: 1, value: 1, profile: { name: 'A' } },
         { id: 2, value: 2, profile: { name: 'B' } },
         { id: 3, value: 3, profile: { name: 'B' } },
-      ] as any)
+      ]) {
+        await database.create('user', user)
+      }
 
       await database.set('user', 1, {
         profile: null,
@@ -1266,15 +1292,19 @@ namespace RelationTests {
 
       await database.set('post', 1, {
         author: {
-          $create: {
+          $upsert: {
             id: 1,
             value: 0,
-            profile: {
-              $create: {
-                name: 'Apple',
-              },
-            },
           },
+        },
+      })
+      await database.set('post', 1, {
+        author: {
+          $set: _ => ({
+            profile: {
+              name: 'Apple',
+            },
+          }),
         },
       })
       await expect(database.select('user', {}, { posts: true, profile: true }).execute()).to.eventually.have.shape(
@@ -1298,6 +1328,17 @@ namespace RelationTests {
       await expect(database.select('user', {}, { posts: true, profile: true }).execute()).to.eventually.have.shape(
         [{ id: 1, value: 123, profile: { name: 'Apple' }, posts: [] }],
       )
+
+      await database.set('post', 1, {
+        author: {
+          value: 999,
+          profile: { name: 'Banana' },
+        },
+      })
+      await expect(database.select('user', {}, { posts: true, profile: true }).execute()).to.eventually.have.shape([
+        { id: 1, value: 123, profile: { name: 'Apple' }, posts: [] },
+        { value: 999, profile: { name: 'Banana' }, posts: [{ id2: 1, content: 'Post1' }] },
+      ])
     })
 
     it('create oneToMany', async () => {
@@ -1350,13 +1391,20 @@ namespace RelationTests {
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
 
+      posts[0].score = 12
       posts[1].score = 13
       await database.set('user', 1, row => ({
         posts: {
-          $set: {
-            where: { score: { $gt: 2 } },
-            update: r => ({ score: $.add(r.score, 10) }),
-          },
+          $set: [
+            {
+              where: { score: { $gt: 2 } },
+              update: r => ({ score: $.add(r.score, 10) }),
+            },
+            {
+              where: r => $.eq(r.score, 2),
+              update: r => ({ score: $.add(r.score, 10) }),
+            },
+          ],
         },
       }))
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
@@ -1418,6 +1466,11 @@ namespace RelationTests {
         posts: posts.slice(0, 2),
       })
       await expect(database.get('post', {})).to.eventually.have.deep.members(posts)
+
+      await database.set('user', 1, {
+        posts: [],
+      })
+      await expect(database.get('post', {})).to.eventually.have.length(posts.length - 2)
     })
 
     nullableComparator && it('connect / disconnect oneToMany', async () => {
@@ -1496,6 +1549,30 @@ namespace RelationTests {
         { id: 1, name: 'Tag1' },
         { id: 2, name: 'Tag2' },
         { id: 3, name: 'Tag3' },
+      ])
+
+      await database.set('post', 2, row => ({
+        tags: {
+          $set: [
+            {
+              where: { id: 1 },
+              update: { name: 'Set1' },
+            },
+            {
+              where: r => $.query(r, { id: 2 }),
+              update: { name: 'Set2' },
+            },
+            {
+              where: r => $.eq(r.id, 3),
+              update: _ => ({ name: 'Set3' }),
+            },
+          ],
+        },
+      }))
+      await expect(database.get('post', 2, ['tags'])).to.eventually.have.nested.property('[0].tags').with.shape([
+        { id: 1, name: 'Set1' },
+        { id: 2, name: 'Set2' },
+        { id: 3, name: 'Set3' },
       ])
     })
 
@@ -1661,9 +1738,7 @@ namespace RelationTests {
           $create: [
             {
               syncAt: 123,
-              guild: {
-                $create: { id: '1', platform2: 'sandbox' },
-              },
+              guild: { id: '1', platform2: 'sandbox' },
             },
           ],
         },

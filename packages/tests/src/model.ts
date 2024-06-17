@@ -1,5 +1,5 @@
 import { mapValues, isNullable, deduplicate, omit } from 'cosmokit'
-import { $, Database, Field, Type, unravel } from 'minato'
+import { $, Database, Field, getCell, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
 interface DType {
@@ -265,15 +265,6 @@ function ModelOperations(database: Database<Tables, Types>) {
   }, { autoInc: true })
 }
 
-function getValue(obj: any, path: string) {
-  if (path.includes('.')) {
-    const index = path.indexOf('.')
-    return getValue(obj[path.slice(0, index)] ?? {}, path.slice(index + 1))
-  } else {
-    return obj[path]
-  }
-}
-
 namespace ModelOperations {
   const magicBorn = new Date('1970/08/17')
 
@@ -450,7 +441,7 @@ namespace ModelOperations {
     it('$.array encoding', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
       await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
-        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getValue(x, key)))
+        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getCell(x, key)))
       ))
     })
 
@@ -462,7 +453,7 @@ namespace ModelOperations {
             x: row => database.select('dtypes').evaluate(key as any)
           })
           .execute()
-        ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
+        ).to.eventually.have.shape([{ x: table.map(x => getCell(x, key)) }])
       ))
     })
 
@@ -602,14 +593,14 @@ namespace ModelOperations {
     aggregateNull && it('$.array encoding', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
-        key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getValue(x, key)))
+        key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getCell(x, key)))
       ))
     })
 
     it('$.array encoding boxed', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
-        key => expect(database.eval('dobjects', row => $.array($.object({ x: row[key] })))).to.eventually.have.deep.members(table.map(x => ({ x: getValue(x, key) })))
+        key => expect(database.eval('dobjects', row => $.array($.object({ x: row[key] })))).to.eventually.have.deep.members(table.map(x => ({ x: getCell(x, key) })))
       ))
     })
 
@@ -621,7 +612,7 @@ namespace ModelOperations {
             x: row => database.select('dobjects').evaluate(key as any)
           })
           .execute()
-        ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
+        ).to.eventually.have.shape([{ x: table.map(x => getCell(x, key)) }])
       ))
     })
 
@@ -633,7 +624,7 @@ namespace ModelOperations {
         ...Object.keys(database.tables['dobjects'].fields).flatMap(k => k.split('.').reduce((arr, c) => arr.length ? [`${arr[0]}.${c}`, ...arr] : [c], [])),
       ])
       await Promise.all(keys.map(key =>
-        expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getValue(row, key) })))
+        expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getCell(row, key) })))
       ))
     })
 

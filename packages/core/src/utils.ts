@@ -128,9 +128,14 @@ export function flatten(source: object, prefix = '', ignore: (value: any) => boo
   return result
 }
 
-export function getCell(row: any, key: any): any {
-  if (key in row) return row[key]
-  return key.split('.').reduce((r, k) => r === undefined ? undefined : r[k], row)
+export function getCell(row: any, path: any): any {
+  if (path in row) return row[path]
+  if (path.includes('.')) {
+    const index = path.indexOf('.')
+    return getCell(row[path.slice(0, index)] ?? {}, path.slice(index + 1))
+  } else {
+    return row[path]
+  }
 }
 
 export function isEmpty(value: any) {

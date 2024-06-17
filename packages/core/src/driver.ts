@@ -5,7 +5,7 @@ import { Direction, Modifier, Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
 import { Database } from './database.ts'
 import { Type } from './type.ts'
-import { FlatKeys } from './utils.ts'
+import { Keys, Values } from './utils.ts'
 
 export namespace Driver {
   export interface Stats {
@@ -18,14 +18,14 @@ export namespace Driver {
     size: number
   }
 
-  export type Cursor<T = any, S = any, K extends FlatKeys<T> = any> = K[] | CursorOptions<T, S, K>
+  export type Cursor<K extends string = string, S = any, T extends Keys<S> = any> = K[] | CursorOptions<K, S, T>
 
-  export interface CursorOptions<T = any, S = any, K extends FlatKeys<T> = any> {
+  export interface CursorOptions<K extends string = string, S = any, T extends Keys<S> = any> {
     limit?: number
     offset?: number
     fields?: K[]
     sort?: Dict<Direction, K>
-    include?: Relation.Include<T, S>
+    include?: Relation.Include<S[T], Values<S>>
   }
 
   export interface WriteResult {
