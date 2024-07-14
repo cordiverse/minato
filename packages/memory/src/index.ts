@@ -27,7 +27,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       return this._store[sel] ||= []
     }
 
-    if (!(sel instanceof Selection)) {
+    if (!Selection.is(sel)) {
       throw new Error('Should not reach here')
     }
 
@@ -36,7 +36,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
 
     let data: any[]
 
-    if (typeof table === 'object' && !(table instanceof Selection)) {
+    if (typeof table === 'object' && !Selection.is(table)) {
       const entries = Object.entries(table).map(([name, sel]) => [name, this.table(sel, env)] as const)
       const catesian = (entries: (readonly [string, any[]])[]): any[] => {
         if (!entries.length) return []

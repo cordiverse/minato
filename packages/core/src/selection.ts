@@ -317,6 +317,12 @@ export class Selection<S = any> extends Executable<S, S[]> {
   }
 }
 
+export namespace Selection {
+  export function is(sel: any): sel is Selection {
+    return !!sel.tables as any
+  }
+}
+
 export function executeSort(data: any[], modifier: Modifier, name: string) {
   const { limit, offset, sort } = modifier
 

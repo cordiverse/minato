@@ -110,7 +110,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   private getDriver(table: string | Selection): Driver<any, C> {
-    if (table instanceof Selection) return table.driver as any
+    if (Selection.is(table)) return table.driver as any
     const model: Model = this.tables[table]
     if (!model) throw new Error(`cannot resolve table "${table}"`)
     return model.ctx?.get('database')?._driver as any
