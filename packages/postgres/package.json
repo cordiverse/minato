@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-postgres",
-  "version": "2.2.0",
+  "version": "2.4.1",
   "description": "PostgreSQL Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -42,13 +42,13 @@
     "postgresql"
   ],
   "peerDependencies": {
-    "minato": "^3.2.0"
+    "minato": "^3.4.3"
   },
   "devDependencies": {
-    "@minatojs/tests": "^2.2.0"
+    "@minatojs/tests": "^2.4.1"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^5.2.0",
+    "@minatojs/sql-utils": "^5.4.1",
     "cosmokit": "^1.6.2",
     "postgres": "^3.4.4"
   }

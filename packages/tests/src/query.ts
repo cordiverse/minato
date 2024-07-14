@@ -206,6 +206,7 @@ namespace QueryOperators {
       await database.create('temp1', { text: 'awesome foo', regex: 'foo' })
       await database.create('temp1', { text: 'awesome bar', regex: 'bar' })
       await database.create('temp1', { text: 'awesome foo bar', regex: 'baz' })
+      await database.create('temp1', { text: 'xxx', regex: 'bAz' })
     })
 
     regexFor && it('$regexFor', async () => {
@@ -216,6 +217,18 @@ namespace QueryOperators {
       await expect(database.get('temp1', {
         regex: { $regexFor: 'baz' },
       })).eventually.to.have.length(1)
+
+      await expect(database.get('temp1', {
+        regex: { $regexFor: 'bAr' },
+      })).eventually.to.have.length(0)
+
+      await expect(database.get('temp1', {
+        regex: { $regexFor: { input: 'foo bar' } },
+      })).eventually.to.have.length(2)
+
+      await expect(database.get('temp1', {
+        regex: { $regexFor: { input: 'bAr', flags: 'i' } },
+      })).eventually.to.have.length(1)
     })
 
     regexBy && it('$regexBy', async () => {
@@ -225,6 +238,18 @@ namespace QueryOperators {
 
       await expect(database.get('temp1', {
         text: { $regex: /^.*bar$/ },
+      })).eventually.to.have.length(2)
+
+      await expect(database.get('temp1', {
+        text: { $regex: /^.*bAr$/ },
+      })).eventually.to.have.length(0)
+
+      await expect(database.get('temp1', {
+        text: { $regex: /^.*bAr$/i },
+      })).eventually.to.have.length(2)
+
+      await expect(database.get('temp1', {
+        text: { $regex: { source: '^.*foo.*$' } },
       })).eventually.to.have.length(2)
     })
 
@@ -240,6 +265,9 @@ namespace QueryOperators {
       await expect(database.get('temp1', row => $.regex(row.text, /^.*foo.*$/))).eventually.to.have.length(2)
       await expect(database.get('temp1', row => $.regex(row.text, /^.*bar.*$/))).eventually.to.have.length(2)
       await expect(database.get('temp1', row => $.regex(row.text, row.regex))).eventually.to.have.length(2)
+      await expect(database.get('temp1', row => $.regex(row.text, /^.*bAr.*$/i))).eventually.to.have.length(2)
+      await expect(database.get('temp1', row => $.regex(row.text, /^.*bAr.*$/))).eventually.to.have.length(0)
+      await expect(database.get('temp1', row => $.regex(row.text, '^.*bAr.*$', 'i'))).eventually.to.have.length(2)
     })
   }
 
@@ -268,6 +296,38 @@ namespace QueryOperators {
         value: { $bitsAnyClear: 6 },
       })).eventually.to.have.shape([{ value: 3 }, { value: 4 }])
     })
+
+    it('using expressions', async () => {
+      await expect(database.get('temp1',
+        row => $.eq($.and(row.value, 1, 1), 1),
+      )).eventually.to.have.shape([{ value: 3 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.or(row.value, 3, 3), 7),
+      )).eventually.to.have.shape([{ value: 4 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.and(row.value, $.not(4)), 3),
+      )).eventually.to.have.shape([{ value: 3 }, { value: 7 }])
+
+      await expect(database.get('temp1',
+        row => $.eq($.xor(0, row.value, 3), 7),
+      )).eventually.to.have.shape([{ value: 4 }])
+
+      await expect(database.eval('temp1', _ => $.max($.not(2 ** 30)))).eventually.to.deep.equal(-(2 ** 30) - 1)
+      await expect(database.eval('temp1', _ => $.max($.not(-(2 ** 30))))).eventually.to.deep.equal(2 ** 30 - 1)
+      await expect(database.eval('temp1', _ => $.max($.or(-(2 ** 30), 1)))).eventually.to.deep.equal(-(2 ** 30) + 1)
+
+      await expect(database.eval('temp1', _ => $.max($.xor(2, 3, 6)))).eventually.to.deep.equal(7)
+      await expect(database.eval('temp1', _ => $.array($.xor(true, false)))).eventually.to.include.members([true])
+      await expect(database.eval('temp1', _ => $.array($.xor(true, false, true)))).eventually.to.include.members([false])
+
+      await expect(database.eval('temp1', _ => $.max($.not(BigInt(2 ** 40))))).eventually.to.deep.equal(BigInt(-(2 ** 40) - 1))
+      await expect(database.eval('temp1', _ => $.max($.and(9223372036854775701n, 9223372036854775702n)))).eventually.to.deep.equal(9223372036854775700n)
+      await expect(database.eval('temp1', _ => $.max($.or(9223372036854775701n, 1n)))).eventually.to.deep.equal(9223372036854775701n)
+      await expect(database.eval('temp1', _ => $.max($.xor(9223372036854775701n, 9223372036854775702n)))).eventually.to.deep.equal(3n)
+      await expect(database.eval('temp1', _ => $.max($.not(9223372036854775701n)))).eventually.to.deep.equal(-9223372036854775702n)
+    })
   }
 
   interface ListOptions {
@@ -291,6 +351,10 @@ namespace QueryOperators {
       await expect(database.get('temp1', {
         list: { $size: 1 },
       })).eventually.to.have.length(2).with.shape([{ id: 2 }, { id: 3 }])
+
+      await expect(database.get('temp1', {
+        list: { $size: 0 },
+      })).eventually.to.have.length(1).with.shape([{ id: 1 }])
     })
 
     size && it('$.length', async () => {

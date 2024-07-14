@@ -1,10 +1,17 @@
 import { defineProperty, isNullable, mapValues } from 'cosmokit'
-import { Comparable, Flatten, isComparable, makeRegExp, Row } from './utils.ts'
+import { AtomicTypes, Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row, Values } from './utils.ts'
 import { Type } from './type.ts'
-import { Field } from './model.ts'
+import { Field, Relation } from './model.ts'
+import { Query } from './query.ts'
 
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
+}
+
+export const isUpdateExpr: (value: any) => boolean = isEvalExpr
+
+export function isAggrExpr(expr: Eval.Expr): boolean {
+  return expr['$'] || expr['$select']
 }
 
 export function hasSubquery(value: any): boolean {
@@ -19,16 +26,18 @@ export function hasSubquery(value: any): boolean {
   })
 }
 
+type UnevalObject<S> = {
+  [K in keyof S]?: (undefined extends S[K] ? null : never) | Uneval<Exclude<S[K], undefined>, boolean>
+}
+
 export type Uneval<U, A extends boolean> =
-  | U extends number ? Eval.Term<number, A>
-  : U extends string ? Eval.Term<string, A>
-  : U extends boolean ? Eval.Term<boolean, A>
-  : U extends Date ? Eval.Term<Date, A>
-  : U extends RegExp ? Eval.Term<RegExp, A>
+  | U extends Values<AtomicTypes> ? Eval.Term<U, A>
+  : U extends (infer T extends object)[] ? Relation.Modifier<T> | Eval.Array<T, A>
+  : U extends object ? Eval.Expr<U, A> | UnevalObject<Flatten<U>> | Relation.Modifier<U>
   : any
 
 export type Eval<U> =
-  | U extends Comparable ? U
+  | U extends Values<AtomicTypes> ? U
   : U extends Eval.Expr<infer T> ? T
   : never
 
@@ -65,6 +74,10 @@ export namespace Eval {
 
   export interface Static {
     <A extends boolean>(key: string, value: any, type: Type): Eval.Expr<any, A>
+
+    ignoreNull<T, A extends boolean>(value: Eval.Expr<T, A>): Eval.Expr<T, A>
+    select(...args: Any[]): Expr<any[], false>
+    query<T extends object>(row: Row<T>, query: Query.Expr<T>, expr?: Term<boolean>): Expr<boolean, false>
 
     // univeral
     if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: Term<T, A>, vElse: Term<T, A>): Expr<T, A>
@@ -105,16 +118,20 @@ export namespace Eval {
 
     // element
     in<T extends Comparable, A extends boolean>(x: Term<T, A>, array: Array<T, A>): Expr<boolean, A>
+    in<T extends Comparable, A extends boolean>(x: Term<T, A>[], array: Array<T[], A>): Expr<boolean, A>
     nin<T extends Comparable, A extends boolean>(x: Term<T, A>, array: Array<T, A>): Expr<boolean, A>
+    nin<T extends Comparable, A extends boolean>(x: Term<T, A>[], array: Array<T[], A>): Expr<boolean, A>
 
     // string
     concat: Multi<string, string>
-    regex<A extends boolean>(x: Term<string, A>, y: Term<string, A> | Term<RegExp, A>): Expr<boolean, A>
+    regex<A extends boolean>(x: Term<string, A>, y: RegExp): Expr<boolean, A>
+    regex<A extends boolean>(x: Term<string, A>, y: Term<string, A>, flags?: string): Expr<boolean, A>
 
-    // logical
-    and: Multi<boolean, boolean>
-    or: Multi<boolean, boolean>
-    not: Unary<boolean, boolean>
+    // logical / bitwise
+    and: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
+    or: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
+    not: Unary<boolean, boolean> & Unary<number, number> & Unary<bigint, bigint>
+    xor: Multi<boolean, boolean> & Multi<number, number> & Multi<bigint, bigint>
 
     // typecast
     literal<T>(value: T, type?: Type<T> | Field.Type<T> | Field.NewType<T> | string): Expr<T, false>
@@ -127,7 +144,6 @@ export namespace Eval {
     min: Aggr<Comparable>
     count(value: Any<false>): Expr<number, true>
     length(value: Any<false>): Expr<number, true>
-    size<A extends boolean>(value: (Any | Expr<Any, A>)[] | Expr<Any[], A>): Expr<number, A>
     length<A extends boolean>(value: any[] | Expr<any[], A>): Expr<number, A>
 
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
@@ -176,6 +192,10 @@ operators.$switch = (args, data) => {
   return executeEval(data, args.default)
 }
 
+Eval.ignoreNull = (expr) => (expr[Type.kType]!.ignoreNull = true, expr)
+Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
+Eval.query = (row, query, expr = true) => ({ $expr: expr, ...query }) as any
+
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)
   : executeEval(data, vElse), (cond, vThen, vElse) => Type.fromTerm(vThen))
@@ -208,17 +228,48 @@ Eval.lt = comparator('lt', (left, right) => left < right)
 Eval.le = Eval.lte = comparator('lte', (left, right) => left <= right)
 
 // element
-Eval.in = multary('in', ([value, array], data) => executeEval(data, array).includes(executeEval(data, value)), Type.Boolean)
-Eval.nin = multary('nin', ([value, array], data) => !executeEval(data, array).includes(executeEval(data, value)), Type.Boolean)
+Eval.in = (value, array) => Eval('in', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
+operators.$in = ([value, array], data) => {
+  const val = executeEval(data, value), arr = executeEval(data, array)
+  if (typeof val === 'object') return arr.includes(val) || arr.map(JSON.stringify).includes(JSON.stringify(val))
+  return arr.includes(val)
+}
+Eval.nin = (value, array) => Eval('nin', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
+operators.$nin = ([value, array], data) => {
+  const val = executeEval(data, value), arr = executeEval(data, array)
+  if (typeof val === 'object') return !arr.includes(val) && !arr.map(JSON.stringify).includes(JSON.stringify(val))
+  return !arr.includes(val)
+}
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''), Type.String)
-Eval.regex = multary('regex', ([value, regex], data) => makeRegExp(executeEval(data, regex)).test(executeEval(data, value)), Type.Boolean)
+Eval.regex = multary('regex', ([value, regex, flags], data) => makeRegExp(executeEval(data, regex), flags).test(executeEval(data, value)), Type.Boolean)
 
-// logical
-Eval.and = multary('and', (args, data) => args.every(arg => executeEval(data, arg)), Type.Boolean)
-Eval.or = multary('or', (args, data) => args.some(arg => executeEval(data, arg)), Type.Boolean)
-Eval.not = unary('not', (value, data) => !executeEval(data, value), Type.Boolean)
+// logical / bitwise
+Eval.and = multary('and', (args, data) => {
+  const type = Type.fromTerms(args, Type.Boolean)
+  if (Field.boolean.includes(type.type)) return args.every(arg => executeEval(data, arg))
+  else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev & curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev & curr)
+}, (...args) => Type.fromTerms(args, Type.Boolean))
+Eval.or = multary('or', (args, data) => {
+  const type = Type.fromTerms(args, Type.Boolean)
+  if (Field.boolean.includes(type.type)) return args.some(arg => executeEval(data, arg))
+  else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev | curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev | curr)
+}, (...args) => Type.fromTerms(args, Type.Boolean))
+Eval.not = unary('not', (value, data) => {
+  const type = Type.fromTerms([value], Type.Boolean)
+  if (Field.boolean.includes(type.type)) return !executeEval(data, value)
+  else if (Field.number.includes(type.type)) return ~executeEval(data, value) as any
+  else if (type.type === 'bigint') return ~BigInt(executeEval(data, value) ?? 0)
+}, (value) => Type.fromTerms([value], Type.Boolean))
+Eval.xor = multary('xor', (args, data) => {
+  const type = Type.fromTerms(args, Type.Boolean)
+  if (Field.boolean.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev !== curr)
+  else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev ^ curr)
+  else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev ^ curr)
+}, (...args) => Type.fromTerms(args, Type.Boolean))
 
 // typecast
 Eval.literal = multary('literal', ([value, type]) => {
@@ -264,7 +315,7 @@ Eval.object = (fields: any) => {
     const modelFields: [string, Field][] = Object.entries(fields.$model.fields)
     const prefix: string = fields.$prefix
     fields = Object.fromEntries(modelFields
-      .filter(([, field]) => !field.deprecated)
+      .filter(([, field]) => Field.available(field))
       .filter(([path]) => path.startsWith(prefix))
       .map(([k]) => [k.slice(prefix.length), fields[k.slice(prefix.length)]]))
     return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value))))
@@ -273,18 +324,14 @@ Eval.object = (fields: any) => {
 }
 
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
-  ? table.map(data => executeAggr(expr, data))
-  : Array.from(executeEval(table, expr)), (expr) => Type.Array(Type.fromTerm(expr)))
+  ? table.map(data => executeAggr(expr, data)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x))
+  : Array.from(executeEval(table, expr)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x)), (expr) => Type.Array(Type.fromTerm(expr)))
 
 Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
 
 export { Eval as $ }
 
-type MapUneval<S> = {
-  [K in keyof S]?: Uneval<S[K], false>
-}
-
-export type Update<T = any> = MapUneval<Flatten<T>>
+export type Update<T = any> = UnevalObject<Flatten<T>>
 
 function getRecursive(args: string | string[], data: any): any {
   if (typeof args === 'string') {

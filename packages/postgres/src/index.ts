@@ -3,6 +3,8 @@ import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
 import { isBracketed } from '@minatojs/sql-utils'
 import { escapeId, formatTime, PostgresBuilder } from './builder'
+import zhCN from './locales/zh-CN.yml'
+import enUS from './locales/en-US.yml'
 
 interface ColumnInfo {
   table_catalog: string
@@ -174,7 +176,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign } = table
-    const fields = { ...table.fields }
+    const fields = { ...table.avaiableFields() }
     const unique = [...table.unique]
     const create: string[] = []
     const update: string[] = []
@@ -182,8 +184,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     // field definitions
     for (const key in fields) {
-      const { deprecated, initial, nullable = true } = fields[key]!
-      if (deprecated) continue
+      const { initial, nullable = true } = fields[key]!
       const legacy = [key, ...fields[key]!.legacy || []]
       const column = columns.find(info => legacy.includes(info.column_name))
       let shouldUpdate = column?.column_name !== key
@@ -314,7 +315,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const { model, query, table, tables, ref } = sel
     const builder = new PostgresBuilder(this, tables)
     const filter = builder.parseQuery(query)
-    const { fields } = model
+    const fields = model.avaiableFields()
     if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
@@ -362,12 +363,12 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.fields).filter(key => !model.fields[key]?.deprecated)
+    const initFields = Object.keys(model.avaiableFields())
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
     let updateFields = difference(dataFields, keys)
-    if (!updateFields.length) updateFields = [dataFields[0]]
+    if (!updateFields.length) updateFields = dataFields.length ? [dataFields[0]] : []
 
     const createFilter = (item: any) => builder.parseQuery(pick(item, keys))
     const createMultiFilter = (items: any[]) => {
@@ -411,8 +412,8 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const result = await this.query([
       `INSERT INTO ${builder.escapeId(table)} (${initFields.map(builder.escapeId).join(', ')})`,
       `VALUES (${insertion.map(item => formatValues(table, item, initFields)).join('), (')})`,
-      `ON CONFLICT (${keys.map(builder.escapeId).join(', ')})`,
-      `DO UPDATE SET ${update}, _pg_mtime = ${mtime}`,
+      update ? `ON CONFLICT (${keys.map(builder.escapeId).join(', ')})` : '',
+      update ? `DO UPDATE SET ${update}, _pg_mtime = ${mtime}` : '',
       `RETURNING _pg_mtime as rtime`,
     ].join(' '))
     return { inserted: result.filter(({ rtime }) => +rtime !== mtime).length, matched: result.filter(({ rtime }) => +rtime === mtime).length }
@@ -534,8 +535,8 @@ export namespace PostgresDriver {
     password: z.string().role('secret'),
     database: z.string().required(),
   }).i18n({
-    'en-US': require('./locales/en-US'),
-    'zh-CN': require('./locales/zh-CN'),
+    'en-US': enUS,
+    'zh-CN': zhCN,
   })
 }
 

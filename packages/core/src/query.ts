@@ -1,6 +1,6 @@
 import { Extract, isNullable } from 'cosmokit'
 import { Eval, executeEval } from './eval.ts'
-import { Comparable, Flatten, Indexable, isComparable, makeRegExp } from './utils.ts'
+import { AtomicTypes, Comparable, Flatten, flatten, getCell, Indexable, isComparable, isFlat, makeRegExp, RegExpLike, Values } from './utils.ts'
 import { Selection } from './selection.ts'
 
 export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable> | Selection.Callback<T, boolean>
@@ -8,9 +8,9 @@ export type Query<T = any> = Query.Expr<Flatten<T>> | Query.Shorthand<Indexable>
 export namespace Query {
   export interface FieldExpr<T = any> {
     // logical
-    $or?: FieldQuery<T>[]
-    $and?: FieldQuery<T>[]
-    $not?: FieldQuery<T>
+    $or?: Field<T>[]
+    $and?: Field<T>[]
+    $not?: Field<T>
 
     // existence
     $exists?: boolean
@@ -28,18 +28,23 @@ export namespace Query {
     $lte?: Extract<T, Comparable>
 
     // list
-    $el?: T extends (infer U)[] ? FieldQuery<U> : never
+    $el?: T extends (infer U)[] ? Field<U> : never
     $size?: Extract<T, any[], number>
 
     // regexp
-    $regex?: Extract<T, string, string | RegExp>
-    $regexFor?: Extract<T, string>
+    $regex?: Extract<T, string, string | RegExpLike>
+    $regexFor?: Extract<T, string, string | { input: string; flags?: string }>
 
     // bitwise
     $bitsAllClear?: Extract<T, number>
     $bitsAllSet?: Extract<T, number>
     $bitsAnyClear?: Extract<T, number>
     $bitsAnySet?: Extract<T, number>
+
+    // relation
+    $some?: T extends (infer U)[] ? Query<U> : never
+    $none?: T extends (infer U)[] ? Query<U> : never
+    $every?: T extends (infer U)[] ? Query<U> : never
   }
 
   export interface LogicalExpr<T = any> {
@@ -47,7 +52,7 @@ export namespace Query {
     $and?: Expr<T>[]
     $not?: Expr<T>
     /** @deprecated use query callback instead */
-    $expr?: Eval.Expr<boolean>
+    $expr?: Eval.Term<boolean>
   }
 
   export type Shorthand<T = any> =
@@ -55,10 +60,14 @@ export namespace Query {
     | Extract<T, Indexable, T[]>
     | Extract<T, string, RegExp>
 
-  export type FieldQuery<T = any> = FieldExpr<T> | Shorthand<T>
+  export type Field<T = any> = FieldExpr<T> | Shorthand<T>
+
+  type NonNullExpr<T> = T extends Values<AtomicTypes> | any[] ? Field<T> : T extends object
+    ? Expr<Flatten<T>> | Selection.Callback<T, boolean>
+    : Field<T>
 
   export type Expr<T = any> = LogicalExpr<T> & {
-    [K in keyof T]?: null | FieldQuery<T[K]>
+    [K in keyof T]?: (undefined extends T[K] ? null : never) | NonNullExpr<Exclude<T[K], undefined>>
   }
 }
 
@@ -89,7 +98,7 @@ const queryOperators: QueryOperators = {
 
   // regexp
   $regex: (query, data) => makeRegExp(query).test(data),
-  $regexFor: (query, data) => new RegExp(data, 'i').test(query),
+  $regexFor: (query, data) => typeof query === 'string' ? makeRegExp(data).test(query) : makeRegExp(data, query.flags).test(query.input),
 
   // bitwise
   $bitsAllSet: (query, data) => (query & data) === query,
@@ -102,7 +111,7 @@ const queryOperators: QueryOperators = {
   $size: (query, data) => data.length === query,
 }
 
-function executeFieldQuery(query: Query.FieldQuery, data: any) {
+function executeFieldQuery(query: Query.Field, data: any) {
   // shorthand syntax
   if (Array.isArray(query)) {
     return query.includes(data)
@@ -139,7 +148,8 @@ export function executeQuery(data: any, query: Query.Expr, ref: string, env: any
 
     // execute field query
     try {
-      return executeFieldQuery(value, data[key])
+      const flattenQuery = isFlat(query[key]) ? { [key]: query[key] } : flatten(query[key], `${key}.`)
+      return Object.entries(flattenQuery).every(([key, value]) => executeFieldQuery(value, getCell(data, key)))
     } catch {
       return false
     }

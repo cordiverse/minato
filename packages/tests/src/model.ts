@@ -1,5 +1,5 @@
 import { mapValues, isNullable, deduplicate, omit } from 'cosmokit'
-import { $, Database, Field, Type, unravel } from 'minato'
+import { $, Database, Field, getCell, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
 interface DType {
@@ -22,6 +22,7 @@ interface DType {
     embed?: {
       bool?: boolean
       bigint?: bigint
+      int64?: bigint
       custom?: Custom
       bstr?: string
     }
@@ -181,7 +182,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       inner: {
         num: 'unsigned',
         text: 'string',
-        json: 'json',
+        json: 'object',
         embed: {
           type: 'object',
           inner: {
@@ -189,6 +190,7 @@ function ModelOperations(database: Database<Tables, Types>) {
               type: 'boolean',
               initial: false,
             },
+            int64: 'bigint',
             bigint: 'bigint2',
             custom: { type: 'custom' },
             bstr: bstr,
@@ -263,15 +265,6 @@ function ModelOperations(database: Database<Tables, Types>) {
   }, { autoInc: true })
 }
 
-function getValue(obj: any, path: string) {
-  if (path.includes('.')) {
-    const index = path.indexOf('.')
-    return getValue(obj[path.slice(0, index)] ?? {}, path.slice(index + 1))
-  } else {
-    return obj[path]
-  }
-}
-
 namespace ModelOperations {
   const magicBorn = new Date('1970/08/17')
 
@@ -280,7 +273,7 @@ namespace ModelOperations {
     { id: 2, text: 'pku' },
     { id: 3, num: 1989 },
     { id: 4, list: ['1', '1', '4'], array: [1, 1, 4] },
-    { id: 5, object: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n, bstr: 'world' } } },
+    { id: 5, object: { num: 10, text: 'ab', embed: { bool: true, bigint: 90n, int64: 100n, bstr: 'world' } } },
     { id: 6, object2: { num: 10, text: 'ab', embed: { bool: false, bigint: 90n } } },
     { id: 7, timestamp: magicBorn },
     { id: 8, date: magicBorn },
@@ -294,7 +287,7 @@ namespace ModelOperations {
 
   const dobjectTable: DObject[] = [
     { id: 1 },
-    { id: 2, foo: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
+    { id: 2, foo: { nested: { id: 1, int64: 123n, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
     { id: 3, bar: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
     { id: 4, baz: [{ nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163), custom: { a: '?', b: 8 }, bstr: 'wo' } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } }, { nested: { id: 2 } }] },
     { id: 5, foo: { nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object2: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } } },
@@ -448,7 +441,7 @@ namespace ModelOperations {
     it('$.array encoding', async () => {
       const table = await setup(database, 'dtypes', dtypeTable)
       await Promise.all(Object.keys(database.tables['dtypes'].fields).map(
-        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getValue(x, key)))
+        key => expect(database.eval('dtypes', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getCell(x, key)))
       ))
     })
 
@@ -460,8 +453,57 @@ namespace ModelOperations {
             x: row => database.select('dtypes').evaluate(key as any)
           })
           .execute()
-        ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
+        ).to.eventually.have.shape([{ x: table.map(x => getCell(x, key)) }])
       ))
+    })
+
+    it('object query', async () => {
+      const table = await setup(database, 'dtypes', dtypeTable)
+      await expect(database.get('dtypes', {
+        'object.embed.bool': true,
+      })).to.eventually.have.shape([table[4]])
+
+      await expect(database.get('dtypes', {
+        'object.num': {
+          $gte: 10,
+        },
+      })).to.eventually.have.shape([table[4]])
+
+      table[4].object!.embed!.bool = false
+      await expect(database.set('dtypes', {
+        object: {
+          embed: {
+            int64: 100n,
+          },
+        },
+      }, {
+        'object.embed.bool': false,
+      })).to.eventually.fulfilled
+
+      await expect(database.get('dtypes', {
+        object: {
+          embed: {
+            int64: 100n,
+          },
+        },
+      })).to.eventually.deep.equal([table[4]])
+
+      await expect(database.get('dtypes', {
+        $or: [
+          {
+            object: {
+              num: 10,
+            },
+          },
+          {
+            object2: {
+              num: {
+                $gte: 10,
+              },
+            },
+          },
+        ],
+      })).to.eventually.have.deep.members([table[4], table[5]])
     })
 
     it('recursive type', async () => {
@@ -551,14 +593,14 @@ namespace ModelOperations {
     aggregateNull && it('$.array encoding', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
-        key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getValue(x, key)))
+        key => expect(database.eval('dobjects', row => $.array(row[key]))).to.eventually.have.deep.members(table.map(x => getCell(x, key)))
       ))
     })
 
     it('$.array encoding boxed', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
       await Promise.all(Object.keys(database.tables['dobjects'].fields).map(
-        key => expect(database.eval('dobjects', row => $.array($.object({ x: row[key] })))).to.eventually.have.deep.members(table.map(x => ({ x: getValue(x, key) })))
+        key => expect(database.eval('dobjects', row => $.array($.object({ x: row[key] })))).to.eventually.have.deep.members(table.map(x => ({ x: getCell(x, key) })))
       ))
     })
 
@@ -570,7 +612,7 @@ namespace ModelOperations {
             x: row => database.select('dobjects').evaluate(key as any)
           })
           .execute()
-        ).to.eventually.have.shape([{ x: table.map(x => getValue(x, key)) }])
+        ).to.eventually.have.shape([{ x: table.map(x => getCell(x, key)) }])
       ))
     })
 
@@ -582,8 +624,16 @@ namespace ModelOperations {
         ...Object.keys(database.tables['dobjects'].fields).flatMap(k => k.split('.').reduce((arr, c) => arr.length ? [`${arr[0]}.${c}`, ...arr] : [c], [])),
       ])
       await Promise.all(keys.map(key =>
-        expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getValue(row, key) })))
+        expect(database.select('dobjects').project([key as any]).execute()).to.eventually.have.deep.members(table.map(row => unravel({ [key]: getCell(row, key) })))
       ))
+    })
+
+    it('bitwise ops on bigint', async () => {
+      await setup(database, 'dobjects', dobjectTable)
+      await expect(database.get('dobjects', row => $.eq($.and(row.foo!.nested!.int64!, 5n), 1n))).to.eventually.have.length(1)
+      await expect(database.get('dobjects', row => $.eq($.or(row.foo!.nested!.int64!, 4n), 127n))).to.eventually.have.length(1)
+      await expect(database.get('dobjects', row => $.eq($.xor(row.foo!.nested!.int64!, 2n), 121n))).to.eventually.have.length(1)
+      await expect(database.eval('dobjects', row => $.max($.or(row.foo!.nested!.int64!, 9223372036854775701n)))).eventually.to.deep.equal(9223372036854775807n)
     })
   }
 }

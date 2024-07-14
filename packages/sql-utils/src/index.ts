@@ -1,5 +1,8 @@
-import { Dict, isNullable, mapValues } from 'cosmokit'
-import { Driver, Eval, Field, isComparable, isEvalExpr, Model, Modifier, Query, randomId, Selection, Type, unravel } from 'minato'
+import { Dict, isNullable } from 'cosmokit'
+import {
+  Driver, Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat,
+  Model, Modifier, Query, randomId, RegExpLike, Selection, Type, unravel,
+} from 'minato'
 
 export function escapeId(value: string) {
   return '`' + value + '`'
@@ -38,8 +41,8 @@ interface State {
   encoded?: boolean
   encodedMap?: Dict<boolean>
 
-  // current eval expr type
-  type?: Type
+  // current eval expr
+  expr?: Eval.Expr
 
   group?: boolean
   tables?: Dict<Model>
@@ -91,7 +94,8 @@ export class Builder {
 
       // regexp
       $regex: (key, value) => this.createRegExpQuery(key, value),
-      $regexFor: (key, value) => `${this.escape(value)} regexp ${key}`,
+      $regexFor: (key, value) => typeof value === 'string' ? `${this.escape(value)} collate utf8mb4_bin regexp ${key}`
+        : `${this.escape(value.input)} ${value.flags?.includes('i') ? 'regexp' : 'collate utf8mb4_bin regexp'} ${key}`,
 
       // bitwise
       $bitsAllSet: (key, value) => `${key} & ${this.escape(value)} = ${this.escape(value)}`,
@@ -110,10 +114,10 @@ export class Builder {
         }
       },
       $size: (key, value) => {
-        if (!value) return this.logicalNot(key)
         if (this.isJsonQuery(key)) {
           return `${this.jsonLength(key)} = ${this.escape(value)}`
         } else {
+          if (!value) return this.logicalNot(key)
           return `${key} AND LENGTH(${key}) - LENGTH(REPLACE(${key}, ${this.escape(',')}, ${this.escape('')})) = ${this.escape(value)} - 1`
         }
       },
@@ -122,6 +126,7 @@ export class Builder {
     this.evalOperators = {
       // universal
       $: (key) => this.getRecursive(key),
+      $select: (args) => `${args.map(arg => this.parseEval(arg, false)).join(', ')}`,
       $if: (args) => `if(${args.map(arg => this.parseEval(arg)).join(', ')})`,
       $ifNull: (args) => `ifnull(${args.map(arg => this.parseEval(arg)).join(', ')})`,
 
@@ -144,12 +149,26 @@ export class Builder {
 
       // string
       $concat: (args) => `concat(${args.map(arg => this.parseEval(arg)).join(', ')})`,
-      $regex: ([key, value]) => `${this.parseEval(key)} regexp ${this.parseEval(value)}`,
+      $regex: ([key, value, flags]) => `(${this.parseEval(key)} ${
+        (flags?.includes('i') || (value instanceof RegExp && value.flags.includes('i'))) ? 'regexp' : 'collate utf8mb4_bin regexp'
+      } ${this.parseEval(value)})`,
 
-      // logical
-      $or: (args) => this.logicalOr(args.map(arg => this.parseEval(arg))),
-      $and: (args) => this.logicalAnd(args.map(arg => this.parseEval(arg))),
-      $not: (arg) => this.logicalNot(this.parseEval(arg)),
+      // logical / bitwise
+      $or: (args) => {
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
+        if (Field.boolean.includes(type.type)) return this.logicalOr(args.map(arg => this.parseEval(arg)))
+        else return `(${args.map(arg => this.parseEval(arg)).join(' | ')})`
+      },
+      $and: (args) => {
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
+        if (Field.boolean.includes(type.type)) return this.logicalAnd(args.map(arg => this.parseEval(arg)))
+        else return `(${args.map(arg => this.parseEval(arg)).join(' & ')})`
+      },
+      $not: (arg) => {
+        const type = Type.fromTerm(this.state.expr, Type.Boolean)
+        if (Field.boolean.includes(type.type)) return this.logicalNot(this.parseEval(arg))
+        else return `(~(${this.parseEval(arg)}))`
+      },
 
       // boolean
       $eq: this.binary('='),
@@ -160,8 +179,8 @@ export class Builder {
       $lte: this.binary('<='),
 
       // membership
-      $in: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ''), false),
-      $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key), value, ' NOT'), false),
+      $in: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key, false), value, ''), false),
+      $nin: ([key, value]) => this.asEncoded(this.createMemberQuery(this.parseEval(key, false), value, ' NOT'), false),
 
       // typecast
       $literal: ([value, type]) => this.escape(value, type as any),
@@ -182,10 +201,6 @@ export class Builder {
     }
   }
 
-  protected unescapeId(value: string) {
-    return value.slice(1, value.length - 1)
-  }
-
   protected createNullQuery(key: string, value: boolean) {
     return `${key} is ${value ? 'not ' : ''}null`
   }
@@ -193,15 +208,24 @@ export class Builder {
   protected createMemberQuery(key: string, value: any, notStr = '') {
     if (Array.isArray(value)) {
       if (!value.length) return notStr ? this.$true : this.$false
+      if (Array.isArray(value[0])) {
+        return `(${key})${notStr} in (${value.map((val: any[]) => `(${val.map(x => this.escape(x)).join(', ')})`).join(', ')})`
+      }
       return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+    } else if (value.$exec) {
+      return `(${key})${notStr} in ${this.parseSelection(value.$exec, true)}`
     } else {
       const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
       return notStr ? this.logicalNot(res) : res
     }
   }
 
-  protected createRegExpQuery(key: string, value: string | RegExp) {
-    return `${key} regexp ${this.escape(typeof value === 'string' ? value : value.source)}`
+  protected createRegExpQuery(key: string, value: string | RegExpLike) {
+    if (typeof value !== 'string' && value.flags?.includes('i')) {
+      return `${key} regexp ${this.escape(value.source)}`
+    } else {
+      return `${key} collate utf8mb4_bin regexp ${this.escape(typeof value === 'string' ? value : value.source)}`
+    }
   }
 
   protected createElementQuery(key: string, value: any) {
@@ -213,7 +237,7 @@ export class Builder {
   }
 
   protected isJsonQuery(key: string) {
-    return isSqlJson(this.state.tables![this.state.table!].fields![this.unescapeId(key)]?.type)
+    return Type.fromTerm(this.state.expr)?.type === 'json' || this.isEncoded(key)
   }
 
   protected comparator(operator: string) {
@@ -244,17 +268,21 @@ export class Builder {
     return `NOT(${condition})`
   }
 
-  protected parseSelection(sel: Selection) {
+  protected parseSelection(sel: Selection, inline = false) {
     const { args: [expr], ref, table, tables } = sel
     const restore = this.saveState({ tables })
     const inner = this.get(table as Selection, true, true) as string
     const output = this.parseEval(expr, false)
+    const fields = expr['$select']?.map(x => this.getRecursive(x['$']))
+    const where = fields && this.logicalAnd(fields.map(x => `(${x} is not null)`))
     restore()
-    if (!(sel.args[0] as any).$) {
-      return `(SELECT ${output} AS value FROM ${inner} ${isBracketed(inner) ? ref : ''})`
+    if (inline || !isAggrExpr(expr as any)) {
+      return `(SELECT ${output} FROM ${inner} ${isBracketed(inner) ? ref : ''}${where ? ` WHERE ${where}` : ''})`
     } else {
-      return `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}
-        AS value FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`
+      return [
+        `(ifnull((SELECT ${this.groupArray(this.transform(output, Type.getInner(Type.fromTerm(expr)), 'encode'))}`,
+        `FROM ${inner} ${isBracketed(inner) ? ref : ''}), json_array()))`,
+      ].join(' ')
     }
   }
 
@@ -274,7 +302,7 @@ export class Builder {
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
     return this.asEncoded((encoded === this.isEncoded() && !pure) ? value
       : encoded ? `cast(${this.transform(value, type, 'encode')} as json)`
-        : `json_unquote(${this.transform(value, type, 'decode')})`, pure ? undefined : encoded)
+        : this.transform(`json_unquote(${value})`, type, 'decode'), pure ? undefined : encoded)
   }
 
   protected isEncoded(key?: string) {
@@ -316,16 +344,15 @@ export class Builder {
       }
       return `json_object(` + Object.entries(fields).map(([key, expr]) => `'${key}', ${parse(expr, key)}`).join(',') + `)`
     }
-    return this.asEncoded(_groupObject(unravel(_fields), this.state.type, ''), true)
+    return this.asEncoded(_groupObject(unravel(_fields), Type.fromTerm(this.state.expr), ''), true)
   }
 
   protected groupArray(value: string) {
     return this.asEncoded(`ifnull(json_arrayagg(${value}), json_array())`, true)
   }
 
-  protected parseFieldQuery(key: string, query: Query.FieldExpr) {
+  protected parseFieldQuery(key: string, query: Query.Field) {
     const conditions: string[] = []
-    if (this.modifiedTable) key = `${this.escapeId(this.modifiedTable)}.${key}`
 
     // query shorthand
     if (Array.isArray(query)) {
@@ -361,7 +388,12 @@ export class Builder {
       } else if (key === '$expr') {
         conditions.push(this.parseEval(query.$expr))
       } else {
-        conditions.push(this.parseFieldQuery(this.escapeId(key), query[key]))
+        const flattenQuery = isFlat(query[key]) ? { [key]: query[key] } : flatten(query[key], `${key}.`)
+        for (const key in flattenQuery) {
+          const model = this.state.tables![this.state.table!] ?? Object.values(this.state.tables!)[0]
+          const expr = Eval('', [this.state.table ?? Object.keys(this.state.tables!)[0], key], model.getType(key)!)
+          conditions.push(this.parseFieldQuery(this.parseEval(expr), flattenQuery[key]))
+        }
       }
     }
 
@@ -372,7 +404,7 @@ export class Builder {
     this.state.encoded = false
     for (const key in expr) {
       if (key in this.evalOperators) {
-        this.state.type = Type.fromTerm(expr)
+        this.state.expr = expr
         return this.evalOperators[key](expr[key])
       }
     }
@@ -409,9 +441,7 @@ export class Builder {
       }
     }
     const prefix = this.modifiedTable ? `${this.escapeId(this.state.tables?.[table]?.name ?? this.modifiedTable)}.`
-      : (!this.state.tables || table === '_' || key in fields
-    // the only table must be the main table
-    || (Object.keys(this.state.tables).length === 1 && table in this.state.tables) ? '' : `${this.escapeId(table)}.`)
+      : (!this.state.tables || table === '_' || key in fields || table in this.state.tables ? '' : `${this.escapeId(table)}.`)
 
     if (!(table in (this.state.tables || {})) && (table in (this.state.innerTables || {}))) {
       const fields = this.state.innerTables?.[table]?.fields || {}
@@ -509,7 +539,7 @@ export class Builder {
     const encodedMap: Dict<boolean> = {}
     const fields = args[0].fields ?? Object.fromEntries(Object
       .entries(model.fields)
-      .filter(([, field]) => !field!.deprecated)
+      .filter(([, field]) => Field.available(field))
       .map(([key, field]) => [key, field!.expr ? field!.expr : Eval('', [ref, key], Type.fromField(field!))]))
     const keys = Object.entries(fields).map(([key, value]) => {
       value = this.parseEval(value, false)
@@ -525,7 +555,7 @@ export class Builder {
       suffix = ` WHERE ${filter}` + suffix
     }
 
-    if (inline && !args[0].fields && !suffix) {
+    if (inline && !args[0].fields && !suffix && (typeof table === 'string' || table instanceof Selection)) {
       return (addref && isBracketed(prefix)) ? `${prefix} ${ref}` : prefix
     }
 
@@ -549,14 +579,7 @@ export class Builder {
       const converter = (type.inner || type.type === 'json') ? (root ? this.driver.types['json'] : undefined) : this.driver.types[type.type]
       if (type.inner || type.type === 'json') root = false
       let res = value
-
-      if (!isNullable(res) && type.inner) {
-        if (Type.isArray(type)) {
-          res = res.map(x => this.dump(x, Type.getInner(type as Type), root))
-        } else {
-          res = mapValues(res, (x, k) => this.dump(x, Type.getInner(type as Type, k), root))
-        }
-      }
+      res = Type.transform(res, type, (value, type) => this.dump(value, type, root))
       res = converter?.dump ? converter.dump(res) : res
       const ancestor = this.driver.database.types[type.type]?.type
       if (!root && !ancestor) res = this.transform(res, type, 'dump')
@@ -586,14 +609,7 @@ export class Builder {
       let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined, root)
       res = this.transform(res, type, 'load')
       res = converter?.load ? converter.load(res) : res
-
-      if (!isNullable(res) && type.inner) {
-        if (Type.isArray(type)) {
-          res = res.map(x => this.load(x, Type.getInner(type as Type), false))
-        } else {
-          res = mapValues(res, (x, k) => this.load(x, Type.getInner(type as Type, k), false))
-        }
-      }
+      res = Type.transform(res, type, (value, type) => this.load(value, type, false))
       return (!isNullable(res) && type.inner && !Type.isArray(type)) ? unravel(res) : res
     }
 
@@ -628,6 +644,7 @@ export class Builder {
     switch (typeof value) {
       case 'boolean':
       case 'number':
+      case 'bigint':
         return value + ''
       case 'object':
         return this.quote(JSON.stringify(value))

@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable } from 'cosmokit'
-import { Driver, Field, Model, randomId, Type } from 'minato'
+import { Driver, Field, Model, randomId, RegExpLike, Type } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -10,7 +10,15 @@ export class SQLiteBuilder extends Builder {
   constructor(protected driver: Driver, tables?: Dict<Model>) {
     super(driver, tables)
 
+    this.queryOperators.$regexFor = (key, value) => typeof value === 'string' ? `${this.escape(value)} regexp ${key}`
+      : value.flags?.includes('i') ? `regexp2(${key}, ${this.escape(value.input)}, 'i')`
+        : `${this.escape(value.input)} regexp ${key}`
+
     this.evalOperators.$if = (args) => `iif(${args.map(arg => this.parseEval(arg)).join(', ')})`
+    this.evalOperators.$regex = ([key, value, flags]) => (flags?.includes('i') || (value instanceof RegExp && value.flags?.includes('i')))
+      ? `regexp2(${this.parseEval(value)}, ${this.parseEval(key)}, ${this.escape(flags ?? (value as any).flags)})`
+      : `regexp(${this.parseEval(value)}, ${this.parseEval(key)})`
+
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
     this.evalOperators.$modulo = ([left, right]) => `modulo(${this.parseEval(left)}, ${this.parseEval(right)})`
     this.evalOperators.$log = ([left, right]) => isNullable(right)
@@ -23,6 +31,13 @@ export class SQLiteBuilder extends Builder {
       const value = this.parseEval(arg)
       const res = Field.date.includes(type.type as any) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
+    }
+
+    const binaryXor = (left: string, right: string) => `((${left} & ~${right}) | (~${left} & ${right}))`
+    this.evalOperators.$xor = (args) => {
+      const type = Type.fromTerm(this.state.expr, Type.Boolean)
+      if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
+      else return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => binaryXor(prev, curr))
     }
 
     this.transformers['bigint'] = {
@@ -56,6 +71,14 @@ export class SQLiteBuilder extends Builder {
     }
   }
 
+  protected createRegExpQuery(key: string, value: string | RegExpLike) {
+    if (typeof value !== 'string' && value.flags?.includes('i')) {
+      return `regexp2(${this.escape(typeof value === 'string' ? value : value.source)}, ${key}, ${this.escape(value.flags)})`
+    } else {
+      return `regexp(${this.escape(typeof value === 'string' ? value : value.source)}, ${key})`
+    }
+  }
+
   protected jsonLength(value: string) {
     return this.asEncoded(`json_array_length(${value})`, false)
   }
@@ -65,7 +88,9 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected encode(value: string, encoded: boolean, pure: boolean = false, type?: Type) {
-    return encoded ? super.encode(value, encoded, pure, type) : value
+    return encoded ? super.encode(value, encoded, pure, type)
+      : (encoded === this.isEncoded() && !pure) ? value
+        : this.asEncoded(this.transform(`(${value} ->> '$')`, type, 'decode'), pure ? undefined : false)
   }
 
   protected createAggr(expr: any, aggr: (value: string) => string, nonaggr?: (value: string) => string) {
@@ -83,6 +108,6 @@ export class SQLiteBuilder extends Builder {
   }
 
   protected transformJsonField(obj: string, path: string) {
-    return this.asEncoded(`json_extract(${obj}, '$${path}')`, false)
+    return this.asEncoded(`(${obj} -> '$${path}')`, true)
   }
 }

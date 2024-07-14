@@ -72,9 +72,9 @@ namespace ObjectOperations {
       table[1].meta = { a: '1', embed: { b: 514, c: 'world' } }
       table.push({ id: '2', meta: { a: '666', embed: { b: 1919 } } })
       table.push({ id: '3', meta: { a: 'foo', embed: { b: 810, c: 'world' } } })
-      await expect(database.upsert('object', [
+      await expect(database.upsert('object', (row) => [
         { id: '0', meta: { embed: { b: 114 } } },
-        { id: '1', meta: { a: { $: 'id' }, 'embed.b': { $add: [500, 14] } } },
+        { id: '1', meta: { a: row.id, 'embed.b': $.add(500, 14) } },
         { id: '2', meta: { embed: { b: 1919 } } },
         { id: '3', meta: { a: 'foo', 'embed.b': 810 } },
       ])).eventually.fulfilled
@@ -127,12 +127,12 @@ namespace ObjectOperations {
       const table = await setup(database)
       table[0].meta = { a: '0', embed: { b: 114 } }
       table[1].meta = { a: '1', embed: { b: 514, c: 'world' } }
-      await expect(database.set('object', '0', {
-        meta: { a: { $: 'id' }, embed: { b: 114 } },
-      })).eventually.fulfilled
-      await expect(database.set('object', '1', {
-        meta: { a: { $: 'id' }, 'embed.b': 514 },
-      })).eventually.fulfilled
+      await expect(database.set('object', '0', (row) => ({
+        meta: { a: row.id, embed: { b: 114 } },
+      }))).eventually.fulfilled
+      await expect(database.set('object', '1', (row) => ({
+        meta: { a: row.id, 'embed.b': 514 },
+      }))).eventually.fulfilled
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
 
@@ -140,12 +140,18 @@ namespace ObjectOperations {
       const table = await setup(database)
       table[0].meta = { a: '0', embed: { b: 114 } }
       table[1].meta = { a: '1', embed: { b: 514, c: 'world' } }
-      await expect(database.set('object', row => $.eq(row.id, database.select('object', '0').evaluate(r => $.max(r.id))), {
-        meta: { a: { $: 'id' }, embed: { b: 114 } },
-      })).eventually.fulfilled
-      await expect(database.set('object', row => $.eq(row.id, database.select('object', '1').evaluate(r => $.max(r.id))), {
-        meta: { a: { $: 'id' }, 'embed.b': 514 },
-      })).eventually.fulfilled
+      await expect(database.set('object',
+        row => $.eq(row.id, database.select('object', '0').evaluate(r => $.max(r.id))),
+        row => ({
+          meta: { a: row.id, embed: { b: 114 } },
+        })),
+      ).eventually.fulfilled
+      await expect(database.set('object',
+        row => $.eq(row.id, database.select('object', '1').evaluate(r => $.max(r.id))),
+        row => ({
+          meta: { a: row.id, 'embed.b': 514 },
+        }),
+      )).eventually.fulfilled
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
 
@@ -219,6 +225,15 @@ namespace ObjectOperations {
         x: database.select('object').where(row => $.lt(row.meta.embed.b, 100)),
         y: database.select('object').where(row => $.lt(row.meta.embed.b, 100)),
       }).execute(row => $.sum(1))).to.eventually.deep.equal(4)
+    })
+
+    it('switch model in object query', async () => {
+      const table = await setup(database)
+      await expect(database.select('object', {
+        'meta.a': '666',
+      }).project({
+        t: 'meta',
+      }).execute()).to.eventually.have.deep.members([{ t: table[1].meta }])
     })
   }
 }

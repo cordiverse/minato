@@ -1,6 +1,6 @@
 {
   "name": "minato",
-  "version": "3.2.0",
+  "version": "3.4.3",
   "description": "Type Driven Database Framework",
   "type": "module",
   "main": "lib/index.cjs",
@@ -21,6 +21,10 @@
     "src"
   ],
   "author": "Shigma <shigma10826@gmail.com>",
+  "contributors": [
+    "Shigma <shigma10826@gmail.com>",
+    "Hieuzest <girkirin@hotmail.com>"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -39,10 +43,28 @@
     "mysql",
     "sqlite",
     "mongo",
-    "postgres"
+    "postgres",
+    "cordis",
+    "plugin"
   ],
+  "cordis": {
+    "ecosystem": {
+      "pattern": [
+        "@minatojs/driver-*",
+        "@minatojs/plugin-*",
+        "minato-plugin-*"
+      ]
+    },
+    "service": {
+      "implements": [
+        "model"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "cordis": "^3.17.3"
+  },
   "dependencies": {
-    "cordis": "^3.14.0",
     "cosmokit": "^1.6.2"
   }
 }

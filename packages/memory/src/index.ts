@@ -1,5 +1,5 @@
-import { clone, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, RuntimeError, Selection, z } from 'minato'
+import { clone, deepEqual, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Field, isAggrExpr, RuntimeError, Selection, z } from 'minato'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
   static name = 'memory'
@@ -64,7 +64,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     for (let row of executeSort(data, args[0], ref)) {
       row = model.format(row, false)
       for (const key in model.fields) {
-        if (model.fields[key]!.deprecated) continue
+        if (!Field.available(model.fields[key])) continue
         row[key] ??= null
       }
       let index = row
@@ -74,7 +74,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       let branch = branches.find((branch) => {
         if (!group || !groupFields) return false
         for (const key in groupFields) {
-          if (branch.index[key] !== index[key]) return false
+          if (!deepEqual(branch.index[key], index[key])) return false
         }
         return true
       })
@@ -153,15 +153,14 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       meta.autoInc += 1
       data[primary] = meta.autoInc
     } else {
-      const duplicated = await this.database.get(table, pick(data, makeArray(primary)))
+      const duplicated = await this.database.get(table, pick(model.format(data), makeArray(primary)))
       if (duplicated.length) {
         throw new RuntimeError('duplicate-entry')
       }
     }
-    const copy = model.create(data)
-    store.push(copy)
+    store.push(clone(data))
     this.$save(table)
-    return clone(copy)
+    return clone(clone(data))
   }
 
   async upsert(sel: Selection.Mutable, data: any, keys: string[]) {
@@ -176,7 +175,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
         result.matched++
       } else {
         const data = executeUpdate(model.create(), update, ref)
-        await this.database.create(table, data).catch(noop)
+        await this.create(sel, data).catch(noop)
         result.inserted++
       }
     }
@@ -188,7 +187,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     const expr = sel.args[0], table = sel.table as Selection
     if (Array.isArray(env)) env = { [sel.ref]: env }
     const data = this.table(sel.table, env)
-    const res = expr.$ ? data.map(row => executeEval({ ...env, [table.ref]: row, _: row }, expr))
+    const res = isAggrExpr(expr) ? data.map(row => executeEval({ ...env, [table.ref]: row, _: row }, expr))
       : executeEval(Object.assign(data.map(row => ({ [table.ref]: row, _: row })), env), expr)
     return res
   }

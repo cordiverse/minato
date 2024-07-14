@@ -1,10 +1,11 @@
-import { Awaitable, Dict, mapValues, remove } from 'cosmokit'
-import { Context, Logger } from 'cordis'
+import { Awaitable, defineProperty, Dict, mapValues, remove } from 'cosmokit'
+import { Context, Logger, Service } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
-import { Field, Model } from './model.ts'
+import { Field, Model, Relation } from './model.ts'
 import { Database } from './database.ts'
 import { Type } from './type.ts'
+import { FlatKeys, Keys, Values } from './utils.ts'
 
 export namespace Driver {
   export interface Stats {
@@ -17,13 +18,14 @@ export namespace Driver {
     size: number
   }
 
-  export type Cursor<K extends string = never> = K[] | CursorOptions<K>
+  export type Cursor<K extends string = string, S = any, T extends Keys<S> = any> = K[] | CursorOptions<K, S, T>
 
-  export interface CursorOptions<K extends string> {
+  export interface CursorOptions<K extends string = string, S = any, T extends Keys<S> = any> {
     limit?: number
     offset?: number
     fields?: K[]
-    sort?: Dict<Direction, K>
+    sort?: Partial<Dict<Direction, FlatKeys<S[T]>>>
+    include?: Relation.Include<S[T], Values<S>>
   }
 
   export interface WriteResult {
@@ -82,8 +84,13 @@ export abstract class Driver<T = any, C extends Context = Context> {
       await this.start()
       ctx.model.drivers.push(this)
       ctx.model.refresh()
-      const database = Object.create(ctx.model)
+      const database = Object.create(ctx.model) // FIXME use original model
+      defineProperty(database, 'ctx', ctx)
       database._driver = this
+      database[Service.tracker] = {
+        associate: 'database',
+        property: 'ctx',
+      }
       ctx.set('database', Context.associate(database, 'database'))
     })
 
@@ -101,11 +108,19 @@ export abstract class Driver<T = any, C extends Context = Context> {
     }
 
     if (table instanceof Selection) {
-      if (!table.args[0].fields) return table.model
+      if (!table.args[0].fields && (typeof table.table === 'string' || table.table instanceof Selection)) {
+        return table.model
+      }
       const model = new Model('temp')
-      model.fields = mapValues(table.args[0].fields, (expr, key) => ({
-        type: Type.fromTerm(expr),
-      }))
+      if (table.args[0].fields) {
+        model.fields = mapValues(table.args[0].fields, (expr) => ({
+          type: Type.fromTerm(expr),
+        }))
+      } else {
+        model.fields = mapValues(table.model.fields, (field) => ({
+          type: Type.fromField(field),
+        }))
+      }
       return model
     }
 
@@ -113,7 +128,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
     for (const key in table) {
       const submodel = this.model(table[key])
       for (const field in submodel.fields) {
-        if (submodel.fields[field]!.deprecated) continue
+        if (!Field.available(submodel.fields[field])) continue
         model.fields[`${key}.${field}`] = {
           expr: Eval('', [table[key].ref, field], Type.fromField(submodel.fields[field]!)),
           type: Type.fromField(submodel.fields[field]!),

@@ -1,5 +1,5 @@
 import { Binary, deepEqual, Dict, difference, isNullable, makeArray, mapValues } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, hasSubquery, isEvalExpr, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, Selection, z } from 'minato'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -10,21 +10,13 @@ import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
 import { pathToFileURL } from 'node:url'
 
-function getValue(obj: any, path: string) {
-  if (path.includes('.')) {
-    const index = path.indexOf('.')
-    return getValue(obj[path.slice(0, index)] ?? {}, path.slice(index + 1))
-  } else {
-    return obj[path]
-  }
-}
-
 function getTypeDef({ deftype: type }: Field) {
   switch (type) {
     case 'primary':
     case 'boolean':
     case 'integer':
     case 'unsigned':
+    case 'bigint':
     case 'date':
     case 'time':
     case 'timestamp': return `INTEGER`
@@ -37,6 +29,7 @@ function getTypeDef({ deftype: type }: Field) {
     case 'list':
     case 'json': return `TEXT`
     case 'binary': return `BLOB`
+    default: throw new Error(`unsupported type: ${type}`)
   }
 }
 
@@ -59,6 +52,7 @@ interface SQLiteMasterInfo {
 export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   static name = 'sqlite'
 
+  path!: string
   db!: init.Database
   sql = new SQLiteBuilder(this)
   beforeUnload?: () => void
@@ -77,7 +71,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
     // field definitions
     for (const key in model.fields) {
-      if (model.fields[key]!.deprecated) {
+      if (!Field.available(model.fields[key])) {
         if (dropKeys?.includes(key)) shouldMigrate = true
         continue
       }
@@ -166,8 +160,9 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async start() {
-    if (this.config.path !== ':memory:') {
-      this.config.path = resolve(this.ctx.baseDir, this.config.path)
+    this.path = this.config.path
+    if (this.path !== ':memory:') {
+      this.path = resolve(this.ctx.baseDir, this.path)
     }
     const isBrowser = process.env.KOISHI_ENV === 'browser'
     const sqlite = await init({
@@ -178,11 +173,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
           // @ts-ignore
           : createRequire(import.meta.url || pathToFileURL(__filename).href).resolve('@minatojs/sql.js/dist/' + file),
     })
-    if (!isBrowser || this.config.path === ':memory:') {
-      this.db = new sqlite.Database(this.config.path)
+    if (!isBrowser || this.path === ':memory:') {
+      this.db = new sqlite.Database(this.path)
     } else {
-      const buffer = await readFile(this.config.path).catch(() => null)
-      this.db = new sqlite.Database(this.config.path, buffer)
+      const buffer = await readFile(this.path).catch(() => null)
+      this.db = new sqlite.Database(this.path, buffer)
       if (isBrowser) {
         window.addEventListener('beforeunload', this.beforeUnload = () => {
           this._export()
@@ -190,6 +185,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       }
     }
     this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
+    this.db.create_function('regexp2', (pattern, str, flags) => +new RegExp(pattern, flags).test(str))
     this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
     this.db.create_function('modulo', (left, right) => left % right)
     this.db.create_function('rand', () => Math.random())
@@ -276,7 +272,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   _export() {
     const data = this.db.export()
-    return writeFile(this.config.path, data)
+    return writeFile(this.path, data)
   }
 
   _run(sql: string, params: any = [], callback?: () => any) {
@@ -308,8 +304,9 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async remove(sel: Selection.Mutable) {
-    const { query, table } = sel
-    const filter = this.sql.parseQuery(query)
+    const { query, table, tables } = sel
+    const builder = new SQLiteBuilder(this, tables)
+    const filter = builder.parseQuery(query)
     if (filter === '0') return {}
     const result = this._run(`DELETE FROM ${escapeId(table)} WHERE ${filter}`, [], () => this._get(`SELECT changes() AS count`))
     return { matched: result.count, removed: result.count }
@@ -333,33 +330,37 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   _update(sel: Selection.Mutable, indexFields: string[], updateFields: string[], update: {}, data: {}) {
-    const { ref, table } = sel
-    const model = this.model(table)
+    const { ref, table, tables, model } = sel
+    const builder = new SQLiteBuilder(this, tables)
     executeUpdate(data, update, ref)
-    const row = this.sql.dump(data, model)
+    const row = builder.dump(data, model)
     const assignment = updateFields.map((key) => `${escapeId(key)} = ?`).join(',')
     const query = Object.fromEntries(indexFields.map(key => [key, row[key]]))
-    const filter = this.sql.parseQuery(query)
+    const filter = builder.parseQuery(query)
     this._run(`UPDATE ${escapeId(table)} SET ${assignment} WHERE ${filter}`, updateFields.map((key) => row[key] ?? null))
   }
 
   async set(sel: Selection.Mutable, update: {}) {
     const { model, table, query } = sel
-    const { primary, fields } = model
+    const { primary } = model, fields = model.avaiableFields()
     const updateFields = [...new Set(Object.keys(update).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     const primaryFields = makeArray(primary)
-    if ((Object.keys(query).length === 1 && query.$expr) || hasSubquery(sel.query) || Object.values(update).some(x => hasSubquery(x))) {
+    if (query.$expr || hasSubquery(sel.query) || Object.values(update).some(x => hasSubquery(x))) {
       const sel2 = this.database.select(table as never, query)
-      sel2.tables[sel.ref] = sel2.table[sel2.ref]
-      delete sel2.table[sel2.ref]
+      sel2.tables[sel.ref] = sel2.tables[sel2.ref]
+      delete sel2.tables[sel2.ref]
       sel2.ref = sel.ref
       const project = mapValues(update as any, (value, key) => () => (isEvalExpr(value) ? value : Eval.literal(value, model.getType(key))))
-      const rawUpsert = await sel2.project({ ...project, ...Object.fromEntries(primaryFields.map(x => [x, x])) } as any).execute()
+      const rawUpsert = await sel2.project({
+        ...project,
+        // do not touch sel2.row since it is not patched
+        ...Object.fromEntries(primaryFields.map(x => [x, () => Eval('', [sel.ref, x], sel2.model.getType(x)!)])),
+      }).execute()
       const upsert = rawUpsert.map(row => ({
-        ...mapValues(update, (_, key) => getValue(row, key)),
-        ...Object.fromEntries(primaryFields.map(x => [x, getValue(row, x)])),
+        ...mapValues(update, (_, key) => getCell(row, key)),
+        ...Object.fromEntries(primaryFields.map(x => [x, getCell(row, x)])),
       }))
       return this.database.upsert(table, upsert)
     } else {
@@ -390,9 +391,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, ref } = sel
+    const fields = model.avaiableFields()
     const result = { inserted: 0, matched: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
-      return Object.keys(model.fields).find(field => field === key || key.startsWith(field + '.'))!
+      return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
     let updateFields = difference(dataFields, keys)
     if (!updateFields.length) updateFields = [dataFields[0]]
@@ -404,7 +406,11 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
         $or: chunk.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
       })
       for (const item of chunk) {
-        const row = results.find(row => keys.every(key => deepEqual(row[key], item[key], true)))
+        const row = results.find(row => {
+          // flatten key to respect model
+          row = model.format(row)
+          return keys.every(key => deepEqual(row[key], item[key], true))
+        })
         if (row) {
           this._update(sel, keys, updateFields, item, row)
           result.matched++
