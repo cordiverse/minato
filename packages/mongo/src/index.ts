@@ -208,6 +208,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const [latest] = await coll.find().sort(this.getVirtualKey(table) ? '_id' : primary, -1).limit(1).toArray()
     await fields.updateOne(meta, {
       $set: { autoInc: latest ? +latest[this.getVirtualKey(table) ? '_id' : primary] : 0 },
+      $setOnInsert: { virtual: !!this.getVirtualKey(table) },
     }, { upsert: true })
   }
 
