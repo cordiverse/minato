@@ -196,12 +196,12 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
       if (!column) {
         create.push(`${escapeId(key)} ${typedef} ${makeArray(primary).includes(key) || !nullable ? 'not null' : 'null'}`
-         + (initial ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
+         + (!primary.includes(key) && !isNullable(initial) ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
       } else if (shouldUpdate) {
         if (column.column_name !== key) rename.push(`RENAME ${escapeId(column.column_name)} TO ${escapeId(key)}`)
         update.push(`ALTER ${escapeId(key)} TYPE ${typedef}`)
         update.push(`ALTER ${escapeId(key)} ${makeArray(primary).includes(key) || !nullable ? 'SET' : 'DROP'} NOT NULL`)
-        if (initial) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${this.sql.escape(initial, fields[key])}`)
+        if (!isNullable(initial)) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${this.sql.escape(initial, fields[key])}`)
       }
     }
 

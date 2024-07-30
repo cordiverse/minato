@@ -185,11 +185,11 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
           def += (nullable ? ' ' : ' not ') + 'null'
         }
         // blob, text, geometry or json columns cannot have default values
-        if (initial && !typedef.startsWith('text') && !typedef.endsWith('blob')) {
+        if (!isNullable(initial) && !typedef.startsWith('text') && !typedef.endsWith('blob')) {
           def += ' default ' + this.sql.escape(initial, fields[key])
         }
 
-        if (!column && initial && (typedef.startsWith('text') || typedef.endsWith('blob'))) {
+        if (!column && !isNullable(initial) && (typedef.startsWith('text') || typedef.endsWith('blob'))) {
           alterInit[key] = this.sql.escape(initial, fields[key])
         }
       }

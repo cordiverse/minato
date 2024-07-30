@@ -221,6 +221,7 @@ function MigrationTests(database: Database<Tables>) {
 
     database.extend('qux', {}, {
       indexes: [{
+        name: 'named-index',
         keys: {
           id: 'asc',
           value: 'asc',
@@ -234,10 +235,38 @@ function MigrationTests(database: Database<Tables>) {
     ])
 
     indexes = await driver.getIndexes('qux')
-    expect(indexes.find(ind => deepEqual(omit(ind, ['name']), {
+    expect(indexes.find(ind => deepEqual(ind, {
+      name: 'named-index',
       unique: false,
       keys: {
         id: 'asc',
+        value: 'asc',
+      },
+    }))).to.not.be.undefined
+
+    database.extend('qux', {
+      text: 'string',
+    }, {
+      indexes: [{
+        name: 'named-index',
+        keys: {
+          text: 'asc',
+          value: 'asc',
+        }
+      }],
+    })
+
+    await expect(database.get('qux', {})).to.eventually.have.deep.members([
+      { id: 1, value: 1, text: '' },
+      { id: 2, value: 2, text: '' },
+    ])
+
+    indexes = await driver.getIndexes('qux')
+    expect(indexes.find(ind => deepEqual(ind, {
+      name: 'named-index',
+      unique: false,
+      keys: {
+        text: 'asc',
         value: 'asc',
       },
     }))).to.not.be.undefined

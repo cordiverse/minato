@@ -1,4 +1,4 @@
-import { clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
+import { clone, deepEqual, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel } from './utils.ts'
@@ -279,7 +279,7 @@ export class Model<S = any> {
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
     unique.forEach(key => this.unique.includes(key) || this.unique.push(key))
-    indexes.map(x => this.parseIndex(x)).forEach(index => (this.indexes.some((ind: Driver.Index) => ind.name === index.name)) || this.indexes.push(index))
+    indexes.map(x => this.parseIndex(x)).forEach(index => (this.indexes.some(ind => deepEqual(ind, index))) || this.indexes.push(index))
     Object.assign(this.foreign, foreign)
 
     if (callback) this.migrations.set(callback, Object.keys(fields))
