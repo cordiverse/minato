@@ -9,7 +9,6 @@ interface User {
   posts?: Post[]
   successor?: Record<string, any> & { id: number }
   predecessor?: Record<string, any> & { id: number }
-  friends?: Record<string, any> & { id: number }
 }
 
 interface Profile {

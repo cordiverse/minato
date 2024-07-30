@@ -1,4 +1,4 @@
-import { Binary, Dict, difference, isNullable, makeArray, noop, pick } from 'cosmokit'
+import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { createPool, format } from '@vlasky/mysql'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
 import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
@@ -529,7 +529,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
     await this.query(
       `ALTER TABLE ${escapeId(table)} ADD ${index.unique ? 'UNIQUE' : ''} INDEX ${index.name ? escapeId(index.name) : ''} (${keyFields})`,
-    ).catch(noop)
+    )
   }
 
   async dropIndex(table: string, name: string) {

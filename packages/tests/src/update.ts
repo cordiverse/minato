@@ -441,7 +441,6 @@ namespace OrmOperations {
 
       await driver.createIndex('temp2', index)
       let indexes = await driver.getIndexes('temp2')
-      console.log(indexes)
       let added = indexes.find(ind => deepEqual(omit(ind, ['name']), index))
       expect(added).to.not.be.undefined
 

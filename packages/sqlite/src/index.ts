@@ -448,8 +448,9 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async createIndex(table: string, index: Driver.Index) {
+    const name = index.name ?? Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
     const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
-    await this._run(`create ${index.unique ? 'UNIQUE' : ''} index ${index.name ? escapeId(index.name) : ''} ON ${escapeId(table)} (${keyFields})`)
+    await this._run(`create ${index.unique ? 'UNIQUE' : ''} index ${escapeId(name)} ON ${escapeId(table)} (${keyFields})`)
   }
 
   async dropIndex(table: string, name: string) {

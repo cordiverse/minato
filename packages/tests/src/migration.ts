@@ -220,7 +220,12 @@ function MigrationTests(database: Database<Tables>) {
     }))).to.not.be.undefined
 
     database.extend('qux', {}, {
-      indexes: [['id', 'value']],
+      indexes: [{
+        keys: {
+          id: 'asc',
+          value: 'asc',
+        }
+      }],
     })
 
     await expect(database.get('qux', {})).to.eventually.have.deep.members([
