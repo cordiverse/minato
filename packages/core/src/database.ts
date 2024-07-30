@@ -129,6 +129,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     Object.values(fields).forEach(field => field?.transformers?.forEach(x => driver.define(x)))
 
     await driver.prepare(name)
+    await driver.prepareIndexes(name)
   }
 
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<FlatKeys<S[K]>>> = {}) {
@@ -189,9 +190,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
     })
     // use relation field as primary
-    if (Array.isArray(model.primary) && model.primary.every(key => model.fields[key]?.relation)) {
-      model.primary = deduplicate(model.primary.map(key => model.fields[key]!.relation!.fields).flat())
+    if (Array.isArray(model.primary)) {
+      model.primary = deduplicate(model.primary.map(key => model.fields[key]!.relation?.fields || key).flat())
     }
+    model.unique = model.unique.map(keys => typeof keys === 'string' ? model.fields[keys]!.relation?.fields || keys
+      : keys.map(key => model.fields[key]!.relation?.fields || key).flat())
+
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
   }
@@ -495,7 +499,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: Create<S[K], S>): Promise<S[K]>
+  async create<K extends Keys<S>>(table: K, data: CreateMap<S[K], S>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const sel = this.select(table)
 
@@ -595,18 +599,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   async dropAll() {
     if (this[Database.transact]) throw new Error('cannot drop table in transaction')
     await Promise.all(Object.values(this.drivers).map(driver => driver.dropAll()))
-  }
-
-  getIndexes<K extends Keys<S>>(table: K): Promise<Dict<Driver.Index<S[K]>>> {
-    return this.getDriver(table).getIndexes(table)
-  }
-
-  createIndex<K extends Keys<S>>(table: K, index: Driver.Index<S[K]>) {
-    return this.getDriver(table).createIndex(table, index)
-  }
-
-  dropIndex<K extends Keys<S>>(table: K, name: string) {
-    return this.getDriver(table).dropIndex(table, name)
   }
 
   async stats() {

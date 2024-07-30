@@ -434,22 +434,22 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     })
   }
 
-  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+  async getIndexes(table: string) {
     const indexes = this._all(`SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ?`, [table]) as SQLiteMasterInfo[]
-    const result = {}
+    const result: Driver.Index[] = []
     for (const { name, sql } of indexes) {
-      result[name] = {
+      result.push({
+        name,
         unique: !sql || sql.toUpperCase().startsWith('CREATE UNIQUE'),
         keys: this._parseIndexDef(sql),
-      }
+      })
     }
     return result
   }
 
   async createIndex(table: string, index: Driver.Index) {
-    const name = `index:${table}:` + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
     const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
-    await this._run(`create ${index.unique ? 'UNIQUE' : ''} index ${escapeId(name)} ON ${escapeId(table)} (${keyFields})`)
+    await this._run(`create ${index.unique ? 'UNIQUE' : ''} index ${index.name ? escapeId(index.name) : ''} ON ${escapeId(table)} (${keyFields})`)
   }
 
   async dropIndex(table: string, name: string) {

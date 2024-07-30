@@ -200,14 +200,14 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
     })
   }
 
-  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
-    return this._indexes[table] ?? {}
+  async getIndexes(table: string) {
+    return Object.values(this._indexes[table] ?? {})
   }
 
   async createIndex(table: string, index: Driver.Index) {
-    const name = 'index:' + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction}`).join('+')
+    const name = index.name ?? 'index:' + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction}`).join('+')
     this._indexes[table] ??= {}
-    this._indexes[table][name] = { unique: false, ...index }
+    this._indexes[table][name] = { name, unique: false, ...index }
   }
 
   async dropIndex(table: string, name: string) {

@@ -423,22 +423,24 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     return this.postgres.begin((conn) => callback(conn))
   }
 
-  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+  async getIndexes(table: string) {
     const indexes = await this.queue<IndexInfo[]>(`SELECT * FROM pg_indexes WHERE schemaname = 'public' AND tablename = ${this.sql.escape(table)}`)
-    const result = {}
+    const result: Driver.Index[] = []
     for (const { indexname: name, indexdef: sql } of indexes) {
-      result[name] = {
+      result.push({
+        name,
         unique: sql.toUpperCase().startsWith('CREATE UNIQUE'),
         keys: this._parseIndexDef(sql),
-      }
+      })
     }
-    return result
+    return Object.values(result)
   }
 
   async createIndex(table: string, index: Driver.Index) {
-    const name = `index:${table}:` + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
     const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
-    await this.query(`CREATE ${index.unique ? 'UNIQUE' : ''} INDEX IF NOT EXISTS ${escapeId(name)} ON ${escapeId(table)} (${keyFields})`)
+    await this.query(
+      `CREATE ${index.unique ? 'UNIQUE' : ''} INDEX ${index.name ? `IF NOT EXISTS ${escapeId(index.name)}` : ''} ON ${escapeId(table)} (${keyFields})`,
+    )
   }
 
   async dropIndex(table: string, name: string) {

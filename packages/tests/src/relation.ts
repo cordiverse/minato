@@ -9,6 +9,7 @@ interface User {
   posts?: Post[]
   successor?: Record<string, any> & { id: number }
   predecessor?: Record<string, any> & { id: number }
+  friends?: Record<string, any> & { id: number }
 }
 
 interface Profile {
@@ -94,6 +95,8 @@ function RelationTests(database: Database<Tables>) {
       table: 'user',
       target: 'profile',
     },
+  }, {
+    unique: [['user', 'name']]
   })
 
   database.extend('post', {

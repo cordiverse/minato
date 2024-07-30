@@ -511,24 +511,25 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     })
   }
 
-  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+  async getIndexes(table: string) {
     const indexes = await this.queue<IndexInfo[]>([
       `SELECT *`,
       `FROM information_schema.statistics`,
       `WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?`,
     ].join(' '), [this.config.database, table])
-    const result = {}
+    const result: Dict<Driver.Index> = {}
     for (const { INDEX_NAME: name, COLUMN_NAME: key, COLLATION: direction, NON_UNIQUE: unique } of indexes) {
-      if (!result[name]) result[name] = { unique: unique !== '1', keys: {} }
+      if (!result[name]) result[name] = { name, unique: unique !== '1', keys: {} }
       result[name].keys[key] = direction === 'A' ? 'asc' : direction === 'D' ? 'desc' : direction
     }
-    return result
+    return Object.values(result)
   }
 
   async createIndex(table: string, index: Driver.Index) {
-    const name = 'index:' + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
     const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
-    await this.query(`ALTER TABLE ${escapeId(table)} ADD ${index.unique ? 'UNIQUE' : ''} INDEX ${escapeId(name)} (${keyFields})`).catch(noop)
+    await this.query(
+      `ALTER TABLE ${escapeId(table)} ADD ${index.unique ? 'UNIQUE' : ''} INDEX ${index.name ? escapeId(index.name) : ''} (${keyFields})`,
+    ).catch(noop)
   }
 
   async dropIndex(table: string, name: string) {

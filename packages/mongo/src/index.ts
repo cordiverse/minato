@@ -105,9 +105,11 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         // mongodb seems to not support $ne in partialFilterExpression
         // so we cannot simply use `{ $ne: null }` to filter out null values
         // below is a workaround for https://github.com/koishijs/koishi/issues/893
-        partialFilterExpression: nullable ? undefined : Object.fromEntries(keys.map((key) => [key, {
-          $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
-        }])),
+        ...(nullable || index > unique.length) ? {} : {
+          partialFilterExpression: Object.fromEntries(keys.map((key) => [key, {
+            $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
+          }])),
+        },
       })
     })
 
@@ -493,25 +495,27 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     }
   }
 
-  async getIndexes(table: string): Promise<Dict<Driver.Index>> {
+  async getIndexes(table: string) {
     const indexes = await this.db.collection(table).listIndexes().toArray()
-    return Object.fromEntries(indexes.map(({ name, key, unique }) => [name, {
+    return indexes.map(({ name, key, unique }) => ({
+      name,
       unique: !!unique,
       keys: mapValues(key, value => value === 1 ? 'asc' : value === -1 ? 'desc' : value),
-    }]))
+    } as Driver.Index))
   }
 
   async createIndex(table: string, index: Driver.Index) {
-    const name = `index:${table}:` + Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
     const keys = mapValues(index.keys, (value) => value === 'asc' ? 1 : value === 'desc' ? -1 : isNullable(value) ? 1 : value)
     const { fields } = this.model(table)
     const nullable = Object.keys(index.keys).every(key => fields[key]?.nullable)
     await this.db.collection(table).createIndex(keys, {
-      name,
+      name: index.name,
       unique: !!index.unique,
-      partialFilterExpression: nullable ? undefined : Object.fromEntries(Object.keys(index.keys).map((key) => [key, {
-        $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
-      }])),
+      ...nullable ? {} : {
+        partialFilterExpression: Object.fromEntries(Object.keys(index.keys).map((key) => [key, {
+          $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
+        }])),
+      },
     })
   }
 
