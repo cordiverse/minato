@@ -44,27 +44,27 @@ export namespace Join2 {
   export type Predicate<S, U extends Input<S>> = (args: Parameters<S, U>) => Eval.Expr<boolean>
 }
 
-type CreateMap<T, S> = { [K in keyof T]?: Create<T[K], S> }
-
-export type Create<T, S> =
+type CreateUnit<T, S> =
   | T extends Values<AtomicTypes> ? T
-  : T extends (infer I extends Values<S>)[] ? CreateMap<I, S>[] |
+  : T extends (infer I extends Values<S>)[] ? Create<I, S>[] |
     {
       $literal?: DeepPartial<I>
-      $create?: MaybeArray<CreateMap<I, S>>
-      $upsert?: MaybeArray<CreateMap<I, S>>
+      $create?: MaybeArray<Create<I, S>>
+      $upsert?: MaybeArray<Create<I, S>>
       $connect?: Query.Expr<Flatten<I>>
     }
-  : T extends Values<S> ? CreateMap<T, S> |
+  : T extends Values<S> ? Create<T, S> |
     {
       $literal?: DeepPartial<T>
-      $create?: CreateMap<T, S>
-      $upsert?: CreateMap<T, S>
+      $create?: Create<T, S>
+      $upsert?: Create<T, S>
       $connect?: Query.Expr<Flatten<T>>
     }
   : T extends (infer U)[] ? DeepPartial<U>[]
-  : T extends object ? CreateMap<T, S>
+  : T extends object ? Create<T, S>
   : T
+
+export type Create<T, S> = { [K in keyof T]?: CreateUnit<T[K], S> }
 
 function mergeQuery<T>(base: Query.FieldExpr<T>, query: Query.Expr<Flatten<T>> | ((row: Row<T>) => Query.Expr<Flatten<T>>)): Selection.Callback<T, boolean> {
   if (typeof query === 'function') {
@@ -499,7 +499,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: CreateMap<S[K], S>): Promise<S[K]>
+  async create<K extends Keys<S>>(table: K, data: Create<S[K], S>): Promise<S[K]>
   async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
     const sel = this.select(table)
 
