@@ -247,7 +247,7 @@ export namespace Model {
     autoInc: boolean
     primary: MaybeArray<K>
     unique: MaybeArray<K>[]
-    indexes: (MaybeArray<K> | Driver.Index<K>)[]
+    indexes: (MaybeArray<K> | Driver.IndexDef<K>)[]
     foreign: {
       [P in K]?: [string, string]
     }

@@ -35,10 +35,13 @@ export namespace Driver {
     removed?: number
   }
 
-  export interface Index<K extends string = string> {
+  export interface IndexDef<K extends string = string> {
     name?: string
-    unique?: boolean
     keys: { [P in K]?: 'asc' | 'desc' }
+  }
+
+  export interface Index<K extends string = string> extends IndexDef<K> {
+    unique?: boolean
   }
 
   export interface Transformer<S = any, T = any> {
