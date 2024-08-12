@@ -56,27 +56,5 @@ database.extend('user', {
 })
 ```
 
-## Simple API
-
-### create
-
-```ts
-const user = await driver.create('user', {
-  name: 'John',
-  age: 20,
-}) // { id: 1, name: 'John', age: 20, money: 100 }
-```
-
-### get
-
-### remove
-
-### set
-
-### upsert
-
-## Selection API
-
-## Using TypeScript
-
-## Using Multiple Drivers
+## Documentation
+[Click here](https://koishi.chat/en-US/guide/database/) for more details.
