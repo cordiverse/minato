@@ -167,8 +167,9 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
           // @ts-ignore
           : createRequire(import.meta.url || pathToFileURL(__filename).href).resolve('@minatojs/sql.js/dist/' + file),
     })
+
+    if (this.path !== ':memory:' && !existsSync(resolve(this.path, '..'))) throw new Error(`The database directory '${resolve(this.path, '..')}' does not exist. You may have to create it first.`)
     if (!isBrowser || this.path === ':memory:') {
-      if (!existsSync(resolve(this.path, '..'))) throw new Error(`The database directory '${this.path}' does not exist. You may have to create it first.`)
       this.db = new sqlite.Database(this.path)
     } else {
       const buffer = await readFile(this.path).catch(() => null)
