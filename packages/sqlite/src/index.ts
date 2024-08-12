@@ -3,6 +3,7 @@ import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, S
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import init from '@minatojs/sql.js'
 import enUS from './locales/en-US.yml'
@@ -167,6 +168,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
           : createRequire(import.meta.url || pathToFileURL(__filename).href).resolve('@minatojs/sql.js/dist/' + file),
     })
     if (!isBrowser || this.path === ':memory:') {
+      if (!existsSync(resolve(this.path, '..'))) throw new Error(`The database directory '${this.path}' does not exist. You may have to create it first.`)
       this.db = new sqlite.Database(this.path)
     } else {
       const buffer = await readFile(this.path).catch(() => null)
