@@ -57,4 +57,5 @@ database.extend('user', {
 ```
 
 ## Documentation
+
 [Click here](https://koishi.chat/en-US/guide/database/) for more details.
