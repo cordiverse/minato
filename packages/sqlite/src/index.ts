@@ -168,7 +168,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     })
 
     if (this.path !== ':memory:' && !(await access(resolve(this.path, '..')).then(() => true).catch(() => false)))
-      throw new Error(`The database directory '${resolve(this.path, '..')}' does not exist. You may have to create it first.`)
+      throw new Error(`The database directory '${resolve(this.path, '..')}' is not accessible. You may have to create it first.`)
     if (!isBrowser || this.path === ':memory:') {
       this.db = new sqlite.Database(this.path)
     } else {
