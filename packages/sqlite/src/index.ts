@@ -2,8 +2,7 @@ import { Binary, deepEqual, Dict, difference, isNullable, makeArray, mapValues }
 import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, Selection, z } from 'minato'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
-import { readFile, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { readFile, writeFile, access } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import init from '@minatojs/sql.js'
 import enUS from './locales/en-US.yml'
@@ -168,7 +167,8 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
           : createRequire(import.meta.url || pathToFileURL(__filename).href).resolve('@minatojs/sql.js/dist/' + file),
     })
 
-    if (this.path !== ':memory:' && !existsSync(resolve(this.path, '..'))) throw new Error(`The database directory '${resolve(this.path, '..')}' does not exist. You may have to create it first.`)
+    if (this.path !== ':memory:' && !(await access(resolve(this.path, '..')).then(() => true).catch(() => false)))
+      throw new Error(`The database directory '${resolve(this.path, '..')}' does not exist. You may have to create it first.`)
     if (!isBrowser || this.path === ':memory:') {
       this.db = new sqlite.Database(this.path)
     } else {
