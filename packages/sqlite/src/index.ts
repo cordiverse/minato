@@ -221,7 +221,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     })
 
     this.define<number, number | bigint>({
-      types: Field.number as any,
+      types: ['primary', ...Field.number as any],
       dump: value => value,
       load: value => isNullable(value) ? value : Number(value),
     })
