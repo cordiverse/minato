@@ -1,5 +1,5 @@
 import { $, Database } from 'minato'
-import { omit } from 'cosmokit'
+import { deepEqual, omit } from 'cosmokit'
 import { expect } from 'chai'
 
 interface Bar {
@@ -48,6 +48,7 @@ function OrmOperations(database: Database<Tables>) {
     },
   }, {
     autoInc: true,
+    indexes: ['text'],
   })
 
   database.extend('temp3', {
@@ -424,6 +425,65 @@ namespace OrmOperations {
     it('$.random', async () => {
       await setup(database, 'temp2', barTable)
       await expect(database.eval('temp2', row => $.max($.random()))).to.eventually.gt(0).lt(1)
+    })
+  }
+
+  export const index = function Index(database: Database<Tables>) {
+    it('basic support', async () => {
+      const driver = Object.values(database.drivers)[0]
+      const index = {
+        unique: false,
+        keys: {
+          num: 'asc',
+          timestamp: 'asc',
+        },
+      } as const
+
+      await driver.createIndex('temp2', index)
+      let indexes = await driver.getIndexes('temp2')
+      let added = indexes.find(ind => deepEqual(omit(ind, ['name']), index))
+      expect(added).to.not.be.undefined
+
+      await driver.dropIndex('temp2', added!.name!)
+      indexes = await driver.getIndexes('temp2')
+      added = indexes.find(ind => deepEqual(omit(ind, ['name']), index))
+      expect(added).to.be.undefined
+    })
+
+    it('named', async () => {
+      const driver = Object.values(database.drivers)[0]
+      const index = {
+        name: 'index_unique:temp2:num_asc+timestamp_asc',
+        unique: true,
+        keys: {
+          num: 'asc',
+          timestamp: 'asc',
+        },
+      } as const
+
+      await driver.createIndex('temp2', index)
+      let indexes = await driver.getIndexes('temp2')
+      let added = indexes.find(ind => deepEqual(ind, index))
+      expect(added).to.not.be.undefined
+
+      await driver.dropIndex('temp2', added!.name!)
+      indexes = await driver.getIndexes('temp2')
+      added = indexes.find(ind => deepEqual(ind, index))
+      expect(added).to.be.undefined
+    })
+
+    it('extend', async () => {
+      const driver = Object.values(database.drivers)[0]
+      const index = {
+        unique: false,
+        keys: {
+          text: 'asc',
+        },
+      } as const
+
+      const indexes = await driver.getIndexes('temp2')
+      const existed = indexes.find(ind => deepEqual(omit(ind, ['name']), index))
+      expect(existed).to.not.be.undefined
     })
   }
 

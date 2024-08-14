@@ -32,6 +32,10 @@ interface ColumnInfo {
 interface IndexInfo {
   INDEX_NAME: string
   COLUMN_NAME: string
+  SEQ_IN_INDEX: string
+  COLLATION: 'A' | 'D'
+  NULLABLE: string
+  NON_UNIQUE: string
 }
 
 interface QueryTask {
@@ -181,11 +185,11 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
           def += (nullable ? ' ' : ' not ') + 'null'
         }
         // blob, text, geometry or json columns cannot have default values
-        if (initial && !typedef.startsWith('text') && !typedef.endsWith('blob')) {
+        if (!isNullable(initial) && !typedef.startsWith('text') && !typedef.endsWith('blob')) {
           def += ' default ' + this.sql.escape(initial, fields[key])
         }
 
-        if (!column && initial && (typedef.startsWith('text') || typedef.endsWith('blob'))) {
+        if (!column && !isNullable(initial) && (typedef.startsWith('text') || typedef.endsWith('blob'))) {
           alterInit[key] = this.sql.escape(initial, fields[key])
         }
       }
@@ -505,6 +509,31 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
         ).finally(() => conn.release()))
       })
     })
+  }
+
+  async getIndexes(table: string) {
+    const indexes = await this.queue<IndexInfo[]>([
+      `SELECT *`,
+      `FROM information_schema.statistics`,
+      `WHERE TABLE_SCHEMA = ? && TABLE_NAME = ?`,
+    ].join(' '), [this.config.database, table])
+    const result: Dict<Driver.Index> = {}
+    for (const { INDEX_NAME: name, COLUMN_NAME: key, COLLATION: direction, NON_UNIQUE: unique } of indexes) {
+      if (!result[name]) result[name] = { name, unique: unique !== '1', keys: {} }
+      result[name].keys[key] = direction === 'A' ? 'asc' : direction === 'D' ? 'desc' : direction
+    }
+    return Object.values(result)
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
+    await this.query(
+      `ALTER TABLE ${escapeId(table)} ADD ${index.unique ? 'UNIQUE' : ''} INDEX ${index.name ? escapeId(index.name) : ''} (${keyFields})`,
+    )
+  }
+
+  async dropIndex(table: string, name: string) {
+    await this.query(`DROP INDEX ${escapeId(name)} ON ${escapeId(table)}`)
   }
 
   private getTypeDef({ deftype: type, length, precision, scale }: Field) {

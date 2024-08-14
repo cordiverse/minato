@@ -82,7 +82,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
    * https://www.mongodb.com/docs/manual/indexes/
    */
   private async _createIndexes(table: string) {
-    const { primary, unique } = this.model(table)
+    const { fields, primary, unique } = this.model(table)
     const coll = this.db.collection(table)
     const newSpecs: IndexDescription[] = []
     const oldSpecs = await coll.indexes()
@@ -96,6 +96,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       const name = (index ? 'unique:' : 'primary:') + keys.join('+')
       if (oldSpecs.find(spec => spec.name === name)) return
 
+      const nullable = Object.entries(fields).filter(([key]) => keys.includes(key)).every(([, field]) => field?.nullable)
       newSpecs.push({
         name,
         key: Object.fromEntries(keys.map(key => [key, 1])),
@@ -104,9 +105,11 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         // mongodb seems to not support $ne in partialFilterExpression
         // so we cannot simply use `{ $ne: null }` to filter out null values
         // below is a workaround for https://github.com/koishijs/koishi/issues/893
-        partialFilterExpression: Object.fromEntries(keys.map((key) => [key, {
-          $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
-        }])),
+        ...(nullable || index > unique.length) ? {} : {
+          partialFilterExpression: Object.fromEntries(keys.map((key) => [key, {
+            $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
+          }])),
+        },
       })
     })
 
@@ -208,6 +211,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const [latest] = await coll.find().sort(this.getVirtualKey(table) ? '_id' : primary, -1).limit(1).toArray()
     await fields.updateOne(meta, {
       $set: { autoInc: latest ? +latest[this.getVirtualKey(table) ? '_id' : primary] : 0 },
+      $setOnInsert: { virtual: !!this.getVirtualKey(table) },
     }, { upsert: true })
   }
 
@@ -490,6 +494,34 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     } else {
       await callback(undefined)
     }
+  }
+
+  async getIndexes(table: string) {
+    const indexes = await this.db.collection(table).listIndexes().toArray()
+    return indexes.map(({ name, key, unique }) => ({
+      name,
+      unique: !!unique,
+      keys: mapValues(key, value => value === 1 ? 'asc' : value === -1 ? 'desc' : value),
+    } as Driver.Index))
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const keys = mapValues(index.keys, (value) => value === 'asc' ? 1 : value === 'desc' ? -1 : isNullable(value) ? 1 : value)
+    const { fields } = this.model(table)
+    const nullable = Object.keys(index.keys).every(key => fields[key]?.nullable)
+    await this.db.collection(table).createIndex(keys, {
+      name: index.name,
+      unique: !!index.unique,
+      ...nullable ? {} : {
+        partialFilterExpression: Object.fromEntries(Object.keys(index.keys).map((key) => [key, {
+          $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
+        }])),
+      },
+    })
+  }
+
+  async dropIndex(table: string, name: string) {
+    await this.db.collection(table).dropIndex(name)
   }
 
   logPipeline(table: string, pipeline: any) {

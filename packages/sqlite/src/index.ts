@@ -33,13 +33,20 @@ function getTypeDef({ deftype: type }: Field) {
   }
 }
 
-export interface SQLiteFieldInfo {
+interface SQLiteFieldInfo {
   cid: number
   name: string
   type: string
   notnull: number
   dflt_value: string
   pk: boolean
+}
+
+interface SQLiteMasterInfo {
+  type: string
+  name: string
+  tbl_name: string
+  sql: string
 }
 
 export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
@@ -223,7 +230,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     })
 
     this.define<number, number | bigint>({
-      types: Field.number as any,
+      types: ['primary', ...Field.number as any],
       dump: value => value,
       load: value => isNullable(value) ? value : Number(value),
     })
@@ -434,6 +441,43 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
         (e) => (this._run('ROLLBACK'), reject(e)),
       )
     })
+  }
+
+  async getIndexes(table: string) {
+    const indexes = this._all(`SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ?`, [table]) as SQLiteMasterInfo[]
+    const result: Driver.Index[] = []
+    for (const { name, sql } of indexes) {
+      result.push({
+        name,
+        unique: !sql || sql.toUpperCase().startsWith('CREATE UNIQUE'),
+        keys: this._parseIndexDef(sql),
+      })
+    }
+    return result
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const name = index.name ?? Object.entries(index.keys).map(([key, direction]) => `${key}_${direction ?? 'asc'}`).join('+')
+    const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
+    await this._run(`create ${index.unique ? 'UNIQUE' : ''} index ${escapeId(name)} ON ${escapeId(table)} (${keyFields})`)
+  }
+
+  async dropIndex(table: string, name: string) {
+    await this._run(`DROP INDEX ${escapeId(name)}`)
+  }
+
+  _parseIndexDef(def: string) {
+    if (!def) return {}
+    try {
+      const keys = {}, matches = def.match(/\((.*)\)/)!
+      matches[1].split(',').forEach((key) => {
+        const [name, direction] = key.trim().split(' ')
+        keys[name.startsWith('`') ? name.slice(1, -1) : name] = direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
+      })
+      return keys
+    } catch {
+      return {}
+    }
   }
 }
 
