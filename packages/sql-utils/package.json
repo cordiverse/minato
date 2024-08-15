@@ -40,8 +40,11 @@
     "query",
     "builder"
   ],
+  "devDependencies": {
+    "cordis": "^3.18.0"
+  },
   "peerDependencies": {
-    "minato": "^3.4.3"
+    "minato": "^3.5.0"
   },
   "dependencies": {
     "cosmokit": "^1.6.2"
