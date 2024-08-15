@@ -24,12 +24,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/shigma/minato.git",
-    "directory": "packages/sqlite"
+    "directory": "packages/node-sqlite"
   },
   "bugs": {
     "url": "https://github.com/shigma/minato/issues"
   },
-  "homepage": "https://github.com/shigma/minato/packages/sqlite#readme",
+  "homepage": "https://github.com/shigma/minato/packages/node-sqlite#readme",
   "keywords": [
     "orm",
     "database",

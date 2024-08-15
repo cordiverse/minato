@@ -10,7 +10,7 @@ describe('@minatojs/driver-node-sqlite', () => {
   const database = new Database()
 
   before(async () => {
-    logger.level = 2
+    logger.level = 3
     await database.connect(SQLiteDriver, {
       path: join(__dirname, 'test.db'),
     })
