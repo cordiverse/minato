@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-node-sqlite",
-  "version": "4.4.1",
+  "version": "4.5.0",
   "description": "node:sqlite Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -23,13 +23,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shigma/minato.git",
+    "url": "git+https://github.com/cordiverse/minato.git",
     "directory": "packages/node-sqlite"
   },
   "bugs": {
-    "url": "https://github.com/shigma/minato/issues"
+    "url": "https://github.com/cordiverse/minato/issues"
   },
-  "homepage": "https://github.com/shigma/minato/packages/node-sqlite#readme",
+  "homepage": "https://github.com/cordiverse/minato/packages/node-sqlite#readme",
   "keywords": [
     "orm",
     "database",
