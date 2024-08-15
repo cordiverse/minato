@@ -94,6 +94,8 @@ function RelationTests(database: Database<Tables>) {
       table: 'user',
       target: 'profile',
     },
+  }, {
+    unique: [['user', 'name']]
   })
 
   database.extend('post', {

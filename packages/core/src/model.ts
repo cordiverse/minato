@@ -1,4 +1,4 @@
-import { clone, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
+import { clone, deepEqual, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel } from './utils.ts'
@@ -71,8 +71,8 @@ export namespace Relation {
       : typeof def.shared === 'string' ? { [def.shared]: def.shared }
         : Array.isArray(def.shared) ? Object.fromEntries(def.shared.map(x => [x, x]))
           : def.shared
-    const fields = def.fields ?? ((subprimary || model.name === relmodel.name || def.type === 'manyToOne'
-      || (def.type === 'oneToOne' && !makeArray(relmodel.primary).every(key => !relmodel.fields[key]?.nullable)))
+    const fields = def.fields ?? ((subprimary || def.type === 'manyToOne'
+      || (def.type === 'oneToOne' && (model.name === relmodel.name || !makeArray(relmodel.primary).every(key => !relmodel.fields[key]?.nullable))))
       ? makeArray(relmodel.primary).map(x => `${key}.${x}`) : model.primary)
     const relation: Config = {
       type: def.type,
@@ -247,6 +247,7 @@ export namespace Model {
     autoInc: boolean
     primary: MaybeArray<K>
     unique: MaybeArray<K>[]
+    indexes: (MaybeArray<K> | Driver.IndexDef<K>)[]
     foreign: {
       [P in K]?: [string, string]
     }
@@ -257,6 +258,7 @@ export interface Model extends Model.Config {}
 
 export class Model<S = any> {
   declare ctx?: Context
+  declare indexes: Driver.Index<FlatKeys<S>>[]
   fields: Field.Config<S> = {}
   migrations = new Map<Model.Migration, string[]>()
 
@@ -266,16 +268,18 @@ export class Model<S = any> {
     this.autoInc = false
     this.primary = 'id' as never
     this.unique = []
+    this.indexes = []
     this.foreign = {}
   }
 
   extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
-    const { primary, autoInc, unique = [] as [], foreign, callback } = config
+    const { primary, autoInc, unique = [], indexes = [], foreign, callback } = config
 
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
     unique.forEach(key => this.unique.includes(key) || this.unique.push(key))
+    indexes.map(x => this.parseIndex(x)).forEach(index => (this.indexes.some(ind => deepEqual(ind, index))) || this.indexes.push(index))
     Object.assign(this.foreign, foreign)
 
     if (callback) this.migrations.set(callback, Object.keys(fields))
@@ -292,10 +296,27 @@ export class Model<S = any> {
     // check index
     this.checkIndex(this.primary)
     this.unique.forEach(index => this.checkIndex(index))
+    this.indexes.forEach(index => this.checkIndex(index))
   }
 
-  private checkIndex(index: MaybeArray<string>) {
-    for (const key of makeArray(index)) {
+  private parseIndex(index: MaybeArray<string> | Driver.Index): Driver.Index {
+    if (typeof index === 'string' || Array.isArray(index)) {
+      return {
+        name: `index:${this.name}:` + makeArray(index).join('+'),
+        unique: false,
+        keys: Object.fromEntries(makeArray(index).map(key => [key, 'asc'])),
+      }
+    } else {
+      return {
+        name: index.name ?? `index:${this.name}:` + Object.keys(index.keys).join('+'),
+        unique: index.unique ?? false,
+        keys: index.keys,
+      }
+    }
+  }
+
+  private checkIndex(index: MaybeArray<string> | Driver.Index) {
+    for (const key of typeof index === 'string' || Array.isArray(index) ? makeArray(index) : Object.keys(index.keys)) {
       if (!this.fields[key]) {
         throw new TypeError(`missing field definition for index key "${key}"`)
       }
