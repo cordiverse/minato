@@ -27,13 +27,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shigma/minato.git",
+    "url": "git+https://github.com/cordiverse/minato.git",
     "directory": "packages/postgres"
   },
   "bugs": {
-    "url": "https://github.com/shigma/minato/issues"
+    "url": "https://github.com/cordiverse/minato/issues"
   },
-  "homepage": "https://github.com/shigma/minato/packages/postgres#readme",
+  "homepage": "https://github.com/cordiverse/minato/packages/postgres#readme",
   "keywords": [
     "orm",
     "database",
