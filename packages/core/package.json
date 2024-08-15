@@ -1,6 +1,6 @@
 {
   "name": "minato",
-  "version": "3.4.3",
+  "version": "3.5.0",
   "description": "Type Driven Database Framework",
   "type": "module",
   "main": "lib/index.cjs",
@@ -28,13 +28,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shigma/minato.git",
+    "url": "git+https://github.com/cordiverse/minato.git",
     "directory": "packages/core"
   },
   "bugs": {
-    "url": "https://github.com/shigma/minato/issues"
+    "url": "https://github.com/cordiverse/minato/issues"
   },
-  "homepage": "https://github.com/shigma/minato",
+  "homepage": "https://github.com/cordiverse/minato",
   "keywords": [
     "orm",
     "query",
@@ -61,8 +61,11 @@
       ]
     }
   },
+  "devDependencies": {
+    "cordis": "^3.18.0"
+  },
   "peerDependencies": {
-    "cordis": "^3.17.3"
+    "cordis": "^3.18.0"
   },
   "dependencies": {
     "cosmokit": "^1.6.2"
