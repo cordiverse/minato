@@ -452,6 +452,43 @@ namespace RelationTests {
         ...user,
         posts: posts.filter(post => post.author?.id === user.id),
       })))
+
+      await expect(database.get('user', {
+        posts: {
+          $or: [
+            {
+              $some: {
+                author: {
+                  id: 1,
+                },
+              },
+            },
+            {
+              $none: {
+                author: {},
+              },
+            },
+          ],
+        },
+      })).to.eventually.have.shape([users[0], users[2]].map(user => ({
+        ...user,
+        posts: posts.filter(post => post.author?.id === user.id),
+      })))
+
+      await expect(database.get('user', {
+        posts: {
+          $not: {
+            $some: {
+              author: {
+                id: 1,
+              },
+            },
+          },
+        },
+      })).to.eventually.have.shape([users[1], users[2]].map(user => ({
+        ...user,
+        posts: posts.filter(post => post.author?.id === user.id),
+      })))
     })
 
     it('manyToMany', async () => {

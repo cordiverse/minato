@@ -636,6 +636,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         ))
       }
     } else if (relation.type === 'oneToMany') {
+      if (query.$or) results.push(Eval.or(...query.$or.map((q: any) => this.transformRelationQuery(table, row, key, q).$expr)))
+      if (query.$and) results.push(...query.$and.map((q: any) => this.transformRelationQuery(table, row, key, q).$expr))
+      if (query.$not) results.push(Eval.not(this.transformRelationQuery(table, row, key, query.$not).$expr))
       if (query.$some) {
         results.push(Eval.in(
           relation.fields.map(x => row[x]),
@@ -658,6 +661,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       const assocTable: any = Relation.buildAssociationTable(table, relation.table)
       const fields: any[] = relation.fields.map(x => Relation.buildAssociationKey(x, table))
       const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
+      if (query.$or) results.push(Eval.or(...query.$or.map((q: any) => this.transformRelationQuery(table, row, key, q).$expr)))
+      if (query.$and) results.push(...query.$and.map((q: any) => this.transformRelationQuery(table, row, key, q).$expr))
+      if (query.$not) results.push(Eval.not(this.transformRelationQuery(table, row, key, query.$not).$expr))
       if (query.$some) {
         const innerTable = this.select(relation.table, query.$some).evaluate(relation.references)
         const relTable = this.select(assocTable, r => Eval.in(references.map(x => r[x]), innerTable)).evaluate(fields)
