@@ -1,8 +1,7 @@
-import { $, Database, Primary } from 'minato'
+import { $, Database, Driver, Primary } from 'minato'
 import { Context, ForkScope, Logger } from 'cordis'
-import { expect } from 'chai'
 import MongoDriver from '@minatojs/driver-mongo'
-import '@minatojs/tests'
+import { expect } from '@minatojs/tests'
 
 const logger = new Logger('mongo')
 
@@ -105,11 +104,11 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     await resetConfig(false)
     await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
 
-    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
+    await (Object.values(database.drivers)[0] as Driver).drop('_fields')
     await resetConfig(true)
     await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
 
-    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
+    await (Object.values(database.drivers)[0] as Driver).drop('_fields')
     await resetConfig(false)
     await expect(database.get('temp1', {})).to.eventually.deep.eq(table)
   })
@@ -139,11 +138,11 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     table.push(await database.create('temp2', { text: 'awesome baz' }))
     await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
 
-    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
+    await (Object.values(database.drivers)[0] as Driver).drop('_fields')
     await resetConfig(true)
     await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
 
-    await (Object.values(database.drivers)[0] as MongoDriver).drop('_fields')
+    await (Object.values(database.drivers)[0] as Driver).drop('_fields')
     await resetConfig(false)
     await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
 

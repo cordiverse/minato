@@ -6,6 +6,7 @@
         - esbuild
       clean:
         - tsc --clean
+- name: yakumo/run
 - name: yakumo-esbuild
 - name: yakumo-mocha
 - name: yakumo-tsc
