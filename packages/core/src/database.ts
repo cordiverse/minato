@@ -203,11 +203,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   private _parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {
     if (field === 'object') {
       setInitial?.({})
-      setField?.({ type: 'json', initial: {} })
+      setField?.({ initial: {}, deftype: 'json', type: Type.Object() })
       return Type.Object()
     } else if (field === 'array') {
       setInitial?.([])
-      setField?.({ type: 'json', initial: [] })
+      setField?.({ initial: [], deftype: 'json', type: Type.Array() })
       return Type.Array()
     } else if (typeof field === 'string' && this.types[field]) {
       transformers.push({

@@ -94,6 +94,14 @@ export class PostgresBuilder extends Builder {
         else return `(${args.map(arg => this.parseEval(arg, 'bigint')).join(' # ')})`
       },
 
+      $get: ([x, key]) => {
+        const type = Type.fromTerm(this.state.expr, Type.Any)
+        const res = typeof key === 'string'
+          ? this.asEncoded(`jsonb_extract_path(${this.parseEval(x, false)}, ${(key as string).split('.').map(this.escapeKey).join(',')})`, true)
+          : this.asEncoded(`(${this.parseEval(x, false)})->(${this.parseEval(key, 'integer')})`, true)
+        return type.type === 'expr' ? res : `(${res})::${this.transformType(type)}`
+      },
+
       $number: (arg) => {
         const value = this.parseEval(arg)
         const type = Type.fromTerm(arg)

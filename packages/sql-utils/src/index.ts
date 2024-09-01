@@ -196,6 +196,9 @@ export class Builder {
 
       $object: (fields) => this.groupObject(fields),
       $array: (expr) => this.groupArray(this.transform(this.parseEval(expr, false), expr, 'encode')),
+      $get: ([x, key]) => typeof key === 'string'
+        ? this.asEncoded(`json_extract(${this.parseEval(x, false)}, '$.${key}')`, true)
+        : this.asEncoded(`json_extract(${this.parseEval(x, false)}, concat('$[', ${this.parseEval(key)}, ']'))`, true),
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }
@@ -391,13 +394,31 @@ export class Builder {
         const flattenQuery = isFlat(query[key]) ? { [key]: query[key] } : flatten(query[key], `${key}.`)
         for (const key in flattenQuery) {
           const model = this.state.tables![this.state.table!] ?? Object.values(this.state.tables!)[0]
-          const expr = Eval('', [this.state.table ?? Object.keys(this.state.tables!)[0], key], model.getType(key)!)
+          const expr = this.transformQueryPath(this.state.table ?? Object.keys(this.state.tables!)[0], model, key)
           conditions.push(this.parseFieldQuery(this.parseEval(expr), flattenQuery[key]))
         }
       }
     }
 
     return this.logicalAnd(conditions)
+  }
+
+  protected transformQueryPath(ref: string, model: Model, key: string) {
+    let intermediate = false, path = ''
+    const segments = key.split('.')
+    let expr: Eval.Expr | undefined
+    for (const segment of segments) {
+      if (Number.isInteger(+segment)) {
+        expr = Eval.get(expr, +segment)
+        intermediate = true
+      } else if (intermediate) {
+        expr = Eval.get(expr, segment)
+      } else {
+        path = path ? `${path}.${segment}` : segment
+        expr = Eval('', [ref, path], model.getType(path)!)
+      }
+    }
+    return expr
   }
 
   protected parseEvalExpr(expr: any) {
