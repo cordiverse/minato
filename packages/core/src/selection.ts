@@ -161,7 +161,11 @@ type FieldMap<S, M extends Dict<FieldLike<S>>> = {
   [K in keyof M]: FieldType<S, M[K]>
 }
 
-type FieldCallback<S = any, U = any> = (row: Row<S>) => U
+type FieldCallback<S = any, M extends Dict<Eval.Term<any>> = any> = (row: Row<S>) => M
+
+type EvalMap<M extends Dict<Eval.Term<any>>> = {
+  [K in keyof M]: Eval<M[K]>
+}
 
 export namespace Selection {
   export type Callback<S = any, T = any, A extends boolean = boolean> = (row: Row<S>) => Eval.Expr<T, A>
@@ -233,7 +237,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
     fields: K | K[],
     extra?: FieldCallback<S, U>,
     query?: Selection.Callback<S, boolean>,
-  ): Selection<FlatPick<S, K> & U>
+  ): Selection<FlatPick<S, K> & EvalMap<U>>
 
   groupBy<K extends Dict<FieldLike<S>>>(fields: K, query?: Selection.Callback<S, boolean>): Selection<FieldMap<S, K>>
   groupBy<K extends Dict<FieldLike<S>>, U extends Dict<FieldLike<S>>>(
@@ -242,11 +246,11 @@ export class Selection<S = any> extends Executable<S, S[]> {
     query?: Selection.Callback<S, boolean>,
   ): Selection<FieldMap<S, K & U>>
 
-  groupBy<K extends Dict<FieldLike<S>>, U extends any>(
+  groupBy<K extends Dict<FieldLike<S>>, U extends object>(
     fields: K,
     extra?: FieldCallback<S, U>,
     query?: Selection.Callback<S, boolean>,
-  ): Selection<FieldMap<S, K> & U>
+  ): Selection<FieldMap<S, K> & EvalMap<U>>
 
   groupBy(fields: any, ...args: any[]) {
     this.args[0].fields = this.resolveFields(fields)
@@ -264,8 +268,8 @@ export class Selection<S = any> extends Executable<S, S[]> {
 
   project<K extends FlatKeys<S>>(fields: K | readonly K[]): Selection<FlatPick<S, K>>
   project<U extends Dict<FieldLike<S>>>(fields: U): Selection<FieldMap<S, U>>
-  project<U extends object>(fields: FieldCallback<S, U>): Selection<U>
-  project(fields: Keys<S>[] | Dict<FieldLike<S>> | Selection.Callback) {
+  project<U extends object>(fields: FieldCallback<S, U>): Selection<EvalMap<U>>
+  project(fields: Keys<S>[] | Dict<FieldLike<S>> | FieldCallback) {
     this.args[0].fields = this.resolveFields(fields)
     return new Selection(this.driver, this)
   }
