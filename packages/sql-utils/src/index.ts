@@ -126,7 +126,7 @@ export class Builder {
     this.evalOperators = {
       // universal
       $: (key) => this.getRecursive(key),
-      $select: (args) => `${args.map(arg => this.parseEval(arg, false)).join(', ')}`,
+      $select: (args) => `${args.map(arg => this.parseEval(arg)).join(', ')}`,
       $if: (args) => `if(${args.map(arg => this.parseEval(arg)).join(', ')})`,
       $ifNull: (args) => `ifnull(${args.map(arg => this.parseEval(arg)).join(', ')})`,
 
