@@ -641,6 +641,7 @@ namespace ModelOperations {
       await setup(database, 'dobjects', dobjectTable)
       await expect(database.get('dobjects', row => $.eq(row.baz[0].nested.id, 1))).to.eventually.have.length(2)
       await expect(database.get('dobjects', { 'baz.0.nested.id': 1 })).to.eventually.have.length(2)
+      await expect(database.get('dobjects', row => $.eq(row.baz[0].nested.array[0], 1))).to.eventually.have.length(2)
     })
   }
 }
