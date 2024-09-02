@@ -318,9 +318,9 @@ Eval.object = (fields: any) => {
       .filter(([, field]) => Field.available(field))
       .filter(([path]) => path.startsWith(prefix))
       .map(([k]) => [k.slice(prefix.length), fields[k.slice(prefix.length)]]))
-    return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value))))
+    return Object.assign(Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value)))), fields)
   }
-  return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value)))) as any
+  return Object.assign(Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value)))), fields)
 }
 
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
