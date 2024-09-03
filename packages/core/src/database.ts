@@ -317,7 +317,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   select(table: any, query?: any, include?: any) {
     let sel = new Selection(this.getDriver(table), table, query)
     if (typeof table !== 'string') return sel
-    const whereOnly = include === null
+    const whereOnly = include === null, isAssoc = !!include?.$assoc
     const rawquery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
     if (include) include = filterKeys(include, (key) => !!modelFields[key]?.relation)
@@ -364,13 +364,20 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       for (const key in include) {
         if (!include[key] || !modelFields[key]?.relation) continue
         const relation: Relation.Config<S> = modelFields[key]!.relation as any
+        const relmodel = this.tables[relation.table]
         if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
-          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, include[key]), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table,
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !relmodel.fields[k]?.relation) : {} as any,
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !!relmodel.fields[k]?.relation) : include[key],
+          ), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
-          ), true)
+          ), !isAssoc)
           sel = applyQuery(sel, key)
         } else if (relation.type === 'oneToMany') {
-          sel = whereOnly ? sel : sel.join(key, this.select(relation.table, {}, include[key]), (self, other) => Eval.and(
+          sel = whereOnly ? sel : sel.join(key, this.select(relation.table,
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !relmodel.fields[k]?.relation) : {} as any,
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !!relmodel.fields[k]?.relation) : include[key],
+          ), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
           sel = applyQuery(sel, key)
@@ -387,10 +394,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             field: x,
             reference: y,
           }] as const)
-          sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { [relation.table]: include[key] } as any), (self, other) => Eval.and(
-            ...shared.map(([k, v]) => Eval.eq(self[v.field], other[k])),
-            ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
-          ), true)
+          sel = whereOnly ? sel : sel.join(key, this.select(assocTable, {}, { $assoc: true, [relation.table]: include[key] } as any),
+            (self, other) => Eval.and(
+              ...shared.map(([k, v]) => Eval.eq(self[v.field], other[k])),
+              ...relation.fields.map((k, i) => Eval.eq(self[k], other[references[i]])),
+            ), true)
           sel = applyQuery(sel, key)
           sel = whereOnly ? sel : sel.groupBy([
             ...Object.entries(modelFields).filter(([k, field]) => !extraFields.some(x => k.startsWith(`${x}.`)) && Field.available(field)).map(([k]) => k),
