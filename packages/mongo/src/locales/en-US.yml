@@ -4,6 +4,7 @@ port: The port number to be connected.
 username: The username used for authentication.
 password: The password used for authentication.
 database: The name of the database we want to use.
+authDatabase: The name of the database for authentication.
 writeConcern:
   $description: Write Concern
   w:

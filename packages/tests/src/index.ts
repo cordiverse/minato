@@ -10,6 +10,8 @@ import Transaction from './transaction'
 import Relation from './relation'
 import './setup'
 
+export { expect } from 'chai'
+
 const Keywords = ['name']
 type Keywords = 'name'
 

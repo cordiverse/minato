@@ -36,6 +36,14 @@ interface ConstraintInfo {
   nulls_distinct: string
 }
 
+interface IndexInfo {
+  schemaname: string
+  tablename: string
+  indexname: string
+  tablespace: string
+  indexdef: string
+}
+
 interface TableInfo {
   table_catalog: string
   table_schema: string
@@ -188,12 +196,12 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
       if (!column) {
         create.push(`${escapeId(key)} ${typedef} ${makeArray(primary).includes(key) || !nullable ? 'not null' : 'null'}`
-         + (initial ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
+         + (!primary.includes(key) && !isNullable(initial) ? ' DEFAULT ' + this.sql.escape(initial, fields[key]) : ''))
       } else if (shouldUpdate) {
         if (column.column_name !== key) rename.push(`RENAME ${escapeId(column.column_name)} TO ${escapeId(key)}`)
         update.push(`ALTER ${escapeId(key)} TYPE ${typedef}`)
         update.push(`ALTER ${escapeId(key)} ${makeArray(primary).includes(key) || !nullable ? 'SET' : 'DROP'} NOT NULL`)
-        if (initial) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${this.sql.escape(initial, fields[key])}`)
+        if (!isNullable(initial)) update.push(`ALTER ${escapeId(key)} SET DEFAULT ${this.sql.escape(initial, fields[key])}`)
       }
     }
 
@@ -413,6 +421,43 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
   async withTransaction(callback: (session: any) => Promise<void>) {
     return this.postgres.begin((conn) => callback(conn))
+  }
+
+  async getIndexes(table: string) {
+    const indexes = await this.queue<IndexInfo[]>(`SELECT * FROM pg_indexes WHERE schemaname = 'public' AND tablename = ${this.sql.escape(table)}`)
+    const result: Driver.Index[] = []
+    for (const { indexname: name, indexdef: sql } of indexes) {
+      result.push({
+        name,
+        unique: sql.toUpperCase().startsWith('CREATE UNIQUE'),
+        keys: this._parseIndexDef(sql),
+      })
+    }
+    return Object.values(result)
+  }
+
+  async createIndex(table: string, index: Driver.Index) {
+    const keyFields = Object.entries(index.keys).map(([key, direction]) => `${escapeId(key)} ${direction ?? 'asc'}`).join(', ')
+    await this.query(
+      `CREATE ${index.unique ? 'UNIQUE' : ''} INDEX ${index.name ? `IF NOT EXISTS ${escapeId(index.name)}` : ''} ON ${escapeId(table)} (${keyFields})`,
+    )
+  }
+
+  async dropIndex(table: string, name: string) {
+    await this.query(`DROP INDEX ${escapeId(name)}`)
+  }
+
+  _parseIndexDef(def: string) {
+    try {
+      const keys = {}, matches = def.match(/\((.*)\)/)!
+      matches[1].split(',').forEach((key) => {
+        const [name, direction] = key.trim().split(' ')
+        keys[name.startsWith('"') ? name.slice(1, -1).replace(/""/g, '"') : name] = direction?.toLowerCase() === 'desc' ? 'desc' : 'asc'
+      })
+      return keys
+    } catch {
+      return {}
+    }
   }
 
   private getTypeDef(field: Field & { autoInc?: boolean }) {

@@ -1,5 +1,6 @@
 import { Database } from 'minato'
 import { expect } from 'chai'
+import { deepEqual, noop, omit } from 'cosmokit'
 
 interface Qux {
   id: number
@@ -21,6 +22,10 @@ interface Tables {
 }
 
 function MigrationTests(database: Database<Tables>) {
+  beforeEach(async () => {
+    await database.drop('qux').catch(noop)
+  })
+
   it('alter field', async () => {
     Reflect.deleteProperty(database.tables, 'qux')
 
@@ -148,6 +153,123 @@ function MigrationTests(database: Database<Tables>) {
       { id: 1, text: 'foo', obj: {} },
       { id: 2, text: 'bar', obj: {} },
     ])
+  })
+
+  it('indexes', async () => {
+    const driver = Object.values(database.drivers)[0]
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      number: 'unsigned',
+    })
+
+    await database.upsert('qux', [
+      { id: 1, number: 1 },
+      { id: 2, number: 2 },
+    ])
+
+    await expect(database.get('qux', {})).to.eventually.have.deep.members([
+      { id: 1, number: 1 },
+      { id: 2, number: 2 },
+    ])
+
+    database.extend('qux', {
+      id: 'unsigned',
+      number: 'unsigned',
+    }, {
+      indexes: ['number'],
+    })
+
+    await expect(database.get('qux', {})).to.eventually.have.deep.members([
+      { id: 1, number: 1 },
+      { id: 2, number: 2 },
+    ])
+
+    let indexes = await driver.getIndexes('qux')
+    expect(indexes.find(ind => deepEqual(omit(ind, ['name']), {
+      unique: false,
+      keys: {
+        number: 'asc',
+      },
+    }))).to.not.be.undefined
+
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      value: {
+        type: 'unsigned',
+        legacy: ['number'],
+      },
+    }, {
+      indexes: ['value'],
+    })
+
+    await expect(database.get('qux', {})).to.eventually.have.deep.members([
+      { id: 1, value: 1 },
+      { id: 2, value: 2 },
+    ])
+
+    indexes = await driver.getIndexes('qux')
+    expect(indexes.find(ind => deepEqual(omit(ind, ['name']), {
+      unique: false,
+      keys: {
+        value: 'asc',
+      },
+    }))).to.not.be.undefined
+
+    database.extend('qux', {}, {
+      indexes: [{
+        name: 'named-index',
+        keys: {
+          id: 'asc',
+          value: 'asc',
+        }
+      }],
+    })
+
+    await expect(database.get('qux', {})).to.eventually.have.deep.members([
+      { id: 1, value: 1 },
+      { id: 2, value: 2 },
+    ])
+
+    indexes = await driver.getIndexes('qux')
+    expect(indexes.find(ind => deepEqual(ind, {
+      name: 'named-index',
+      unique: false,
+      keys: {
+        id: 'asc',
+        value: 'asc',
+      },
+    }))).to.not.be.undefined
+
+    database.extend('qux', {
+      text: 'string',
+    }, {
+      indexes: [{
+        name: 'named-index',
+        keys: {
+          text: 'asc',
+          value: 'asc',
+        }
+      }],
+    })
+
+    await expect(database.get('qux', {})).to.eventually.have.deep.members([
+      { id: 1, value: 1, text: '' },
+      { id: 2, value: 2, text: '' },
+    ])
+
+    indexes = await driver.getIndexes('qux')
+    expect(indexes.find(ind => deepEqual(ind, {
+      name: 'named-index',
+      unique: false,
+      keys: {
+        text: 'asc',
+        value: 'asc',
+      },
+    }))).to.not.be.undefined
   })
 }
 

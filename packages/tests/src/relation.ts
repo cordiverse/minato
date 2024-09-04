@@ -52,7 +52,14 @@ interface Guild {
   platform2: string
   name?: string
   logins?: Login[]
+  members?: Member[]
   syncs?: GuildSync[]
+}
+
+interface Member {
+  guild: Guild
+  user: Login
+  name: string
 }
 
 interface GuildSync {
@@ -71,6 +78,7 @@ interface Tables {
   guildSync: GuildSync
   login: Login
   guild: Guild
+  member: Member
 }
 
 function RelationTests(database: Database<Tables>) {
@@ -94,6 +102,8 @@ function RelationTests(database: Database<Tables>) {
       table: 'user',
       target: 'profile',
     },
+  }, {
+    unique: [['user', 'name']]
   })
 
   database.extend('post', {
@@ -141,7 +151,7 @@ function RelationTests(database: Database<Tables>) {
 
   database.extend('login', {
     id: 'string',
-    platform: 'string',
+    platform: 'string(64)',
     name: 'string',
   }, {
     primary: ['id', 'platform'],
@@ -149,7 +159,7 @@ function RelationTests(database: Database<Tables>) {
 
   database.extend('guild', {
     id: 'string',
-    platform2: 'string',
+    platform2: 'string(64)',
     name: 'string',
     logins: {
       type: 'manyToMany',
@@ -178,6 +188,21 @@ function RelationTests(database: Database<Tables>) {
     },
   }, {
     primary: ['guild', 'login'],
+  })
+
+  database.extend('member', {
+    guild: {
+      type: 'manyToOne',
+      table: 'guild',
+      target: 'members',
+    },
+    user: {
+      type: 'manyToOne',
+      table: 'login',
+    },
+    name: 'string',
+  }, {
+    primary: ['user', 'guild'],
   })
 
   async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
@@ -447,6 +472,43 @@ namespace RelationTests {
           },
         },
       })).to.eventually.have.shape([users[0], users[2]].map(user => ({
+        ...user,
+        posts: posts.filter(post => post.author?.id === user.id),
+      })))
+
+      await expect(database.get('user', {
+        posts: {
+          $or: [
+            {
+              $some: {
+                author: {
+                  id: 1,
+                },
+              },
+            },
+            {
+              $none: {
+                author: {},
+              },
+            },
+          ],
+        },
+      })).to.eventually.have.shape([users[0], users[2]].map(user => ({
+        ...user,
+        posts: posts.filter(post => post.author?.id === user.id),
+      })))
+
+      await expect(database.get('user', {
+        posts: {
+          $not: {
+            $some: {
+              author: {
+                id: 1,
+              },
+            },
+          },
+        },
+      })).to.eventually.have.shape([users[1], users[2]].map(user => ({
         ...user,
         posts: posts.filter(post => post.author?.id === user.id),
       })))
@@ -1757,6 +1819,25 @@ namespace RelationTests {
           ],
         },
       ])
+
+      await database.create('member', {
+        user: {
+          $connect: {
+            id: '1',
+          },
+        },
+        guild: {
+          $connect: {
+            id: '1',
+          },
+        },
+      })
+
+      await expect(database.get('member', {
+        user: {
+          guilds: {},
+        },
+      })).to.eventually.have.length(1)
     })
   }
 }

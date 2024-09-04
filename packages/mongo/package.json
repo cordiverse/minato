@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mongo",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "MongoDB Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -23,13 +23,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shigma/minato.git",
+    "url": "git+https://github.com/cordiverse/minato.git",
     "directory": "packages/mongo"
   },
   "bugs": {
-    "url": "https://github.com/shigma/minato/issues"
+    "url": "https://github.com/cordiverse/minato/issues"
   },
-  "homepage": "https://github.com/shigma/minato/packages/mongo#readme",
+  "homepage": "https://github.com/cordiverse/minato/packages/mongo#readme",
   "keywords": [
     "orm",
     "database",
@@ -38,10 +38,12 @@
     "mongodb"
   ],
   "devDependencies": {
-    "@minatojs/tests": "^2.4.1"
+    "@minatojs/tests": "^2.5.0",
+    "cordis": "^3.18.0",
+    "minato": "^3.5.0"
   },
   "peerDependencies": {
-    "minato": "^3.4.3"
+    "minato": "^3.5.0"
   },
   "dependencies": {
     "cosmokit": "^1.6.2",
