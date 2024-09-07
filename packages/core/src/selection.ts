@@ -322,19 +322,6 @@ export namespace Selection {
     return !!sel.tables as any
   }
 
-  function retrieveType(type?: Type) {
-    if (!type) return
-    defineProperty(type, Type.kType, true)
-    if (Type.isArray(type)) retrieveType(type.inner)
-    else if (type.inner) mapValues(type.inner, retrieveType as any)
-  }
-
-  function retrieveModel(payload: Model) {
-    const model = Object.assign(new Model(payload.name), payload)
-    model.fields = mapValues(model.fields, (field) => (retrieveType(field?.type), field))
-    return model
-  }
-
   function retrieveQuery(query: Query.Expr, ctx) {
     if (query.$expr) retrieveExprType(query.$expr, ctx)
     if (query.$and) query.$and.forEach((expr) => retrieveQuery(expr, ctx))
@@ -342,17 +329,18 @@ export namespace Selection {
     if (query.$not) retrieveQuery(query.$not, ctx)
   }
 
-  export function retrieve<T extends Selection.Mutable | Selection.Immutable>(sel: T, driver: Driver): T {
+  export function retrieve<T extends Selection.Mutable | Selection.Immutable>(sel: T, driver: Driver, models?: Record<string, Model>): T {
     if (sel instanceof Selection) return sel
-
+    models ??= {}
     if (Selection.is(sel.table)) {
-      sel.table = Selection.retrieve(sel.table, driver)
+      sel.table = Selection.retrieve(sel.table, driver, models)
     } else if (typeof sel.table === 'object') {
-      sel.table = mapValues(sel.table, (table) => Selection.retrieve(table, driver))
+      sel.table = mapValues(sel.table, (table) => Selection.retrieve(table, driver, models))
     }
 
     sel = new Executable(driver, sel) as T
-    sel.tables = mapValues(sel.tables, (model) => model instanceof Model ? model : retrieveModel(model))
+    models[sel.ref] = sel.model
+    sel.tables = mapValues(sel.tables, (_, k) => models[k])
 
     if (sel.query) retrieveQuery(sel.query, sel)
     if (sel.type === 'get') {

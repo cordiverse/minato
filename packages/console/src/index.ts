@@ -1,4 +1,5 @@
 import { Driver, Schema, Selection } from 'minato'
+import { mapValues } from 'cosmokit'
 import { deserialize, serialize } from './utils'
 export { serialize, deserialize }
 
@@ -20,6 +21,7 @@ export class ConsoleDriver extends Driver<ConsoleDriver.Config> {
       this[method] = async function (...args: any[]) {
         const arg = args.shift() ?? ''
         const table = typeof arg === 'string' ? arg : getTable(arg)
+        if (Selection.is(arg)) arg.tables = mapValues(arg.tables, _ => ({} as any))
         const result = await this.send(method, this.session, table, serialize(arg), ...Selection.is(arg) ? [] : args.map(serialize))
         return result && deserialize(result)
       }
