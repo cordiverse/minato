@@ -1,4 +1,4 @@
-import { clone, deepEqual, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
+import { clone, deepEqual, defineProperty, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel } from './utils.ts'
@@ -262,7 +262,7 @@ export class Model<S = any> {
   fields: Field.Config<S> = {}
   migrations = new Map<Model.Migration, string[]>()
 
-  private type: Type<S> | undefined
+  declare private type: Type<S> | undefined
 
   constructor(public name: string) {
     this.autoInc = false
@@ -442,7 +442,7 @@ export class Model<S = any> {
   getType(): Type<S>
   getType(key: string): Type | undefined
   getType(key?: string): Type | undefined {
-    this.type ??= Type.Object(mapValues(this.fields!, field => Type.fromField(field!))) as any
+    if (!this.type) defineProperty(this, 'type', Type.Object(mapValues(this.fields, field => Type.fromField(field!))) as any)
     return key ? Type.getInner(this.type, key) : this.type
   }
 }

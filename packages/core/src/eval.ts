@@ -1,8 +1,10 @@
-import { defineProperty, isNullable, mapValues } from 'cosmokit'
+import { defineProperty, Dict, isNullable, makeArray, mapValues } from 'cosmokit'
 import { AtomicTypes, Comparable, Flatten, isComparable, isEmpty, makeRegExp, Row, Values } from './utils.ts'
 import { Type } from './type.ts'
-import { Field, Relation } from './model.ts'
+import { Field, Model, Relation } from './model.ts'
 import { Query } from './query.ts'
+import { Selection } from './selection.ts'
+import { Driver } from './driver.ts'
 
 export function isEvalExpr(value: any): value is Eval.Expr {
   return value && Object.keys(value).some(key => key.startsWith('$'))
@@ -12,6 +14,28 @@ export const isUpdateExpr: (value: any) => boolean = isEvalExpr
 
 export function isAggrExpr(expr: Eval.Expr): boolean {
   return expr['$'] || expr['$select']
+}
+
+export function retrieveExprType<T>(expr: Eval.Term<T>, ctx: EvalTypeContext | undefined): Type {
+  if (!isEvalExpr(expr)) return Type.fromTerm(expr)
+  if (!expr[Type.kType]) {
+    for (const key in expr) {
+      if (key.startsWith('$') && key in solvers) {
+        if (key === '$exec') {
+          expr[key] = Selection.retrieve(expr[key], ctx?.driver!)
+        }
+        const type = solvers[key](expr[key], ctx)
+        if (expr['$ignoreNull']) type.ignoreNull = true
+        defineProperty(expr, Type.kType, type)
+        return type
+      }
+    }
+  }
+  return expr[Type.kType]!
+}
+
+function retrieveExprsType(exprs: Eval.Term<any>[], ctx: EvalTypeContext | undefined) {
+  exprs.forEach(expr => retrieveExprType(expr, ctx))
 }
 
 export function hasSubquery(value: any): boolean {
@@ -156,21 +180,43 @@ export const Eval = ((key, value, type) => defineProperty(defineProperty({ ['$' 
 
 const operators = Object.create(null) as Record<`$${keyof Eval.Static}`, (args: any, data: any) => any>
 
+type ExtractUnary<T> = T extends [infer U] ? U : T
+
+interface EvalTypeContext {
+  tables: Dict<Model>
+  driver: Driver
+}
+
+type EvalTypeSolvers = {
+  [K in keyof Eval.Static as `$${K}`]: (expr: ExtractUnary<Parameters<Eval.Static[K]>>, ctx?: EvalTypeContext) => Type
+} & { $: (expr: any, ctx: EvalTypeContext) => Type }
+
+const solvers: EvalTypeSolvers = Object.create(null)
+
 operators['$'] = getRecursive
+solvers.$ = (arg, ctx) => {
+  if (typeof arg === 'string') return Type.Any
+  const [ref, path] = arg
+  return ctx.tables[ref]?.getType(path) ?? Type.Any
+}
+
+const solverFactory = (type: Type) => (args, ctx) => (retrieveExprsType(makeArray(args), ctx), type)
 
 type UnaryCallback<T> = T extends (value: infer R) => Eval.Expr<infer S> ? (value: R, data: any[]) => S : never
-function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval.Static[K]>, type: Type | ((...args: any[]) => Type)): Eval.Static[K] {
+function unary<K extends keyof Eval.Static>(key: K, callback: UnaryCallback<Eval.Static[K]>, type: Type | EvalTypeSolvers[`$${K}`]): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return ((value: any) => Eval(key, value, typeof type === 'function' ? type(value) : type)) as any
+  solvers[`$${key}`] = typeof type === 'function' ? type : solverFactory(type)
+  return ((value: any) => Eval(key, value, solvers[`$${key}`](value))) as any
 }
 
 type MultivariateCallback<T> = T extends (...args: infer R) => Eval.Expr<infer S> ? (args: R, data: any) => S : never
 function multary<K extends keyof Eval.Static>(
   key: K, callback: MultivariateCallback<Eval.Static[K]>,
-  type: Type | ((...args: any[]) => Type),
+  type: Type | EvalTypeSolvers[`$${K}`],
 ): Eval.Static[K] {
   operators[`$${key}`] = callback
-  return (...args: any) => Eval(key, args, typeof type === 'function' ? type(...args) : type) as any
+  solvers[`$${key}`] = typeof type === 'function' ? type : solverFactory(type)
+  return (...args: any) => Eval(key, args, solvers[`$${key}`](args)) as any
 }
 
 type BinaryCallback<T> = T extends (...args: any[]) => Eval.Expr<infer S> ? (...args: any[]) => S : never
@@ -181,25 +227,32 @@ function comparator<K extends keyof Eval.Static>(key: K, callback: BinaryCallbac
     if (isNullable(left) || isNullable(right)) return true
     return callback(left.valueOf(), right.valueOf())
   }
+  solvers[`$${key}`] = (args, ctx) => (retrieveExprsType(args, ctx), Type.Boolean)
   return (...args: any) => Eval(key, args, Type.Boolean) as any
 }
 
-Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault }, Type.fromTerm(branches[0]))
+Eval.switch = (branches, vDefault) => Eval('switch', { branches, default: vDefault }, Type.fromTerm(branches[0].then))
 operators.$switch = (args, data) => {
   for (const branch of args.branches) {
     if (executeEval(data, branch.case)) return executeEval(data, branch.then)
   }
   return executeEval(data, args.default)
 }
+solvers.$switch = ([branches, vDefault], ctx) => {
+  branches.map(branch => (retrieveExprType(branch.case, ctx), retrieveExprType(branch.then, ctx)))
+  return Type.fromTerm(branches[0].then)
+}
 
-Eval.ignoreNull = (expr) => (expr[Type.kType]!.ignoreNull = true, expr)
+// TODO: there are special forms
+Eval.ignoreNull = (expr) => (expr['$ignoreNull'] = true, expr[Type.kType]!.ignoreNull = true, expr)
 Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
 Eval.query = (row, query, expr = true) => ({ $expr: expr, ...query }) as any
 
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)
-  : executeEval(data, vElse), (cond, vThen, vElse) => Type.fromTerm(vThen))
-Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback), (value) => Type.fromTerm(value))
+  : executeEval(data, vElse), (args, ctx) => (retrieveExprsType(args, ctx), Type.fromTerm(args[1])))
+Eval.ifNull = multary('ifNull', ([value, fallback], data) => executeEval(data, value) ?? executeEval(data, fallback),
+  (args, ctx) => (retrieveExprsType(args, ctx), Type.fromTerm(args[0])))
 
 // arithmetic
 Eval.add = multary('add', (args, data) => args.reduce<number>((prev, curr) => prev + executeEval(data, curr), 0), Type.Number)
@@ -218,6 +271,7 @@ Eval.log = multary('log', ([left, right], data) => Math.log(executeEval(data, le
 Eval.pow = Eval.power = multary('power', ([left, right], data) => Math.pow(executeEval(data, left), executeEval(data, right)), Type.Number)
 Eval.random = () => Eval('random', {}, Type.Number)
 operators.$random = () => Math.random()
+solvers.$random = () => Type.Number
 
 // comparison
 Eval.eq = comparator('eq', (left, right) => left === right)
@@ -234,12 +288,14 @@ operators.$in = ([value, array], data) => {
   if (typeof val === 'object') return arr.includes(val) || arr.map(JSON.stringify).includes(JSON.stringify(val))
   return arr.includes(val)
 }
+solvers.$in = solverFactory(Type.Boolean)
 Eval.nin = (value, array) => Eval('nin', [Array.isArray(value) ? Eval.select(...value) : value, array], Type.Boolean)
 operators.$nin = ([value, array], data) => {
   const val = executeEval(data, value), arr = executeEval(data, array)
   if (typeof val === 'object') return !arr.includes(val) && !arr.map(JSON.stringify).includes(JSON.stringify(val))
   return !arr.includes(val)
 }
+solvers.$nin = solverFactory(Type.Boolean)
 
 // string
 Eval.concat = multary('concat', (args, data) => args.map(arg => executeEval(data, arg)).join(''), Type.String)
@@ -251,38 +307,38 @@ Eval.and = multary('and', (args, data) => {
   if (Field.boolean.includes(type.type)) return args.every(arg => executeEval(data, arg))
   else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev & curr)
   else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev & curr)
-}, (...args) => Type.fromTerms(args, Type.Boolean))
+}, (args, ctx) => (retrieveExprsType(args, ctx), Type.fromTerms(args, Type.Boolean)))
 Eval.or = multary('or', (args, data) => {
   const type = Type.fromTerms(args, Type.Boolean)
   if (Field.boolean.includes(type.type)) return args.some(arg => executeEval(data, arg))
   else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev | curr)
   else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev | curr)
-}, (...args) => Type.fromTerms(args, Type.Boolean))
+}, (args, ctx) => (retrieveExprsType(args, ctx), Type.fromTerms(args, Type.Boolean)))
 Eval.not = unary('not', (value, data) => {
   const type = Type.fromTerms([value], Type.Boolean)
   if (Field.boolean.includes(type.type)) return !executeEval(data, value)
   else if (Field.number.includes(type.type)) return ~executeEval(data, value) as any
   else if (type.type === 'bigint') return ~BigInt(executeEval(data, value) ?? 0)
-}, (value) => Type.fromTerms([value], Type.Boolean))
+}, (arg, ctx) => (retrieveExprType(arg, ctx), Type.fromTerms([arg], Type.Boolean)))
 Eval.xor = multary('xor', (args, data) => {
   const type = Type.fromTerms(args, Type.Boolean)
   if (Field.boolean.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev !== curr)
   else if (Field.number.includes(type.type)) return args.map(arg => executeEval(data, arg)).reduce((prev, curr) => prev ^ curr)
   else if (type.type === 'bigint') return args.map(arg => BigInt(executeEval(data, arg) ?? 0)).reduce((prev, curr) => prev ^ curr)
-}, (...args) => Type.fromTerms(args, Type.Boolean))
+}, (args, ctx) => (retrieveExprsType(args, ctx), Type.fromTerms(args, Type.Boolean)))
 
 // typecast
 Eval.literal = multary('literal', ([value, type]) => {
   if (type) throw new TypeError('literal cast is not supported')
   else return value
-}, (value, type) => type ? Type.fromField(type) : Type.fromTerm(value))
+}, ([value, type], ctx) => type ? Type.fromField(type) : Type.fromTerm(value))
 Eval.number = unary('number', (arg, data) => {
   const value = executeEval(data, arg)
   return value instanceof Date ? Math.floor(value.valueOf() / 1000) : Number(value)
 }, Type.Number)
 
-const unwrapAggr = (expr: any, def?: Type) => {
-  let type = Type.fromTerm(expr)
+const unwrapAggr = (expr: any, ctx: EvalTypeContext | undefined, def?: Type) => {
+  let type = retrieveExprType(expr, ctx)
   type = Type.getInner(type) ?? type
   return (def && type.type === 'expr') ? def : type
 }
@@ -300,16 +356,15 @@ Eval.avg = unary('avg', (expr, table) => {
 }, Type.Number)
 Eval.max = unary('max', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x > y ? x : y, -Infinity)
-  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity), (expr) => unwrapAggr(expr, Type.Number))
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x > y ? x : y, -Infinity), (expr, ctx) => unwrapAggr(expr, ctx, Type.Number))
 Eval.min = unary('min', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).reduce((x, y) => x < y ? x : y, Infinity)
-  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity), (expr) => unwrapAggr(expr, Type.Number))
+  : Array.from<number>(executeEval(table, expr)).reduce((x, y) => x < y ? x : y, Infinity), (expr, ctx) => unwrapAggr(expr, ctx, Type.Number))
 Eval.count = unary('count', (expr, table) => new Set(table.map(data => executeAggr(expr, data))).size, Type.Number)
 defineProperty(Eval, 'length', unary('length', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).length
   : Array.from(executeEval(table, expr)).length, Type.Number))
 
-operators.$object = (field, table) => mapValues(field, value => executeAggr(value, table))
 Eval.object = (fields: any) => {
   if (fields.$model) {
     const modelFields: [string, Field][] = Object.entries(fields.$model.fields)
@@ -322,10 +377,15 @@ Eval.object = (fields: any) => {
   }
   return Eval('object', fields, Type.Object(mapValues(fields, (value) => Type.fromTerm(value)))) as any
 }
+operators.$object = (field, table) => mapValues(field, (value) => executeAggr(value, table))
+solvers.$object = (fields, ctx) => {
+  const types = mapValues(fields, (value) => retrieveExprType(value, ctx))
+  return Type.Object(types)
+}
 
 Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x))
-  : Array.from(executeEval(table, expr)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x)), (expr) => Type.Array(Type.fromTerm(expr)))
+  : Array.from(executeEval(table, expr)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x)), (expr, ctx) => Type.Array(retrieveExprType(expr, ctx)))
 
 Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
 

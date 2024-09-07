@@ -1,6 +1,6 @@
 import { defineProperty, Dict, filterKeys, mapValues } from 'cosmokit'
 import { Driver } from './driver.ts'
-import { Eval, executeEval, isAggrExpr, isEvalExpr } from './eval.ts'
+import { Eval, executeEval, isAggrExpr, isEvalExpr, retrieveExprType } from './eval.ts'
 import { Field, Model } from './model.ts'
 import { Query } from './query.ts'
 import { FlatKeys, FlatPick, Flatten, getCell, Keys, randomId, Row } from './utils.ts'
@@ -320,6 +320,55 @@ export class Selection<S = any> extends Executable<S, S[]> {
 export namespace Selection {
   export function is(sel: any): sel is Selection {
     return !!sel.tables as any
+  }
+
+  function retrieveType(type?: Type) {
+    if (!type) return
+    defineProperty(type, Type.kType, true)
+    if (Type.isArray(type)) retrieveType(type.inner)
+    else if (type.inner) mapValues(type.inner, retrieveType as any)
+  }
+
+  function retrieveModel(payload: Model) {
+    const model = Object.assign(new Model(payload.name), payload)
+    model.fields = mapValues(model.fields, (field) => (retrieveType(field?.type), field))
+    return model
+  }
+
+  function retrieveQuery(query: Query.Expr, ctx) {
+    if (query.$expr) retrieveExprType(query.$expr, ctx)
+    if (query.$and) query.$and.forEach((expr) => retrieveQuery(expr, ctx))
+    if (query.$or) query.$or.forEach((expr) => retrieveQuery(expr, ctx))
+    if (query.$not) retrieveQuery(query.$not, ctx)
+  }
+
+  export function retrieve<T extends Selection.Mutable | Selection.Immutable>(sel: T, driver: Driver): T {
+    if (sel instanceof Selection) return sel
+
+    if (Selection.is(sel.table)) {
+      sel.table = Selection.retrieve(sel.table, driver)
+    } else if (typeof sel.table === 'object') {
+      sel.table = mapValues(sel.table, (table) => Selection.retrieve(table, driver))
+    }
+
+    sel = new Executable(driver, sel) as T
+    sel.tables = mapValues(sel.tables, (model) => model instanceof Model ? model : retrieveModel(model))
+
+    if (sel.query) retrieveQuery(sel.query, sel)
+    if (sel.type === 'get') {
+      retrieveExprType(sel.args[0].having, sel)
+      sel.args[0].sort.forEach(([field]) => retrieveExprType(field, sel))
+      sel.args[0].limit ??= Infinity
+      Object.values(sel.args[0].fields ?? {}).forEach((field) => retrieveExprType(field, sel))
+    } else if (sel.type === 'set') {
+      Object.values(sel.args[0]).forEach((field) => retrieveExprType(field, sel))
+    } else if (sel.type === 'upsert') {
+      sel.args[0].map(update => Object.values(update).forEach((field) => retrieveExprType(field, sel)))
+    } else if (sel.type === 'eval') {
+      retrieveExprType(sel.args[0], sel)
+      if (isAggrExpr(sel.args[0])) defineProperty(sel.args[0], Type.kType, Type.Array(Type.fromTerm(sel.args[0])))
+    }
+    return sel
   }
 }
 

@@ -495,7 +495,7 @@ export class Builder {
         return `${this.parseEval(expr)} ${dir.toUpperCase()}`
       }).join(', ')
     }
-    if (!isNullable(limit) && limit < Infinity) sql += ' LIMIT ' + limit
+    if (limit < Infinity) sql += ' LIMIT ' + limit
     if (offset > 0) sql += ' OFFSET ' + offset
     return sql
   }
