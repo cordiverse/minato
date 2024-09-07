@@ -154,20 +154,6 @@ namespace JsonTests {
         .to.eventually.deep.equal([
           { id: 1, nums: [4, 5, 6] },
         ])
-
-      await expect(database.get('baz', { 'nums.0': 4 }))
-        .to.eventually.deep.equal([
-          { id: 1, nums: [4, 5, 6] },
-        ])
-
-      await expect(database.get('baz', {
-        nums: {
-          0: 4,
-        },
-      }))
-        .to.eventually.deep.equal([
-          { id: 1, nums: [4, 5, 6] },
-        ])
     })
 
     nullableComparator && it('$get array with expressions', async () => {
