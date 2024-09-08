@@ -17,10 +17,9 @@ export interface Type<T = any, N = any> {
 export namespace Type {
   export const kType = Symbol.for('minato.type')
 
-  export const Any: Type = fromField('expr')
-  export const Boolean: Type<boolean> = fromField('boolean')
-  export const Number: Type<number> = fromField('double')
-  export const String: Type<string> = fromField('string')
+  export const Boolean: Type<boolean> = defineProperty({ type: 'boolean' }, kType, true) as any
+  export const Number: Type<number> = defineProperty({ type: 'double' }, kType, true)
+  export const String: Type<string> = defineProperty({ type: 'string' }, kType, true)
 
   type Extract<T> =
     | T extends Type<infer I> ? I

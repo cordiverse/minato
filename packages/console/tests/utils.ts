@@ -1,6 +1,6 @@
 import { Context } from 'cordis'
 import { Database, Driver, Model, Selection } from 'minato'
-import ConsoleDriver, { serialize, deserialize } from '@minatojs/console'
+import ConsoleDriver, { serialize, deserialize, retrieveSelection } from '@minatojs/console'
 import { defineProperty, mapValues } from 'cosmokit'
 
 export function setup() {
@@ -68,7 +68,7 @@ export async function prepare(database: Database, database3: Database) {
       await driver._ensureSession()
 
       if (callargs[0] && Selection.is(callargs[0])) {
-        callargs[0] = Selection.retrieve(callargs[0], driver)
+        callargs[0] = retrieveSelection(callargs[0], driver)
         callargs = [callargs[0], ...callargs[0].args]
       }
       const result = await (driver[action as any] as any)(...callargs)

@@ -1,6 +1,7 @@
 import { Driver, Schema, Selection } from 'minato'
 import { mapValues } from 'cosmokit'
 import { deserialize, serialize } from './utils'
+export { retrieveSelection } from './retrieve'
 export { serialize, deserialize }
 
 // @ts-expect-error
