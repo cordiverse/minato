@@ -310,7 +310,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   private transformQuery(sel: Selection.Immutable, query: Query.Expr, table: string) {
-    return new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table)).query(query)
+    return new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table)).query(sel, query)
   }
 
   async get(sel: Selection.Immutable) {
