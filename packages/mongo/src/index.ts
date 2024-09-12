@@ -1,4 +1,4 @@
-import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError } from 'mongodb'
+import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError, ObjectId } from 'mongodb'
 import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
@@ -71,6 +71,12 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       types: ['bigint'],
       dump: value => isNullable(value) ? value : value as any,
       load: value => isNullable(value) ? value : BigInt(value as any),
+    })
+
+    this.define<ObjectId | string, ObjectId>({
+      types: ['primary' as any],
+      dump: value => typeof value === 'string' ? new ObjectId(value) : value,
+      load: value => value,
     })
   }
 

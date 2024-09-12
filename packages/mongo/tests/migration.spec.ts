@@ -142,6 +142,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
 
     await expect(database.get('temp2', table[0].id?.toString() as any)).to.eventually.deep.eq([table[0]])
     await expect(database.get('temp2', { id: table[0].id?.toString() as any })).to.eventually.deep.eq([table[0]])
+    await expect(database.get('temp2', row => $.eq(row.id, $.literal(table[0].id?.toString(), 'primary') as any))).to.eventually.deep.eq([table[0]])
 
     await (Object.values(database.drivers)[0] as Driver).drop('_fields')
     await resetConfig(true)
