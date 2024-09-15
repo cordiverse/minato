@@ -127,6 +127,8 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
       foreign: 'primary',
     })
 
+    await database.remove('temp2', {})
+
     const table: Bar[] = []
     table.push(await database.create('temp2', {
       text: 'awesome foo',
@@ -137,6 +139,10 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     table.push(await database.create('temp2', { text: 'awesome bar' }))
     table.push(await database.create('temp2', { text: 'awesome baz' }))
     await expect(database.get('temp2', {})).to.eventually.deep.eq(table)
+
+    await expect(database.get('temp2', table[0].id?.toString() as any)).to.eventually.deep.eq([table[0]])
+    await expect(database.get('temp2', { id: table[0].id?.toString() as any })).to.eventually.deep.eq([table[0]])
+    await expect(database.get('temp2', row => $.eq(row.id, $.literal(table[0].id?.toString(), 'primary') as any))).to.eventually.deep.eq([table[0]])
 
     await (Object.values(database.drivers)[0] as Driver).drop('_fields')
     await resetConfig(true)

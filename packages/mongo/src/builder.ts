@@ -3,10 +3,10 @@ import { Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat, mak
 import { Filter, FilterOperators, ObjectId } from 'mongodb'
 import MongoDriver from '.'
 
-function createFieldFilter(query: Query.Field, key: string) {
+function createFieldFilter(query: Query.Field, key: string, type?: Type) {
   const filters: Filter<any>[] = []
   const result: Filter<any> = {}
-  const child = transformFieldQuery(query, key, filters)
+  const child = transformFieldQuery(query, key, filters, type)
   if (child === false) return false
   if (child !== true) result[key] = child
   if (filters.length) result.$and = filters
@@ -14,9 +14,10 @@ function createFieldFilter(query: Query.Field, key: string) {
   return true
 }
 
-function transformFieldQuery(query: Query.Field, key: string, filters: Filter<any>[]) {
+function transformFieldQuery(query: Query.Field, key: string, filters: Filter<any>[], type?: Type) {
   // shorthand syntax
   if (isComparable(query) || query instanceof ObjectId) {
+    if (type?.type === 'primary' && typeof query === 'string') query = new ObjectId(query)
     return { $eq: query }
   } else if (Array.isArray(query)) {
     if (!query.length) return false
@@ -32,7 +33,7 @@ function transformFieldQuery(query: Query.Field, key: string, filters: Filter<an
   for (const prop in query) {
     if (prop === '$and') {
       for (const item of query[prop]!) {
-        const child = createFieldFilter(item, key)
+        const child = createFieldFilter(item, key, type)
         if (child === false) return false
         if (child !== true) filters.push(child)
       }
@@ -40,13 +41,13 @@ function transformFieldQuery(query: Query.Field, key: string, filters: Filter<an
       const $or: Filter<any>[] = []
       if (!query[prop]!.length) return false
       const always = query[prop]!.some((item) => {
-        const child = createFieldFilter(item, key)
+        const child = createFieldFilter(item, key, type)
         if (typeof child === 'boolean') return child
         $or.push(child)
       })
       if (!always) filters.push({ $or })
     } else if (prop === '$not') {
-      const child = createFieldFilter(query[prop], key)
+      const child = createFieldFilter(query[prop], key, type)
       if (child === true) return false
       if (child !== false) filters.push({ $nor: [child] })
     } else if (prop === '$el') {
@@ -392,7 +393,7 @@ export class Builder {
     return this.transformEvalExpr(expr, group)
   }
 
-  public query(query: Query.Expr) {
+  public query(sel: Selection.Immutable, query: Query.Expr) {
     const filter: Filter<any> = {}
     const additional: Filter<any>[] = []
     for (const key in query) {
@@ -402,7 +403,7 @@ export class Builder {
         // { $and: [] } matches everything
         // { $or: [] } matches nothing
         if (value.length) {
-          filter[key] = value.map(query => this.query(query))
+          filter[key] = value.map(query => this.query(sel, query))
         } else if (key === '$or') {
           return
         }
@@ -410,7 +411,7 @@ export class Builder {
         // MongoError: unknown top level operator: $not
         // https://stackoverflow.com/questions/25270396/mongodb-how-to-invert-query-with-not
         // this may solve this problem but lead to performance degradation
-        const query = this.query(value)
+        const query = this.query(sel, value)
         if (query) filter.$nor = [query]
       } else if (key === '$expr') {
         additional.push({ $expr: this.eval(value) })
@@ -419,7 +420,7 @@ export class Builder {
         const flattenQuery = ignore(value) ? { [key]: value } : flatten(value, `${key}.`, ignore)
         for (const key in flattenQuery) {
           const value = flattenQuery[key], actualKey = this.getActualKey(key)
-          const query = transformFieldQuery(value, actualKey, additional)
+          const query = transformFieldQuery(value, actualKey, additional, sel.model.fields[key]?.type)
           if (query === false) return
           if (query !== true) filter[actualKey] = query
         }
@@ -554,7 +555,7 @@ export class Builder {
     }
 
     // where
-    const filter = this.query(query)
+    const filter = this.query(sel, query)
     if (!filter) return
     if (Object.keys(filter).length) {
       this.pipeline.push(...this.flushLookups(), { $match: filter })
