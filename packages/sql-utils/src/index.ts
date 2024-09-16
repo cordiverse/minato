@@ -508,7 +508,7 @@ export class Builder {
     let prefix: string | undefined
     if (typeof table === 'string') {
       prefix = this.escapeId(table)
-    } else if (table instanceof Selection) {
+    } else if (Selection.is(table)) {
       prefix = this.get(table, true)
       if (!prefix) return
     } else {
@@ -555,7 +555,7 @@ export class Builder {
       suffix = ` WHERE ${filter}` + suffix
     }
 
-    if (inline && !args[0].fields && !suffix && (typeof table === 'string' || table instanceof Selection)) {
+    if (inline && !args[0].fields && !suffix && (typeof table === 'string' || Selection.is(table))) {
       return (addref && isBracketed(prefix)) ? `${prefix} ${ref}` : prefix
     }
 

@@ -508,7 +508,7 @@ export class Builder {
     if (typeof table === 'string') {
       this.table = table
       this.refVirtualKeys[sel.ref] = this.virtualKey = (sel.driver as MongoDriver).getVirtualKey(table)!
-    } else if (table instanceof Selection) {
+    } else if (Selection.is(table)) {
       const predecessor = this.createSubquery(table)
       if (!predecessor) return
       this.table = predecessor.table
