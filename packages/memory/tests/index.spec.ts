@@ -19,12 +19,18 @@ describe('@minatojs/driver-memory', () => {
     update: {
       index: false,
     },
+    json: {
+      query: {
+        nullableComparator: false,
+      },
+    },
     model: {
       fields: {
         cast: false,
         typeModel: false,
       },
       object: {
+        nullableComparator: false,
         typeModel: false,
       },
     },

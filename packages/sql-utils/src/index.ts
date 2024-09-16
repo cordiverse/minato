@@ -196,6 +196,9 @@ export class Builder {
 
       $object: (fields) => this.groupObject(fields),
       $array: (expr) => this.groupArray(this.transform(this.parseEval(expr, false), expr, 'encode')),
+      $get: ([x, key]) => typeof key === 'string'
+        ? this.asEncoded(`json_extract(${this.parseEval(x, false)}, '$.${key}')`, true)
+        : this.asEncoded(`json_extract(${this.parseEval(x, false)}, concat('$[', ${this.parseEval(key)}, ']'))`, true),
 
       $exec: (sel) => this.parseSelection(sel as Selection),
     }

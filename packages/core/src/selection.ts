@@ -38,15 +38,27 @@ namespace Executable {
   }
 }
 
-const createRow = (ref: string, expr = {}, prefix = '', model?: Model) => new Proxy(expr, {
+const createRow = (ref: string, expr = {}, prefix = '', model?: Model, intermediate?: Eval.Expr) => new Proxy(expr, {
   get(target, key) {
     if (key === '$prefix') return prefix
     if (key === '$model') return model
     if (typeof key === 'symbol' || key in target || key.startsWith('$')) return Reflect.get(target, key)
 
+    if (intermediate) {
+      if (Type.isArray(expr?.[Type.kType]) && Number.isInteger(+key)) {
+        return createRow(ref, Eval.get(expr as any, +key), '', model, Eval.get(expr as any, +key))
+      } else {
+        return createRow(ref, Eval.get(intermediate as any, `${prefix}${key}`), `${prefix}${key}.`, model, intermediate)
+      }
+    }
+
     let type: Type
     const field = model?.fields[prefix + key as string]
-    if (Type.getInner(expr?.[Type.kType], key)) {
+    if (Type.isArray(expr?.[Type.kType]) && Number.isInteger(+key)) {
+      // indexing array
+      type = Type.getInner(expr?.[Type.kType]) ?? Type.fromField('expr')
+      return createRow(ref, Eval.get(expr as any, +key), '', model, Eval.get(expr as any, +key))
+    } else if (Type.getInner(expr?.[Type.kType], key)) {
       // type may conatins object layout
       type = Type.getInner(expr?.[Type.kType], key)!
     } else if (field) {

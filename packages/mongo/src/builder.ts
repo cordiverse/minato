@@ -263,6 +263,10 @@ export class Builder {
         }
       },
 
+      $get: ([x, key], group) => typeof key === 'string'
+        ? (key as string).split('.').reduce((res, k) => ({ $getField: { input: res, field: k } }), this.eval(x, group))
+        : { $arrayElemAt: [this.eval(x, group), this.eval(key, group)] },
+
       $exec: (arg, group) => {
         const sel = arg as Selection
         const transformer = this.createSubquery(sel)

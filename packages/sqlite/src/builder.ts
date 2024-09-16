@@ -39,6 +39,9 @@ export class SQLiteBuilder extends Builder {
       if (Field.boolean.includes(type.type)) return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => `(${prev} != ${curr})`)
       else return args.map(arg => this.parseEval(arg)).reduce((prev, curr) => binaryXor(prev, curr))
     }
+    this.evalOperators.$get = ([x, key]) => typeof key === 'string'
+      ? this.asEncoded(`(${this.parseEval(x, false)} -> '$.${key}')`, true)
+      : this.asEncoded(`(${this.parseEval(x, false)} -> ('$[' || ${this.parseEval(key)} || ']'))`, true)
 
     this.transformers['bigint'] = {
       encode: value => `cast(${value} as text)`,

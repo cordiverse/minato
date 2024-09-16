@@ -17,9 +17,10 @@ export interface Type<T = any, N = any> {
 export namespace Type {
   export const kType = Symbol.for('minato.type')
 
-  export const Boolean: Type<boolean> = defineProperty({ type: 'boolean' }, kType, true) as any
-  export const Number: Type<number> = defineProperty({ type: 'double' }, kType, true)
-  export const String: Type<string> = defineProperty({ type: 'string' }, kType, true)
+  export const Any: Type = fromField('expr')
+  export const Boolean: Type<boolean> = fromField('boolean')
+  export const Number: Type<number> = fromField('double')
+  export const String: Type<string> = fromField('string')
 
   type Extract<T> =
     | T extends Type<infer I> ? I
@@ -76,20 +77,20 @@ export namespace Type {
     return value?.[kType] === true
   }
 
-  export function isArray(type: Type) {
-    return (type.type === 'json') && type.array
+  export function isArray(type?: Type) {
+    return (type?.type === 'json') && type?.array
   }
 
   export function getInner(type?: Type, key?: string): Type | undefined {
     if (!type?.inner) return
-    if (isArray(type) && isNullable(key)) return type.inner
+    if (isArray(type)) return type.inner
     if (isNullable(key)) return
     if (type.inner[key]) return type.inner[key]
     if (key.includes('.')) return key.split('.').reduce((t, k) => getInner(t, k), type)
-    return Object(globalThis.Object.fromEntries(globalThis.Object.entries(type.inner)
+    const fields = globalThis.Object.entries(type.inner)
       .filter(([k]) => k.startsWith(`${key}.`))
-      .map(([k, v]) => [k.slice(key.length + 1), v]),
-    ))
+      .map(([k, v]) => [k.slice(key.length + 1), v])
+    return fields.length ? Object(globalThis.Object.fromEntries(fields)) : undefined
   }
 
   export function transform(value: any, type: Type, callback: (value: any, type?: Type) => any) {

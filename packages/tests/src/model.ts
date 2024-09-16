@@ -308,6 +308,7 @@ namespace ModelOperations {
     cast?: boolean
     typeModel?: boolean
     aggregateNull?: boolean
+    nullableComparator?: boolean
   }
 
   export const fields = function Fields(database: Database<Tables, Types>, options: ModelOptions = {}) {
@@ -513,7 +514,7 @@ namespace ModelOperations {
   }
 
   export const object = function ObjectFields(database: Database<Tables, Types>, options: ModelOptions = {}) {
-    const { aggregateNull = true, typeModel = true } = options
+    const { aggregateNull = true, nullableComparator = true, typeModel = true } = options
 
     it('basic', async () => {
       const table = await setup(database, 'dobjects', dobjectTable)
@@ -634,6 +635,12 @@ namespace ModelOperations {
       await expect(database.get('dobjects', row => $.eq($.or(row.foo!.nested!.int64!, 4n), 127n))).to.eventually.have.length(1)
       await expect(database.get('dobjects', row => $.eq($.xor(row.foo!.nested!.int64!, 2n), 121n))).to.eventually.have.length(1)
       await expect(database.eval('dobjects', row => $.max($.or(row.foo!.nested!.int64!, 9223372036854775701n)))).eventually.to.deep.equal(9223372036854775807n)
+    })
+
+    nullableComparator && it('nested $get', async () => {
+      await setup(database, 'dobjects', dobjectTable)
+      await expect(database.get('dobjects', row => $.eq(row.baz[0].nested.id, 1))).to.eventually.have.length(2)
+      await expect(database.get('dobjects', row => $.eq(row.baz[0].nested.array[0], 1))).to.eventually.have.length(2)
     })
   }
 }
