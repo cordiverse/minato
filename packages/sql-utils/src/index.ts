@@ -126,7 +126,7 @@ export class Builder {
     this.evalOperators = {
       // universal
       $: (key) => this.getRecursive(key),
-      $select: (args) => `${args.map(arg => this.parseEval(arg, false)).join(', ')}`,
+      $select: (args) => `${args.map(arg => this.parseEval(arg)).join(', ')}`,
       $if: (args) => `if(${args.map(arg => this.parseEval(arg)).join(', ')})`,
       $ifNull: (args) => `ifnull(${args.map(arg => this.parseEval(arg)).join(', ')})`,
 
@@ -511,7 +511,7 @@ export class Builder {
     let prefix: string | undefined
     if (typeof table === 'string') {
       prefix = this.escapeId(table)
-    } else if (table instanceof Selection) {
+    } else if (Selection.is(table)) {
       prefix = this.get(table, true)
       if (!prefix) return
     } else {
@@ -558,7 +558,7 @@ export class Builder {
       suffix = ` WHERE ${filter}` + suffix
     }
 
-    if (inline && !args[0].fields && !suffix && (typeof table === 'string' || table instanceof Selection)) {
+    if (inline && !args[0].fields && !suffix && (typeof table === 'string' || Selection.is(table))) {
       return (addref && isBracketed(prefix)) ? `${prefix} ${ref}` : prefix
     }
 

@@ -195,9 +195,11 @@ operators.$switch = (args, data) => {
   return executeEval(data, args.default)
 }
 
-Eval.ignoreNull = (expr) => (expr[Type.kType]!.ignoreNull = true, expr)
+// special forms
+Eval.ignoreNull = (expr) => (expr['$ignoreNull'] = true, expr[Type.kType]!.ignoreNull = true, expr)
 Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
 Eval.query = (row, query, expr = true) => ({ $expr: expr, ...query }) as any
+Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
 
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)
@@ -331,8 +333,6 @@ Eval.array = unary('array', (expr, table) => Array.isArray(table)
   : Array.from(executeEval(table, expr)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x)), (expr) => Type.Array(Type.fromTerm(expr)))
 
 Eval.get = multary('get', ([x, key], data) => executeEval(data, x)?.[executeEval(data, key)], (x, key) => Type.getInner(Type.fromTerm(x), key) ?? Type.Any)
-
-Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
 
 export { Eval as $ }
 
