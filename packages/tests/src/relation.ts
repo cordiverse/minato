@@ -701,6 +701,59 @@ namespace RelationTests {
         },
       }])
     })
+
+    it('filter on relations', async () => {
+      const users = await setup(database, 'user', userTable)
+      const posts = await setup(database, 'post', postTable)
+      const tags = await setup(database, 'tag', tagTable)
+      const post2tags = await setup(database, 'post2tag', post2TagTable)
+      await setup(database, Relation.buildAssociationTable('post', 'tag') as any, post2TagTable2)
+
+      await expect(database.get('user', {
+        posts: {
+          $some: {
+            id2: 1,
+          },
+        },
+      }, {
+        include: {
+          posts: {
+            id2: 1,
+          },
+        },
+      })).to.eventually.have.shape(users.slice(0, 1).map(user => ({
+        ...user,
+        posts: posts.filter(post => post.id2 === 1),
+      })))
+
+      await expect(database.get('user', {
+        posts: {
+          $some: {
+            tags: {
+              $some: {
+                id: 1,
+              },
+            },
+          },
+        },
+      }, {
+        include: {
+          posts: {
+            tags: {
+              id: 1,
+            },
+          },
+        },
+      })).to.eventually.have.shape([users[0]].map(user => ({
+        ...user,
+        posts: posts.filter(post => post.author?.id === user.id).map(post => ({
+          ...post,
+          tags: post2tags.filter(p2t => p2t.post?.id === post.id2)
+            .map(p2t => tags.find(tag => tag.id === p2t.tag?.id))
+            .filter(tag => tag?.id === 1),
+        })),
+      })))
+    })
   }
 
   export function create(database: Database<Tables>, options: RelationOptions = {}) {
