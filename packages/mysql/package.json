@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-mysql",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "MySQL Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -37,16 +37,16 @@
     "mysql"
   ],
   "peerDependencies": {
-    "minato": "^3.5.0"
+    "minato": "^3.6.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^2.5.0",
+    "@minatojs/tests": "^2.6.0",
     "@types/mysql": "^2.15.26",
-    "cordis": "^3.18.0",
-    "minato": "^3.5.0"
+    "cordis": "^3.18.1",
+    "minato": "^3.6.0"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^5.4.1",
+    "@minatojs/sql-utils": "^5.5.0",
     "@vlasky/mysql": "^2.18.6",
     "cosmokit": "^1.6.2"
   }

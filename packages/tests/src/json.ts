@@ -56,7 +56,10 @@ function JsonTests(database: Database<Tables>) {
 
   database.extend('baz', {
     id: 'unsigned',
-    nums: { type: 'json', initial: [] },
+    nums: {
+      type: 'array',
+      inner: 'unsigned',
+    }
   })
 
   before(async () => {
@@ -81,7 +84,13 @@ function JsonTests(database: Database<Tables>) {
 }
 
 namespace JsonTests {
-  export function query(database: Database<Tables>) {
+  export interface RelationOptions {
+    nullableComparator?: boolean
+  }
+
+  export function query(database: Database<Tables>, options: RelationOptions = {}) {
+    const { nullableComparator = true } = options
+
     it('$size', async () => {
       await expect(database.get('baz', {
         nums: { $size: 3 },
@@ -133,6 +142,37 @@ namespace JsonTests {
     it('execute nested selection', async () => {
       await expect(database.eval('bar', row => $.max($.add(1, row.value)))).to.eventually.deep.equal(2)
       await expect(database.eval('bar', row => $.max($.add(1, row.obj.x)))).to.eventually.deep.equal(4)
+    })
+
+    it('$get array', async () => {
+      await expect(database.get('baz', row => $.eq($.get(row.nums, 0), 4)))
+        .to.eventually.deep.equal([
+          { id: 1, nums: [4, 5, 6] },
+        ])
+
+      await expect(database.get('baz', row => $.eq(row.nums[0], 4)))
+        .to.eventually.deep.equal([
+          { id: 1, nums: [4, 5, 6] },
+        ])
+    })
+
+    nullableComparator && it('$get array with expressions', async () => {
+      await expect(database.get('baz', row => $.eq($.get(row.nums, $.add(row.id, -1)), 4)))
+        .to.eventually.deep.equal([
+          { id: 1, nums: [4, 5, 6] },
+        ])
+    })
+
+    it('$get object', async () => {
+      await expect(database.get('bar', row => $.eq(row.obj.o.a, 2)))
+        .to.eventually.have.shape([
+          { value: 1 },
+        ])
+
+      await expect(database.get('bar', row => $.eq($.get(row.obj.o, 'a'), 2)))
+        .to.eventually.have.shape([
+          { value: 1 },
+        ])
     })
   }
 

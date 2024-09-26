@@ -149,6 +149,9 @@ export namespace Eval {
     object<T extends any>(row: Row.Cell<T>): Expr<T, false>
     object<T extends any>(row: Row<T>): Expr<T, false>
     array<T>(value: Expr<T, false>): Expr<T[], true>
+
+    get<T extends object, K extends keyof T, A extends boolean>(x: Term<T, A>, key: K): Expr<T[K], A>
+    get<T extends any, A extends boolean>(x: Array<T, A>, index: Term<number, A>): Expr<T, A>
   }
 }
 
@@ -192,9 +195,11 @@ operators.$switch = (args, data) => {
   return executeEval(data, args.default)
 }
 
-Eval.ignoreNull = (expr) => (expr[Type.kType]!.ignoreNull = true, expr)
+// special forms
+Eval.ignoreNull = (expr) => (expr['$ignoreNull'] = true, expr[Type.kType]!.ignoreNull = true, expr)
 Eval.select = multary('select', (args, table) => args.map(arg => executeEval(table, arg)), Type.Array())
 Eval.query = (row, query, expr = true) => ({ $expr: expr, ...query }) as any
+Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
 
 // univeral
 Eval.if = multary('if', ([cond, vThen, vElse], data) => executeEval(data, cond) ? executeEval(data, vThen)
@@ -329,7 +334,7 @@ Eval.array = unary('array', (expr, table) => Array.isArray(table)
   ? table.map(data => executeAggr(expr, data)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x))
   : Array.from(executeEval(table, expr)).filter(x => !expr[Type.kType]?.ignoreNull || !isEmpty(x)), (expr) => Type.Array(Type.fromTerm(expr)))
 
-Eval.exec = unary('exec', (expr, data) => (expr.driver as any).executeSelection(expr, data), (expr) => Type.fromTerm(expr.args[0]))
+Eval.get = multary('get', ([x, key], data) => executeEval(data, x)?.[executeEval(data, key)], (x, key) => Type.getInner(Type.fromTerm(x), key) ?? Type.Any)
 
 export { Eval as $ }
 

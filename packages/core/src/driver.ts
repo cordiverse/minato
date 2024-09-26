@@ -111,8 +111,8 @@ export abstract class Driver<T = any, C extends Context = Context> {
       throw new TypeError(`unknown table name "${table}"`)
     }
 
-    if (table instanceof Selection) {
-      if (!table.args[0].fields && (typeof table.table === 'string' || table.table instanceof Selection)) {
+    if (Selection.is(table)) {
+      if (!table.args[0].fields && (typeof table.table === 'string' || Selection.is(table.table))) {
         return table.model
       }
       const model = new Model('temp')

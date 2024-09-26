@@ -1,6 +1,6 @@
 {
   "name": "minato",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Type Driven Database Framework",
   "type": "module",
   "main": "lib/index.cjs",
@@ -44,14 +44,14 @@
     "sqlite",
     "mongo",
     "postgres",
-    "cordis",
-    "plugin"
+    "cordis"
   ],
   "cordis": {
     "ecosystem": {
       "pattern": [
         "@minatojs/driver-*",
         "@minatojs/plugin-*",
+        "minato-driver-*",
         "minato-plugin-*"
       ]
     },
@@ -62,10 +62,10 @@
     }
   },
   "devDependencies": {
-    "cordis": "^3.18.0"
+    "cordis": "^3.18.1"
   },
   "peerDependencies": {
-    "cordis": "^3.18.0"
+    "cordis": "^3.18.1"
   },
   "dependencies": {
     "cosmokit": "^1.6.2"
