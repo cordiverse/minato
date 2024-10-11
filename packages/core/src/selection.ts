@@ -95,7 +95,7 @@ class Executable<S = any, T = any> {
     defineProperty(this, 'row', createRow(this.ref, Eval.object(createRow(this.ref, {}, '', this.model)), '', this.model))
   }
 
-  protected isQuery(query: any): query is Query<S> {
+  protected isCallaback(query: any): query is Selection.Callback<S> {
     if (typeof query !== 'function') return false
     const fields = query(this.row)
     return isEvalExpr(omit(fields, ['$object']))
@@ -267,7 +267,7 @@ export class Selection<S = any> extends Executable<S, S[]> {
   groupBy(fields: any, ...args: any[]) {
     this.args[0].fields = this.resolveFields(fields)
     this.args[0].group = Object.keys(this.args[0].fields!)
-    const extra = this.isQuery(args[0]) ? undefined : args.shift()
+    const extra = this.isCallaback(args[0]) ? undefined : args.shift()
     Object.assign(this.args[0].fields!, this.resolveFields(extra || {}))
     if (args[0]) this.having(args[0])
     return new Selection(this.driver, this)
