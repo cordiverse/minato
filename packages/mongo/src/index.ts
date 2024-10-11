@@ -179,8 +179,9 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       const doc = await this.db.collection(table).findOne()
       if (doc) {
         virtual = typeof doc._id !== 'object' || (typeof primary === 'string' && fields[primary]?.deftype === 'primary')
-      } else {
-        // Empty collection, just set meta and return
+      }
+      if (!doc || virtual === useVirtualKey) {
+        // Empty table or already configured
         await metaTable.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
         this.logger.info('successfully reconfigured table %s', table)
         return
