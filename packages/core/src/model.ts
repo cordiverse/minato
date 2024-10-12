@@ -272,19 +272,25 @@ export class Model<S = any> {
     this.foreign = {}
   }
 
-  extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
+  extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): () => void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
-    const { primary, autoInc, unique = [], indexes = [], foreign, callback } = config
+    const { primary, autoInc, unique = [], indexes = [], foreign = {}, callback } = config
+    const disposables: (() => void)[] = []
 
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
-    unique.forEach(key => this.unique.includes(key) || this.unique.push(key))
-    indexes.map(x => this.parseIndex(x)).forEach(index => (this.indexes.some(ind => deepEqual(ind, index))) || this.indexes.push(index))
-    Object.assign(this.foreign, foreign)
+    unique.forEach(key => this.unique.includes(key) || (this.unique.push(key), disposables.push(() => this.unique.splice(this.unique.indexOf(key), 1))))
+    indexes.map(x => this.parseIndex(x)).forEach(index => (this.indexes.some(ind => deepEqual(ind, index)))
+      || (this.indexes.push(index), disposables.push(() => this.indexes.splice(this.indexes.indexOf(index), 1))))
+    Object.keys(foreign).forEach(key => Object.hasOwn(this.foreign, key)
+      || (this.foreign[key] = foreign[key], disposables.push(() => delete this.foreign[key])))
 
     if (callback) this.migrations.set(callback, Object.keys(fields))
 
     for (const key in fields) {
+      if (makeArray(this.primary).includes(key)) {
+        disposables.push(() => delete this.ctx?.get('model')?.tables[this.name])
+      }
       this.fields[key] = Field.parse(fields[key])
       this.fields[key].deprecated = !!callback
     }
@@ -297,6 +303,14 @@ export class Model<S = any> {
     this.checkIndex(this.primary)
     this.unique.forEach(index => this.checkIndex(index))
     this.indexes.forEach(index => this.checkIndex(index))
+
+    return () => {
+      for (const key in fields) {
+        delete this.fields[key]
+      }
+      if (callback) this.migrations.delete(callback)
+      disposables.splice(0).forEach(dispose => dispose())
+    }
   }
 
   private parseIndex(index: MaybeArray<string> | Driver.Index): Driver.Index {

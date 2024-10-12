@@ -133,6 +133,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<FlatKeys<S[K]>>> = {}) {
+    const disposables: (() => void)[] = []
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
@@ -142,7 +143,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       this.parseField(field, transformer, undefined, value => field = fields[key] = value)
       if (typeof field === 'object') field.transformers = transformer
     })
-    model.extend(fields, config)
+    disposables.push(model.extend(fields, config))
     if (makeArray(model.primary).every(key => key in fields)) {
       defineProperty(model, 'ctx', this.ctx)
     }
@@ -155,10 +156,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       ;(model.fields[key] = Field.parse('expr')).relation = relation
       if (def.target) {
         (relmodel.fields[def.target] ??= Field.parse('expr')).relation = inverse
+        disposables.unshift(() => delete relmodel.fields[def.target!])
       }
 
       if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
         relation.fields.forEach((x, i) => {
+          if (!model.fields[x]) disposables.unshift(() => delete model.fields[x])
           model.fields[x] ??= { ...relmodel.fields[relation.references[i]] } as any
           if (!relation.required) {
             model.fields[x]!.nullable = true
@@ -171,7 +174,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const shared = Object.entries(relation.shared).map(([x, y]) => [Relation.buildSharedKey(x, y), model.fields[x]!.deftype] as const)
         const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]!.deftype] as const)
         const references = relation.references.map(x => [Relation.buildAssociationKey(x, relation.table), relmodel.fields[x]?.deftype] as const)
-        this.extend(assocTable as any, {
+        disposables.push(this.extend(assocTable as any, {
           ...Object.fromEntries([...shared, ...fields, ...references]),
           [name]: {
             type: 'manyToOne',
@@ -187,18 +190,32 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           },
         } as any, {
           primary: [...shared, ...fields, ...references].map(x => x[0]) as any,
-        })
+        }))
       }
     })
     // use relation field as primary
     if (Array.isArray(model.primary) || model.fields[model.primary]!.relation) {
       model.primary = deduplicate(makeArray(model.primary).map(key => model.fields[key]!.relation?.fields || key).flat())
     }
-    model.unique = model.unique.map(keys => typeof keys === 'string' ? model.fields[keys]!.relation?.fields || keys
-      : keys.map(key => model.fields[key]!.relation?.fields || key).flat())
+    model.unique = model.unique.map(keys => {
+      if (typeof keys === 'string') {
+        return (model.fields[keys]!.relation?.fields && disposables.unshift(() => model.unique.splice(model.unique.indexOf(keys), 1)),
+        model.fields[keys]!.relation?.fields || keys)
+      } else {
+        const pred = keys.some(key => model.fields[key]!.relation?.fields)
+        if (pred) {
+          const newKeys = keys.map(key => model.fields[key]!.relation?.fields || key).flat()
+          disposables.unshift(() => model.unique.splice(model.unique.indexOf(newKeys), 1))
+          return newKeys
+        } else {
+          return keys
+        }
+      }
+    })
 
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
+    return this.ctx.effect(() => () => disposables.splice(0).forEach(dispose => dispose()))
   }
 
   private _parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {

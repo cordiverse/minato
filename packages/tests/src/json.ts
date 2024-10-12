@@ -37,32 +37,33 @@ interface Tables {
 }
 
 function JsonTests(database: Database<Tables>) {
-  database.extend('foo', {
-    id: 'unsigned',
-    value: 'integer',
-  })
-
-  database.extend('bar', {
-    id: 'unsigned',
-    uid: 'unsigned',
-    pid: 'unsigned',
-    value: 'integer',
-    obj: 'json',
-    s: 'string',
-    l: 'list',
-  }, {
-    autoInc: true,
-  })
-
-  database.extend('baz', {
-    id: 'unsigned',
-    nums: {
-      type: 'array',
-      inner: 'unsigned',
-    }
-  })
-
   before(async () => {
+    console.log(Object.keys(database.tables))
+    database.extend('foo', {
+      id: 'unsigned',
+      value: 'integer',
+    })
+
+    database.extend('bar', {
+      id: 'unsigned',
+      uid: 'unsigned',
+      pid: 'unsigned',
+      value: 'integer',
+      obj: 'json',
+      s: 'string',
+      l: 'list',
+    }, {
+      autoInc: true,
+    })
+
+    database.extend('baz', {
+      id: 'unsigned',
+      nums: {
+        type: 'array',
+        inner: 'unsigned',
+      }
+    })
+
     await setup(database, 'foo', [
       { id: 1, value: 0 },
       { id: 2, value: 2 },

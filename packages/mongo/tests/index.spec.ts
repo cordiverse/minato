@@ -2,6 +2,7 @@ import { Database } from 'minato'
 import MongoDriver from '@minatojs/driver-mongo'
 import test from '@minatojs/tests'
 import Logger from 'reggol'
+import { noop } from 'cosmokit'
 
 const logger = new Logger('mongo')
 
@@ -19,7 +20,7 @@ describe('@minatojs/driver-mongo', () => {
   })
 
   after(async () => {
-    await database.dropAll()
+    await database.dropAll().catch(noop)
     await database.stopAll()
     logger.level = 2
   })

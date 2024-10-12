@@ -18,18 +18,20 @@ interface Tables {
 }
 
 function QueryOperators(database: Database<Tables>) {
-  database.extend('temp1', {
-    id: 'unsigned',
-    text: 'string',
-    value: 'integer',
-    bool: 'boolean',
-    list: 'list',
-    timestamp: 'timestamp',
-    date: 'date',
-    time: 'time',
-    regex: 'string',
-  }, {
-    autoInc: true,
+  before(() => {
+    database.extend('temp1', {
+      id: 'unsigned',
+      text: 'string',
+      value: 'integer',
+      bool: 'boolean',
+      list: 'list',
+      timestamp: 'timestamp',
+      date: 'date',
+      time: 'time',
+      regex: 'string',
+    }, {
+      autoInc: true,
+    })
   })
 }
 

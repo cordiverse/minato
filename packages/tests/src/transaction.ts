@@ -17,17 +17,19 @@ interface Tables {
 }
 
 function TransactionOperations(database: Database<Tables>) {
-  database.extend('temptx', {
-    id: 'unsigned',
-    text: 'string',
-    num: 'integer',
-    bool: 'boolean',
-    list: 'list',
-    timestamp: 'timestamp',
-    date: 'date',
-    time: 'time',
-  }, {
-    autoInc: true,
+  before(() => {
+    database.extend('temptx', {
+      id: 'unsigned',
+      text: 'string',
+      num: 'integer',
+      bool: 'boolean',
+      list: 'list',
+      timestamp: 'timestamp',
+      date: 'date',
+      time: 'time',
+    }, {
+      autoInc: true,
+    })
   })
 }
 
