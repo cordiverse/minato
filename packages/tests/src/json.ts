@@ -38,7 +38,6 @@ interface Tables {
 
 function JsonTests(database: Database<Tables>) {
   before(async () => {
-    console.log(Object.keys(database.tables))
     database.extend('foo', {
       id: 'unsigned',
       value: 'integer',

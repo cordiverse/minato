@@ -20,7 +20,7 @@ type UnitOptions<T> = (T extends (database: Database, options?: infer R) => any 
   [K in keyof T as Exclude<K, Keywords>]?: false | UnitOptions<T[K]>
 }
 
-type Unit<T> = ((database: Database | ((arg: T) => Database), options: UnitOptions<T>, fork?: boolean) => void) & {
+type Unit<T> = ((database: Database, options?: UnitOptions<T>) => void) & {
   [K in keyof T as Exclude<K, Keywords>]: Unit<T[K]>
 }
 

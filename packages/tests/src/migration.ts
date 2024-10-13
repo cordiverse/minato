@@ -45,8 +45,6 @@ function MigrationTests(database: Database<Tables>) {
     ])
 
     database.extend('qux', {
-      id: 'unsigned',
-      text: 'string(64)',
       number: 'unsigned',
     })
 
@@ -66,6 +64,46 @@ function MigrationTests(database: Database<Tables>) {
       id: 'unsigned',
       text: 'string(64)',
     })
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+  })
+
+  it('alter disposable field', async () => {
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'string(64)',
+    })
+
+    await database.upsert('qux', [
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    const dispose = database.extend('qux', {
+      number: 'unsigned',
+    })
+
+    await database.upsert('qux', [
+      { id: 1, text: 'foo', number: 100 },
+      { id: 2, text: 'bar', number: 200 },
+    ])
+
+    await expect(database.get('qux', {})).to.eventually.deep.equal([
+      { id: 1, text: 'foo', number: 100 },
+      { id: 2, text: 'bar', number: 200 },
+    ])
+
+    dispose()
 
     await expect(database.get('qux', {})).to.eventually.deep.equal([
       { id: 1, text: 'foo' },
@@ -174,10 +212,7 @@ function MigrationTests(database: Database<Tables>) {
       { id: 2, number: 2 },
     ])
 
-    database.extend('qux', {
-      id: 'unsigned',
-      number: 'unsigned',
-    }, {
+    database.extend('qux', {}, {
       indexes: ['number'],
     })
 
