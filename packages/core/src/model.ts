@@ -272,7 +272,7 @@ export class Model<S = any> {
     this.foreign = {}
   }
 
-  extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
+  extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): () => void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
     const { primary, autoInc, unique = [], indexes = [], foreign, callback } = config
 
@@ -285,6 +285,7 @@ export class Model<S = any> {
     if (callback) this.migrations.set(callback, Object.keys(fields))
 
     for (const key in fields) {
+      if (Object.keys(this.fields).includes(key)) throw new TypeError(`field "${key}" already exists in table "${this.name}"`)
       this.fields[key] = Field.parse(fields[key])
       this.fields[key].deprecated = !!callback
     }
@@ -297,6 +298,17 @@ export class Model<S = any> {
     this.checkIndex(this.primary)
     this.unique.forEach(index => this.checkIndex(index))
     this.indexes.forEach(index => this.checkIndex(index))
+
+    if (Object.keys(fields).some(key => makeArray(this.primary).includes(key))) {
+      return () => {
+        const database = this.ctx?.get('model')
+        delete database?.tables[this.name]
+        delete database?.migrateTasks[this.name]
+        delete database?.['prepareTasks'][this.name]
+      }
+    } else {
+      return () => Object.keys(fields).forEach(key => delete this.fields[key])
+    }
   }
 
   private parseIndex(index: MaybeArray<string> | Driver.Index): Driver.Index {

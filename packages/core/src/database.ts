@@ -133,6 +133,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<FlatKeys<S[K]>>> = {}) {
+    const disposables: (() => void)[] = []
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
@@ -142,7 +143,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       this.parseField(field, transformer, undefined, value => field = fields[key] = value)
       if (typeof field === 'object') field.transformers = transformer
     })
-    model.extend(fields, config)
+    disposables.push(model.extend(fields, config))
     if (makeArray(model.primary).every(key => key in fields)) {
       defineProperty(model, 'ctx', this.ctx)
     }
@@ -159,6 +160,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
       if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
         relation.fields.forEach((x, i) => {
+          if (!(x in model.fields)) disposables.unshift(() => delete model.fields[x])
           model.fields[x] ??= { ...relmodel.fields[relation.references[i]] } as any
           if (!relation.required) {
             model.fields[x]!.nullable = true
@@ -171,7 +173,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const shared = Object.entries(relation.shared).map(([x, y]) => [Relation.buildSharedKey(x, y), model.fields[x]!.deftype] as const)
         const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]!.deftype] as const)
         const references = relation.references.map(x => [Relation.buildAssociationKey(x, relation.table), relmodel.fields[x]?.deftype] as const)
-        this.extend(assocTable as any, {
+        disposables.push(this.extend(assocTable as any, {
           ...Object.fromEntries([...shared, ...fields, ...references]),
           [name]: {
             type: 'manyToOne',
@@ -187,7 +189,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
           },
         } as any, {
           primary: [...shared, ...fields, ...references].map(x => x[0]) as any,
-        })
+        }))
       }
     })
     // use relation field as primary
@@ -199,6 +201,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
     this.prepareTasks[name] = this.prepare(name)
     ;(this.ctx as Context).emit('model', name)
+    return this.ctx.effect(() => () => {
+      disposables.splice(0).forEach(dispose => dispose())
+      ;(this.ctx as Context).emit('model', name)
+    })
   }
 
   private _parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {
@@ -304,7 +310,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     fields: Field.Extension<S[K], N>,
     callback: Model.Migration<this>,
   ) {
-    this.extend(name, fields, { callback })
+    return this.extend(name, fields, { callback })
   }
 
   select<T>(table: Selection<T>, query?: Query<T>): Selection<T>

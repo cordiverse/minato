@@ -1,3 +1,4 @@
+import { Context, ForkScope } from 'cordis'
 import { Database } from 'minato'
 import ModelOperations from './model'
 import QueryOperators from './query'
@@ -32,9 +33,20 @@ function setValue(obj: any, path: string, value: any) {
   }
 }
 
-function createUnit<T>(target: T, root = false): Unit<T> {
+function createUnit<T>(target: T, level = 0): Unit<T> {
+  const title = target['name']
   const test: any = (database: Database, options: any = {}) => {
     function callback() {
+      let fork: ForkScope<Context> | undefined
+      if (level === 1) {
+        fork = database['ctx'].plugin({
+          inject: ['model'],
+          name: title,
+          apply: () => {},
+        })
+        database = fork.ctx.model
+      }
+
       if (typeof target === 'function') {
         target(database, options)
       }
@@ -43,13 +55,19 @@ function createUnit<T>(target: T, root = false): Unit<T> {
         if (options[key] === false || Keywords.includes(key)) continue
         test[key](database, options[key])
       }
+
+      if (fork) {
+        after(async () => {
+          await database.dropAll()
+          fork.dispose()
+        })
+      }
     }
 
     process.argv.filter(x => x.startsWith('--+')).forEach(x => setValue(options, x.slice(3), true))
     process.argv.filter(x => x.startsWith('---')).forEach(x => setValue(options, x.slice(3), false))
 
-    const title = target['name']
-    if (!root && title) {
+    if (level && title) {
       describe(title.replace(/(?=[A-Z])/g, ' ').trimStart(), callback)
     } else {
       callback()
@@ -58,7 +76,7 @@ function createUnit<T>(target: T, root = false): Unit<T> {
 
   for (const key in target) {
     if (Keywords.includes(key)) continue
-    test[key] = createUnit(target[key])
+    test[key] = createUnit(target[key], level + 1)
   }
 
   return test
@@ -76,4 +94,4 @@ namespace Tests {
   export const relation = Relation
 }
 
-export default createUnit(Tests, true)
+export default createUnit(Tests)

@@ -102,167 +102,169 @@ function flatten(type: any, prefix) {
 }
 
 function ModelOperations(database: Database<Tables, Types>) {
-  database.define('bigint2', {
-    type: 'string',
-    dump: value => isNullable(value) ? value : value.toString(),
-    load: value => isNullable(value) ? value : BigInt(value),
-    initial: 123n,
-  })
-
-  database.define('custom', {
-    type: 'string',
-    dump: value => isNullable(value) ? value : `${value.a}|${value.b}`,
-    load: value => isNullable(value) ? value : { a: value.split('|')[0], b: +value.split('|')[1] },
-  })
-
-  const bnum = database.define({
-    type: 'binary',
-    dump: value => isNullable(value) ? value : toBinary(String(value)),
-    load: value => isNullable(value) ? value : +Buffer.from(value),
-    initial: 0,
-  })
-
-  const bstr = database.define({
-    type: 'custom',
-    dump: value => isNullable(value) ? value : { a: value, b: 1 },
-    load: value => isNullable(value) ? value : value.a,
-    initial: 'pooo',
-  })
-
-  database.define('recurx', {
-    type: 'object',
-    inner: {
-      id: 'unsigned',
-      y: 'recury',
-    },
-  })
-
-  database.define('recury', {
-    type: 'object',
-    inner: {
-      id: 'unsigned',
-      x: 'recurx',
-    },
-  })
-
-  const baseFields: Field.Extension<DType, Types> = {
-    id: 'unsigned',
-    text: {
+  before(() => {
+    database.define('bigint2', {
       type: 'string',
-      initial: 'he`l"\'\\lo',
-    },
-    num: {
-      type: 'integer',
-      initial: 233,
-    },
-    double: {
-      type: 'double',
-      initial: 3.14,
-    },
-    decimal: {
-      type: 'decimal',
-      scale: 3,
-      initial: 12413,
-    },
-    int64: {
-      type: 'bigint',
-      initial: 1n,
-    },
-    bool: {
-      type: 'boolean',
-      initial: true,
-    },
-    list: {
-      type: 'list',
-      initial: ['a`a', 'b"b', 'c\'c', 'd\\d'],
-    },
-    array: 'array',
-    object: {
-      type: 'object',
-      inner: {
-        num: 'unsigned',
-        text: 'string',
-        json: 'object',
-        embed: {
-          type: 'object',
-          inner: {
-            bool: {
-              type: 'boolean',
-              initial: false,
-            },
-            int64: 'bigint',
-            bigint: 'bigint2',
-            custom: { type: 'custom' },
-            bstr: bstr,
-          },
-        },
-      },
-    },
-    // dot defined object
-    'object2.num': {
-      type: 'unsigned',
-      initial: 1,
-    },
-    'object2.text': {
+      dump: value => isNullable(value) ? value : value.toString(),
+      load: value => isNullable(value) ? value : BigInt(value),
+      initial: 123n,
+    })
+
+    database.define('custom', {
       type: 'string',
-      initial: '2',
-    },
-    'object2.embed.bool': {
-      type: 'boolean',
-      initial: true,
-    },
-    'object2.embed.bigint': 'bigint2',
-    timestamp: {
-      type: 'timestamp',
-      initial: new Date('1970-01-01 00:00:00'),
-    },
-    date: {
-      type: 'date',
-      initial: new Date('1970-01-01'),
-    },
-    time: {
-      type: 'time',
-      initial: new Date('1970-01-01 12:00:00'),
-    },
-    binary: {
-      type: 'binary',
-      initial: toBinary('initial buffer')
-    },
-    bigint: 'bigint2',
-    bnum,
-    bnum2: {
+      dump: value => isNullable(value) ? value : `${value.a}|${value.b}`,
+      load: value => isNullable(value) ? value : { a: value.split('|')[0], b: +value.split('|')[1] },
+    })
+
+    const bnum = database.define({
       type: 'binary',
       dump: value => isNullable(value) ? value : toBinary(String(value)),
       load: value => isNullable(value) ? value : +Buffer.from(value),
       initial: 0,
-    },
-  }
+    })
 
-  const baseObject = {
-    type: 'object',
-    inner: { nested: { type: 'object', inner: baseFields } },
-    initial: { nested: { id: 1 } }
-  }
+    const bstr = database.define({
+      type: 'custom',
+      dump: value => isNullable(value) ? value : { a: value, b: 1 },
+      load: value => isNullable(value) ? value : value.a,
+      initial: 'pooo',
+    })
 
-  database.extend('dtypes', {
-    ...baseFields
-  }, { autoInc: true })
+    database.define('recurx', {
+      type: 'object',
+      inner: {
+        id: 'unsigned',
+        y: 'recury',
+      },
+    })
 
-  database.extend('dobjects', {
-    id: 'unsigned',
-    foo: baseObject,
-    ...flatten(baseObject, 'bar'),
-    baz: {
-      type: 'array',
-      inner: baseObject,
-      initial: []
-    },
-  }, { autoInc: true })
+    database.define('recury', {
+      type: 'object',
+      inner: {
+        id: 'unsigned',
+        x: 'recurx',
+      },
+    })
 
-  database.extend('recurxs', {
-    id: 'unsigned',
-    y: 'recury',
-  }, { autoInc: true })
+    const baseFields: Field.Extension<DType, Types> = {
+      id: 'unsigned',
+      text: {
+        type: 'string',
+        initial: 'he`l"\'\\lo',
+      },
+      num: {
+        type: 'integer',
+        initial: 233,
+      },
+      double: {
+        type: 'double',
+        initial: 3.14,
+      },
+      decimal: {
+        type: 'decimal',
+        scale: 3,
+        initial: 12413,
+      },
+      int64: {
+        type: 'bigint',
+        initial: 1n,
+      },
+      bool: {
+        type: 'boolean',
+        initial: true,
+      },
+      list: {
+        type: 'list',
+        initial: ['a`a', 'b"b', 'c\'c', 'd\\d'],
+      },
+      array: 'array',
+      object: {
+        type: 'object',
+        inner: {
+          num: 'unsigned',
+          text: 'string',
+          json: 'object',
+          embed: {
+            type: 'object',
+            inner: {
+              bool: {
+                type: 'boolean',
+                initial: false,
+              },
+              int64: 'bigint',
+              bigint: 'bigint2',
+              custom: { type: 'custom' },
+              bstr: bstr,
+            },
+          },
+        },
+      },
+      // dot defined object
+      'object2.num': {
+        type: 'unsigned',
+        initial: 1,
+      },
+      'object2.text': {
+        type: 'string',
+        initial: '2',
+      },
+      'object2.embed.bool': {
+        type: 'boolean',
+        initial: true,
+      },
+      'object2.embed.bigint': 'bigint2',
+      timestamp: {
+        type: 'timestamp',
+        initial: new Date('1970-01-01 00:00:00'),
+      },
+      date: {
+        type: 'date',
+        initial: new Date('1970-01-01'),
+      },
+      time: {
+        type: 'time',
+        initial: new Date('1970-01-01 12:00:00'),
+      },
+      binary: {
+        type: 'binary',
+        initial: toBinary('initial buffer')
+      },
+      bigint: 'bigint2',
+      bnum,
+      bnum2: {
+        type: 'binary',
+        dump: value => isNullable(value) ? value : toBinary(String(value)),
+        load: value => isNullable(value) ? value : +Buffer.from(value),
+        initial: 0,
+      },
+    }
+
+    const baseObject = {
+      type: 'object',
+      inner: { nested: { type: 'object', inner: baseFields } },
+      initial: { nested: { id: 1 } }
+    }
+
+    database.extend('dtypes', {
+      ...baseFields
+    }, { autoInc: true })
+
+    database.extend('dobjects', {
+      id: 'unsigned',
+      foo: baseObject,
+      ...flatten(baseObject, 'bar'),
+      baz: {
+        type: 'array',
+        inner: baseObject,
+        initial: []
+      },
+    }, { autoInc: true })
+
+    database.extend('recurxs', {
+      id: 'unsigned',
+      y: 'recury',
+    }, { autoInc: true })
+  })
 }
 
 namespace ModelOperations {

@@ -21,10 +21,12 @@ interface Tables {
 }
 
 function ObjectOperations(database: Database<Tables>) {
-  database.extend('object', {
-    'id': 'string',
-    'meta.a': { type: 'string', initial: '666' },
-    'meta.embed': { type: 'json', initial: { c: 'world' } },
+  before(async () => {
+    database.extend('object', {
+      'id': 'string',
+      'meta.a': { type: 'string', initial: '666' },
+      'meta.embed': { type: 'json', initial: { c: 'world' } },
+    })
   })
 }
 
