@@ -21,7 +21,13 @@ interface Tables {
   qux2: Qux2
 }
 
-function MigrationTests(database: Database<Tables>) {
+interface MigrationOptions {
+  definition?: boolean
+}
+
+function MigrationTests(database: Database<Tables>, options: MigrationOptions = {}) {
+  const { definition = true } = options
+
   beforeEach(async () => {
     await database.drop('qux').catch(noop)
   })
@@ -104,6 +110,8 @@ function MigrationTests(database: Database<Tables>) {
       id: 'unsigned',
       flag: 'boolean',
     })
+
+    await database.prepared()
 
     database.migrate('qux', {
       flag: 'boolean',
@@ -270,6 +278,42 @@ function MigrationTests(database: Database<Tables>) {
         value: 'asc',
       },
     }))).to.not.be.undefined
+  })
+
+  definition && it('model.immutable', async () => {
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'string(64)',
+    })
+
+    await database.upsert('qux', [
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    await expect(database.get('qux', {})).to.eventually.have.deep.members([
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])
+
+    Reflect.deleteProperty(database.tables, 'qux')
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'integer' as any,
+    }, {
+      immutable: true,
+    })
+
+    await expect(database.upsert('qux', [
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])).to.eventually.be.rejectedWith('immutable')
+
+    Reflect.deleteProperty(database.tables, 'qux')
+    Reflect.deleteProperty(database['prepareTasks'], 'qux')
   })
 }
 

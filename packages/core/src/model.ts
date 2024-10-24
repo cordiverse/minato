@@ -245,6 +245,7 @@ export namespace Model {
   export interface Config<K extends string = string> {
     callback?: Migration
     autoInc: boolean
+    immutable: boolean
     primary: MaybeArray<K>
     unique: MaybeArray<K>[]
     indexes: (MaybeArray<K> | Driver.IndexDef<K>)[]
@@ -266,6 +267,7 @@ export class Model<S = any> {
 
   constructor(public name: string) {
     this.autoInc = false
+    this.immutable = false
     this.primary = 'id' as never
     this.unique = []
     this.indexes = []
@@ -274,10 +276,11 @@ export class Model<S = any> {
 
   extend(fields: Field.Extension<S>, config?: Partial<Model.Config>): void
   extend(fields = {}, config: Partial<Model.Config> = {}) {
-    const { primary, autoInc, unique = [], indexes = [], foreign, callback } = config
+    const { primary, autoInc, immutable, unique = [], indexes = [], foreign, callback } = config
 
     this.primary = primary || this.primary
     this.autoInc = autoInc || this.autoInc
+    this.immutable = immutable || this.immutable
     unique.forEach(key => this.unique.includes(key) || this.unique.push(key))
     indexes.map(x => this.parseIndex(x)).forEach(index => (this.indexes.some(ind => deepEqual(ind, index))) || this.indexes.push(index))
     Object.assign(this.foreign, foreign)

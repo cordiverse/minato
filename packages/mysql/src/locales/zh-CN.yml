@@ -10,3 +10,4 @@ ssl:
     - 默认值
     - $description: 自定义
       rejectUnauthorized: 拒绝使用无效证书的客户端。
+readOnly: 以只读模式连接。

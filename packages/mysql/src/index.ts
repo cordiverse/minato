@@ -157,6 +157,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign, autoInc } = table
+    const immutable = table.immutable || this.config.readOnly
     const fields = table.avaiableFields()
     const unique = [...table.unique]
     const create: string[] = []
@@ -230,6 +231,13 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
         create.push(`UNIQUE INDEX ${escapeId(name)} (${createIndex(key)})`)
         update.push(`DROP INDEX ${escapeId(oldIndex.INDEX_NAME)}`)
       }
+    }
+
+    if (immutable) {
+      if (create.length || update.length) {
+        throw new Error(`immutable table ${name} cannot be migrated`)
+      }
+      return
     }
 
     if (!columns.length) {
@@ -593,9 +601,10 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 }
 
 export namespace MySQLDriver {
-  export interface Config extends PoolConfig {}
+  export interface Config extends Driver.Config, PoolConfig {}
 
   export const Config: z<Config> = z.intersect([
+    Driver.Config,
     z.object({
       host: z.string().default('localhost'),
       port: z.natural().max(65535).default(3306),

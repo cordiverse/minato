@@ -1,5 +1,5 @@
 import { Awaitable, deepEqual, defineProperty, Dict, mapValues, remove } from 'cosmokit'
-import { Context, Logger, Service } from 'cordis'
+import { Context, Logger, Service, z } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
@@ -52,10 +52,10 @@ export namespace Driver {
 }
 
 export namespace Driver {
-  export type Constructor<T> = new (ctx: Context, config: T) => Driver<T>
+  export type Constructor<T extends Driver.Config> = new (ctx: Context, config: T) => Driver<T>
 }
 
-export abstract class Driver<T = any, C extends Context = Context> {
+export abstract class Driver<T extends Driver.Config = Driver.Config, C extends Context = Context> {
   static inject = ['model']
 
   abstract start(): Promise<void>
@@ -165,8 +165,9 @@ export abstract class Driver<T = any, C extends Context = Context> {
   async _ensureSession() {}
 
   async prepareIndexes(table: string) {
+    const { immutable, indexes } = this.model(table)
+    if (immutable || this.config.readOnly) return
     const oldIndexes = await this.getIndexes(table)
-    const { indexes } = this.model(table)
     for (const index of indexes) {
       const oldIndex = oldIndexes.find(info => info.name === index.name)
       if (!oldIndex) {
@@ -177,6 +178,16 @@ export abstract class Driver<T = any, C extends Context = Context> {
       }
     }
   }
+}
+
+export namespace Driver {
+  export interface Config {
+    readOnly?: boolean
+  }
+
+  export const Config: z<Config> = z.object({
+    readOnly: z.boolean().default(false),
+  })
 }
 
 export interface MigrationHooks {
