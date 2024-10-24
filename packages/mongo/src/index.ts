@@ -229,6 +229,15 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   /** synchronize table schema */
   async prepare(table: string) {
+    const { immutable } = this.model(table)
+
+    if (immutable || this.config.readOnly) {
+      if (immutable && this.shouldEnsurePrimary(table)) {
+        throw new Error(`immutable table ${table} cannot be autoInc`)
+      }
+      return
+    }
+
     await Promise.all([
       this._createInternalTable(),
       this.db.createCollection(table).catch(noop),
@@ -536,7 +545,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 }
 
 export namespace MongoDriver {
-  export interface Config extends MongoClientOptions {
+  export interface Config extends Driver.Config, MongoClientOptions {
     username?: string
     password?: string
     protocol?: string
@@ -556,24 +565,27 @@ export namespace MongoDriver {
     optimizeIndex?: boolean
   }
 
-  export const Config: z<Config> = z.object({
-    protocol: z.string().default('mongodb'),
-    host: z.string().default('localhost'),
-    port: z.natural().max(65535),
-    username: z.string(),
-    password: z.string().role('secret'),
-    database: z.string().required(),
-    authDatabase: z.string(),
-    writeConcern: z.object({
-      w: z.union([
-        z.const(undefined),
-        z.number().required(),
-        z.const('majority').required(),
-      ]),
-      wtimeoutMS: z.number(),
-      journal: z.boolean(),
+  export const Config: z<Config> = z.intersect([
+    Driver.Config,
+    z.object({
+      protocol: z.string().default('mongodb'),
+      host: z.string().default('localhost'),
+      port: z.natural().max(65535),
+      username: z.string(),
+      password: z.string().role('secret'),
+      database: z.string().required(),
+      authDatabase: z.string(),
+      writeConcern: z.object({
+        w: z.union([
+          z.const(undefined),
+          z.number().required(),
+          z.const('majority').required(),
+        ]),
+        wtimeoutMS: z.number(),
+        journal: z.boolean(),
+      }) as any,
     }),
-  }).i18n({
+  ]).i18n({
     'en-US': enUS,
     'zh-CN': zhCN,
   })
