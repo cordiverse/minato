@@ -300,7 +300,12 @@ export class Model<S = any> {
     this.indexes.forEach(index => this.checkIndex(index))
 
     if (Object.keys(fields).some(key => makeArray(this.primary).includes(key))) {
-      return () => delete this.ctx?.get('model')?.tables[this.name]
+      return () => {
+        const database = this.ctx?.get('model')
+        delete database?.tables[this.name]
+        delete database?.migrateTasks[this.name]
+        delete database?.['prepareTasks'][this.name]
+      }
     } else {
       return () => Object.keys(fields).forEach(key => delete this.fields[key])
     }
