@@ -15,4 +15,3 @@ writeConcern:
       - Majority
   wtimeoutMS: The write concern timeout.
   journal: The journal write concern.
-readOnly: 以只读模式连接。

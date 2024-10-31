@@ -603,13 +603,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   async drop<K extends Keys<S>>(table: K) {
     if (this[Database.transact]) throw new Error('cannot drop table in transaction')
     const driver = this.getDriver(table)
-    if (driver.config.readOnly) throw new Error('cannot drop table in read-only mode')
+    if (driver.config.readonly) throw new Error('cannot drop table in read-only mode')
     await driver.drop(table)
   }
 
   async dropAll() {
     if (this[Database.transact]) throw new Error('cannot drop table in transaction')
-    await Promise.all(Object.values(this.drivers).filter(driver => !driver.config.readOnly).map(driver => driver.dropAll()))
+    await Promise.all(Object.values(this.drivers).filter(driver => !driver.config.readonly).map(driver => driver.dropAll()))
   }
 
   async stats() {

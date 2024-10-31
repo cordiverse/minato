@@ -10,4 +10,3 @@ ssl:
     - Default
     - $description: Custom
       rejectUnauthorized: Reject clients with invalid certificates.
-readOnly: Connect in read-only mode.

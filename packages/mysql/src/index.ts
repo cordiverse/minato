@@ -157,7 +157,6 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign, autoInc } = table
-    const immutable = table.immutable || this.config.readOnly
     const fields = table.avaiableFields()
     const unique = [...table.unique]
     const create: string[] = []
@@ -233,16 +232,19 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       }
     }
 
-    if (immutable) {
+    if (!columns.length) {
+      if (this.config.readonly || this.config.migrateStrategy === 'never') {
+        throw new Error(`immutable table ${name} cannot be created`)
+      }
+      this.logger.info('auto creating table %c', name)
+      return this.query(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}) COLLATE = ${this.sql.escape(this.config.charset ?? 'utf8mb4_general_ci')}`)
+    }
+
+    if (this.config.readonly || this.config.migrateStrategy !== 'auto') {
       if (create.length || update.length) {
         throw new Error(`immutable table ${name} cannot be migrated`)
       }
       return
-    }
-
-    if (!columns.length) {
-      this.logger.info('auto creating table %c', name)
-      return this.query(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}) COLLATE = ${this.sql.escape(this.config.charset ?? 'utf8mb4_general_ci')}`)
     }
 
     const operations = [
@@ -604,15 +606,12 @@ export namespace MySQLDriver {
   export interface Config extends Driver.Config, PoolConfig {}
 
   export const Config: z<Config> = z.intersect([
-    Driver.Config,
     z.object({
       host: z.string().default('localhost'),
       port: z.natural().max(65535).default(3306),
       user: z.string().default('root'),
       password: z.string().role('secret'),
       database: z.string().required(),
-    }),
-    z.object({
       ssl: z.union([
         z.const(undefined),
         z.object({
@@ -639,11 +638,12 @@ export namespace MySQLDriver {
           sessionTimeout: z.number(),
         }),
       ]) as any,
+    }).i18n({
+      'en-US': enUS,
+      'zh-CN': zhCN,
     }),
-  ]).i18n({
-    'en-US': enUS,
-    'zh-CN': zhCN,
-  })
+    Driver.Config,
+  ])
 }
 
 export default MySQLDriver

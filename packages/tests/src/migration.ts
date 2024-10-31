@@ -280,7 +280,7 @@ function MigrationTests(database: Database<Tables>, options: MigrationOptions = 
     }))).to.not.be.undefined
   })
 
-  definition && it('model.immutable', async () => {
+  definition && it('immutable model', async () => {
     Reflect.deleteProperty(database.tables, 'qux')
 
     database.extend('qux', {
@@ -299,12 +299,10 @@ function MigrationTests(database: Database<Tables>, options: MigrationOptions = 
     ])
 
     Reflect.deleteProperty(database.tables, 'qux')
-
+    Object.values(database.drivers)[0].config.migrateStrategy = 'never'
     database.extend('qux', {
       id: 'unsigned',
       text: 'integer' as any,
-    }, {
-      immutable: true,
     })
 
     await expect(database.upsert('qux', [
@@ -314,6 +312,7 @@ function MigrationTests(database: Database<Tables>, options: MigrationOptions = 
 
     Reflect.deleteProperty(database.tables, 'qux')
     Reflect.deleteProperty(database['prepareTasks'], 'qux')
+    Object.values(database.drivers)[0].config.migrateStrategy = 'auto'
   })
 }
 

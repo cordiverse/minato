@@ -229,10 +229,8 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
   /** synchronize table schema */
   async prepare(table: string) {
-    const { immutable } = this.model(table)
-
-    if (immutable || this.config.readOnly) {
-      if (immutable && this.shouldEnsurePrimary(table)) {
+    if (this.config.migrateStrategy === 'never' || this.config.readonly) {
+      if (this.config.migrateStrategy === 'never' && this.shouldEnsurePrimary(table)) {
         throw new Error(`immutable table ${table} cannot be autoInc`)
       }
       return
@@ -566,7 +564,6 @@ export namespace MongoDriver {
   }
 
   export const Config: z<Config> = z.intersect([
-    Driver.Config,
     z.object({
       protocol: z.string().default('mongodb'),
       host: z.string().default('localhost'),
@@ -584,11 +581,12 @@ export namespace MongoDriver {
         wtimeoutMS: z.number(),
         journal: z.boolean(),
       }) as any,
+    }).i18n({
+      'en-US': enUS,
+      'zh-CN': zhCN,
     }),
-  ]).i18n({
-    'en-US': enUS,
-    'zh-CN': zhCN,
-  })
+    Driver.Config,
+  ])
 }
 
 export default MongoDriver
