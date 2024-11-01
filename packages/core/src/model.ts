@@ -1,6 +1,6 @@
 import { clone, deepEqual, defineProperty, filterKeys, isNullable, makeArray, mapValues, MaybeArray } from 'cosmokit'
 import { Context } from 'cordis'
-import { Eval, Update } from './eval.ts'
+import { Eval, isEvalExpr, Update } from './eval.ts'
 import { DeepPartial, FlatKeys, Flatten, isFlat, Keys, Row, unravel } from './utils.ts'
 import { Type } from './type.ts'
 import { Driver } from './driver.ts'
@@ -349,7 +349,7 @@ export class Model<S = any> {
     const result = {}
     for (const key in obj) {
       const type = Type.getInner(model, key)
-      if (!type || isNullable(obj[key])) {
+      if (!type || isNullable(obj[key]) || isEvalExpr(obj[key])) {
         result[key] = obj[key]
       } else if (type.type !== 'json') {
         result[key] = this.resolveValue(type, obj[key])

@@ -30,10 +30,21 @@ interface Baz {
   nums: number[]
 }
 
+interface Bax {
+  id: number
+  array: {
+    text: string
+  }[]
+  object: {
+    num: number
+  }
+}
+
 interface Tables {
   foo: Foo
   bar: Bar
   baz: Baz
+  bax: Bax
 }
 
 function JsonTests(database: Database<Tables>) {
@@ -62,6 +73,25 @@ function JsonTests(database: Database<Tables>) {
     }
   })
 
+  database.extend('bax', {
+    id: 'unsigned',
+    array: {
+      type: 'array',
+      inner: {
+        type: 'object',
+        inner: {
+          text: 'string',
+        },
+      },
+    },
+    object: {
+      type: 'object',
+      inner: {
+        num: 'unsigned',
+      },
+    },
+  })
+
   before(async () => {
     await setup(database, 'foo', [
       { id: 1, value: 0 },
@@ -84,6 +114,11 @@ function JsonTests(database: Database<Tables>) {
 }
 
 namespace JsonTests {
+  const Bax = [{
+    id: 1,
+    array: [{ text: 'foo' }],
+  }]
+
   export interface RelationOptions {
     nullableComparator?: boolean
   }
@@ -173,6 +208,73 @@ namespace JsonTests {
         .to.eventually.have.shape([
           { value: 1 },
         ])
+    })
+  }
+
+  export function modify(database: Database<Tables>) {
+    it('$.object', async () => {
+      await setup(database, 'bax', Bax)
+      await database.set('bax', 1, row => ({
+        object: $.object({
+          num: row.id,
+        }),
+      }))
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo' }], object: { num: 1 } },
+      ])
+    })
+
+    it('$.literal', async () => {
+      await setup(database, 'bax', Bax)
+
+      await database.set('bax', 1, {
+        array: $.literal([{ text: 'foo2' }]),
+      })
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo2' }], object: { num: 0 } },
+      ])
+
+      await database.set('bax', 1, {
+        object: $.literal({ num: 2 }),
+      })
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo2' }], object: { num: 2 } },
+      ])
+
+      await database.set('bax', 1, {
+        'object.num': $.literal(3),
+      })
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo2' }], object: { num: 3 } },
+      ])
+    })
+
+    it('$.literal cast', async () => {
+      await setup(database, 'bax', Bax)
+
+      await database.set('bax', 1, {
+        array: $.literal([{ text: 'foo2' }], 'array'),
+      })
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo2' }], object: { num: 0 } },
+      ])
+
+      await database.set('bax', 1, {
+        object: $.literal({ num: 2 }, 'object'),
+      })
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo2' }], object: { num: 2 } },
+      ])
+    })
+
+    it('nested illegal string', async () => {
+      await setup(database, 'bax', Bax)
+      await database.set('bax', 1, row => ({
+        array: [{ text: '$foo2' }],
+      }))
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: '$foo2' }], object: { num: 0 } },
+      ])
     })
   }
 
