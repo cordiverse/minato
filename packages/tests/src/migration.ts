@@ -281,6 +281,7 @@ function MigrationTests(database: Database<Tables>, options: MigrationOptions = 
   })
 
   definition && it('immutable model', async () => {
+    const driver = Object.values(database.drivers)[0]
     Reflect.deleteProperty(database.tables, 'qux')
 
     database.extend('qux', {
@@ -299,7 +300,7 @@ function MigrationTests(database: Database<Tables>, options: MigrationOptions = 
     ])
 
     Reflect.deleteProperty(database.tables, 'qux')
-    Object.values(database.drivers)[0].config.migrateStrategy = 'never'
+    driver.config.migrateStrategy = 'never'
     database.extend('qux', {
       id: 'unsigned',
       text: 'integer' as any,
@@ -309,10 +310,30 @@ function MigrationTests(database: Database<Tables>, options: MigrationOptions = 
       { id: 1, text: 'foo' },
       { id: 2, text: 'bar' },
     ])).to.eventually.be.rejectedWith('immutable')
+    await expect(database.get('qux', {})).to.eventually.be.rejectedWith('immutable')
 
     Reflect.deleteProperty(database.tables, 'qux')
     Reflect.deleteProperty(database['prepareTasks'], 'qux')
-    Object.values(database.drivers)[0].config.migrateStrategy = 'auto'
+    driver.config.migrateStrategy = 'auto'
+    driver.config.readonly = true
+
+    database.extend('qux', {
+      id: 'unsigned',
+      text: 'string(64)',
+    })
+
+    await expect(database.get('qux', {})).to.eventually.be.fulfilled
+    await expect(database.set('qux', 1, { text: 'foo' })).to.eventually.be.rejectedWith('read-only')
+    await expect(database.upsert('qux', [
+      { id: 1, text: 'foo' },
+      { id: 2, text: 'bar' },
+    ])).to.eventually.be.rejectedWith('read-only')
+    await expect(database.remove('qux', 1)).to.eventually.be.rejectedWith('read-only')
+
+    Reflect.deleteProperty(database.tables, 'qux')
+    Reflect.deleteProperty(database['prepareTasks'], 'qux')
+    driver.config.migrateStrategy = 'auto'
+    driver.config.readonly = false
   })
 }
 
