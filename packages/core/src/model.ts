@@ -349,10 +349,12 @@ export class Model<S = any> {
     const result = {}
     for (const key in obj) {
       const type = Type.getInner(model, key)
-      if (!type || isNullable(obj[key]) || isEvalExpr(obj[key])) {
+      if (!type || isNullable(obj[key])) {
         result[key] = obj[key]
       } else if (type.type !== 'json') {
         result[key] = this.resolveValue(type, obj[key])
+      } else if (isEvalExpr(obj[key])) {
+        result[key] = obj[key]
       } else if (type.inner && Type.isArray(type) && Array.isArray(obj[key])) {
         result[key] = obj[key].map(x => this.resolveModel(x, Type.getInner(type)))
       } else if (type.inner) {
