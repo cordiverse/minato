@@ -1,5 +1,5 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError, ObjectId } from 'mongodb'
-import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
+import { Binary, deepEqual, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Builder } from './builder'
@@ -99,6 +99,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
       // if the index is already created, skip it
       keys = makeArray(keys)
+      if (index && deepEqual(keys, makeArray(primary))) return
       const name = (index ? 'unique:' : 'primary:') + keys.join('+')
       if (oldSpecs.find(spec => spec.name === name)) return
 
@@ -162,9 +163,10 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       const doc = await this.db.collection(table).findOne()
       if (doc) {
         virtual = typeof doc._id !== 'object' || (typeof primary === 'string' && modelFields[primary]?.deftype === 'primary')
-      } else {
-        // Empty collection, just set meta and return
-        fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
+      }
+      if (!doc || virtual === useVirtualKey) {
+        // Empty table or already configured
+        await fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
         this.logger.info('Successfully reconfigured table %s', table)
         return
       }
