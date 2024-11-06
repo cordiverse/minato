@@ -243,8 +243,8 @@ export class Builder {
       $power: (arg, group) => ({ $pow: arg.map(val => this.eval(val, group)) }),
       $random: (arg, group) => ({ $rand: {} }),
 
-      $literal: (arg, group) => {
-        return { $literal: this.dump(arg[0], arg[1] ? Type.fromField(arg[1]) : undefined) }
+      $literal: ([value, type], group) => {
+        return { $literal: this.dump(value, type ? Type.fromField(type) : undefined) }
       },
       $number: (arg, group) => {
         const value = this.eval(arg, group)
@@ -628,16 +628,23 @@ export class Builder {
     return type.parse(result)
   }
 
-  formatUpdateAggr(model: Type, obj: any) {
-    const result = {}
-    for (const key in obj) {
-      const type = Type.getInner(model, key)
-      if (!type || type.type !== 'json' || isNullable(obj[key]) || obj[key].$literal) result[key] = obj[key]
-      else if (Type.isArray(type) && Array.isArray(obj[key])) result[key] = obj[key]
-      else if (Object.keys(obj[key]).length === 0) result[key] = { $literal: obj[key] }
-      else if (type.inner) result[key] = this.formatUpdateAggr(type, obj[key])
-      else result[key] = obj[key]
+  toUpdateExpr(value: any, type: Type | undefined, root: boolean = true) {
+    if (isNullable(value)) {
+      return value
+    } else if (isEvalExpr(value)) {
+      return root ? this.eval(value) : this.dump(value, type)
+    } else if ((type?.type === 'string' || !type) && typeof value === 'string' && value.startsWith('$')) {
+      return { $literal: value }
+    } else if ((type?.type === 'json' || !type) && typeof value === 'object' && Object.keys(value).length === 0) {
+      return { $literal: value }
+    } else if (!type) {
+      return this.dump(value, type)
+    } else if (Type.isArray(type) && Array.isArray(value)) {
+      return value.map(val => this.toUpdateExpr(val, type.inner, false))
+    } else if (type.inner) {
+      return mapValues(value, (val, key) => this.toUpdateExpr(val, Type.getInner(type, key), false))
+    } else {
+      return this.dump(value, type)
     }
-    return result
   }
 }

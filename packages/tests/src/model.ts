@@ -42,6 +42,7 @@ interface DType {
   bigint?: bigint
   bnum?: number
   bnum2?: number
+  text2?: string
 }
 
 interface DObject {
@@ -83,6 +84,7 @@ interface Types {
   custom: Custom
   recurx: RecursiveX
   recury: RecursiveY
+  string2: string
 }
 
 function toBinary(source: string): ArrayBuffer {
@@ -127,6 +129,13 @@ function ModelOperations(database: Database<Tables, Types>) {
     dump: value => isNullable(value) ? value : { a: value, b: 1 },
     load: value => isNullable(value) ? value : value.a,
     initial: 'pooo',
+  })
+
+  database.define('string2', {
+    type: 'string',
+    dump: value => isNullable(value) ? value : `AAA${value}`,
+    load: value => isNullable(value) ? value : value.slice(3),
+    initial: '',
   })
 
   database.define('recurx', {
@@ -236,6 +245,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       load: value => isNullable(value) ? value : +Buffer.from(value),
       initial: 0,
     },
+    text2: 'string2',
   }
 
   const baseObject = {
@@ -510,6 +520,13 @@ namespace ModelOperations {
     it('recursive type', async () => {
       const table = await setup(database, 'recurxs', [{ id: 1, y: { id: 2, x: { id: 3, y: { id: 4, x: { id: 5 } } } } }])
       await expect(database.get('recurxs', {})).to.eventually.have.deep.members(table)
+    })
+
+    it('customized string type', async () => {
+      await setup(database, 'dtypes', dtypeTable)
+      await database.set('dtypes', 1, { text2: 'foo' })
+      await expect(database.eval('dtypes', row => $.array(row.text2))).to.eventually.contain('foo')
+      await expect(database.get('dtypes', row => $.eq(row.text2, $.literal('foo', 'string2')))).to.eventually.have.length(1)
     })
   }
 
