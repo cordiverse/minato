@@ -42,16 +42,16 @@
     "postgresql"
   ],
   "peerDependencies": {
-    "minato": "^3.6.0"
+    "minato": "^3.6.1"
   },
   "devDependencies": {
     "@minatojs/tests": "^2.6.0",
     "cordis": "^3.18.1",
-    "minato": "^3.6.0"
+    "minato": "^3.6.1"
   },
   "dependencies": {
     "@minatojs/sql-utils": "^5.5.0",
-    "cosmokit": "^1.6.2",
+    "cosmokit": "^1.6.3",
     "postgres": "^3.4.4"
   }
 }

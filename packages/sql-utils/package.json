@@ -44,9 +44,9 @@
     "cordis": "^3.18.1"
   },
   "peerDependencies": {
-    "minato": "^3.6.0"
+    "minato": "^3.6.1"
   },
   "dependencies": {
-    "cosmokit": "^1.6.2"
+    "cosmokit": "^1.6.3"
   }
 }
