@@ -85,15 +85,15 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   static readonly migrate = Symbol('minato.migrate')
 
   public tables: Dict<Model> = Object.create(null)
-  public drivers: Driver<any, C>[] = []
+  public drivers: Driver<Driver.Config, C>[] = []
   public types: Dict<Field.Transform> = Object.create(null)
 
-  private _driver: Driver<any, C> | undefined
+  private _driver: Driver<Driver.Config, C> | undefined
   private stashed = new Set<string>()
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   public migrateTasks: Dict<Promise<void>> = Object.create(null)
 
-  async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
+  async connect<T extends Driver.Config = Driver.Config>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
     this.ctx.plugin(driver, args[0] as any)
     await this.ctx.start()
   }
@@ -109,7 +109,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await Promise.all(Object.values(this.prepareTasks))
   }
 
-  private getDriver(table: string | Selection): Driver<any, C> {
+  private getDriver(table: string | Selection): Driver<Driver.Config, C> {
     if (Selection.is(table)) return table.driver as any
     const model: Model = this.tables[table]
     if (!model) throw new Error(`cannot resolve table "${table}"`)
@@ -602,12 +602,14 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
   async drop<K extends Keys<S>>(table: K) {
     if (this[Database.transact]) throw new Error('cannot drop table in transaction')
-    await this.getDriver(table).drop(table)
+    const driver = this.getDriver(table)
+    if (driver.config.readonly) throw new Error('cannot drop table in read-only mode')
+    await driver.drop(table)
   }
 
   async dropAll() {
     if (this[Database.transact]) throw new Error('cannot drop table in transaction')
-    await Promise.all(Object.values(this.drivers).map(driver => driver.dropAll()))
+    await Promise.all(Object.values(this.drivers).filter(driver => !driver.config.readonly).map(driver => driver.dropAll()))
   }
 
   async stats() {

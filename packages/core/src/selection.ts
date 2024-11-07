@@ -146,6 +146,9 @@ class Executable<S = any, T = any> {
   }
 
   async execute(): Promise<T> {
+    if (this.driver.config.readonly && !['get', 'eval'].includes(this.type)) {
+      throw new Error(`database is in read-only mode`)
+    }
     await this.driver.database.prepared()
     await this.driver._ensureSession()
     return this.driver[this.type as any](this, ...this.args)

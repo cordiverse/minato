@@ -233,8 +233,18 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     }
 
     if (!columns.length) {
+      if (this.config.readonly || this.config.migrateStrategy === 'never') {
+        throw new Error(`immutable table ${name} cannot be created`)
+      }
       this.logger.info('auto creating table %c', name)
       return this.query(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}) COLLATE = ${this.sql.escape(this.config.charset ?? 'utf8mb4_general_ci')}`)
+    }
+
+    if (this.config.readonly || this.config.migrateStrategy !== 'auto') {
+      if (create.length || update.length) {
+        throw new Error(`immutable table ${name} cannot be migrated`)
+      }
+      return
     }
 
     const operations = [
@@ -593,7 +603,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 }
 
 export namespace MySQLDriver {
-  export interface Config extends PoolConfig {}
+  export interface Config extends Driver.Config, PoolConfig {}
 
   export const Config: z<Config> = z.intersect([
     z.object({
@@ -602,8 +612,6 @@ export namespace MySQLDriver {
       user: z.string().default('root'),
       password: z.string().role('secret'),
       database: z.string().required(),
-    }),
-    z.object({
       ssl: z.union([
         z.const(undefined),
         z.object({
@@ -630,11 +638,12 @@ export namespace MySQLDriver {
           sessionTimeout: z.number(),
         }),
       ]) as any,
+    }).i18n({
+      'en-US': enUS,
+      'zh-CN': zhCN,
     }),
-  ]).i18n({
-    'en-US': enUS,
-    'zh-CN': zhCN,
-  })
+    Driver.Config,
+  ])
 }
 
 export default MySQLDriver

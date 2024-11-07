@@ -1,11 +1,13 @@
 import { Awaitable, deepEqual, defineProperty, Dict, mapValues, remove } from 'cosmokit'
-import { Context, Logger, Service } from 'cordis'
+import { Context, Logger, Service, z } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
 import { Database } from './database.ts'
 import { Type } from './type.ts'
 import { FlatKeys, Keys, Values } from './utils.ts'
+import enUS from './locales/en-US.yml'
+import zhCN from './locales/zh-CN.yml'
 
 export namespace Driver {
   export interface Stats {
@@ -52,10 +54,10 @@ export namespace Driver {
 }
 
 export namespace Driver {
-  export type Constructor<T> = new (ctx: Context, config: T) => Driver<T>
+  export type Constructor<T extends Driver.Config> = new (ctx: Context, config: T) => Driver<T>
 }
 
-export abstract class Driver<T = any, C extends Context = Context> {
+export abstract class Driver<T extends Driver.Config = Driver.Config, C extends Context = Context> {
   static inject = ['model']
 
   abstract start(): Promise<void>
@@ -165,18 +167,34 @@ export abstract class Driver<T = any, C extends Context = Context> {
   async _ensureSession() {}
 
   async prepareIndexes(table: string) {
-    const oldIndexes = await this.getIndexes(table)
     const { indexes } = this.model(table)
+    if (this.config.migrateStrategy === 'never' || this.config.readonly) return
+    const oldIndexes = await this.getIndexes(table)
     for (const index of indexes) {
       const oldIndex = oldIndexes.find(info => info.name === index.name)
       if (!oldIndex) {
         await this.createIndex(table, index)
-      } else if (!deepEqual(oldIndex, index)) {
+      } else if (this.config.migrateStrategy === 'auto' && !deepEqual(oldIndex, index)) {
         await this.dropIndex(table, index.name!)
         await this.createIndex(table, index)
       }
     }
   }
+}
+
+export namespace Driver {
+  export interface Config {
+    readonly?: boolean
+    migrateStrategy?: 'auto' | 'create' | 'never'
+  }
+
+  export const Config: z<Config> = z.object({
+    readonly: z.boolean().default(false),
+    migrateStrategy: z.union([z.const('auto'), z.const('create'), z.const('never')]).default('auto'),
+  }).i18n({
+    'en-US': enUS,
+    'zh-CN': zhCN,
+  })
 }
 
 export interface MigrationHooks {

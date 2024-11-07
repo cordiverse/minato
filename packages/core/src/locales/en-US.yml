@@ -1,0 +1,3 @@
+$description: Access settings
+readonly: Connect in read-only mode.
+migrateStrategy: Table migration strategy.

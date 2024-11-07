@@ -1,0 +1,3 @@
+$description: 访问设置
+readonly: 以只读模式连接。
+migrateStrategy: 表迁移策略。

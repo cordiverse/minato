@@ -112,9 +112,18 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       }))
     }
 
+    if (this.config.readonly || this.config.migrateStrategy === 'never') {
+      if (!columns.length || shouldMigrate || alter.length) {
+        throw new Error(`immutable table ${table} cannot be migrated`)
+      }
+      return
+    }
+
     if (!columns.length) {
       this.logger.info('auto creating table %c', table)
       this._run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
+    } else if (this.config.migrateStrategy === 'create') {
+      throw new Error(`immutable table ${table} cannot be migrated`)
     } else if (shouldMigrate) {
       // preserve old columns
       for (const { name, type, notnull, pk, dflt_value: value } of columns) {
@@ -482,16 +491,19 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 }
 
 export namespace SQLiteDriver {
-  export interface Config {
+  export interface Config extends Driver.Config {
     path: string
   }
 
-  export const Config: z<Config> = z.object({
-    path: z.string().role('path').required(),
-  }).i18n({
-    'en-US': enUS,
-    'zh-CN': zhCN,
-  })
+  export const Config: z<Config> = z.intersect([
+    z.object({
+      path: z.string().role('path').required(),
+    }).i18n({
+      'en-US': enUS,
+      'zh-CN': zhCN,
+    }),
+    Driver.Config,
+  ])
 }
 
 export default SQLiteDriver

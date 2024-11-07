@@ -237,8 +237,18 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     }
 
     if (!columns.length) {
+      if (this.config.readonly || this.config.migrateStrategy === 'never') {
+        throw new Error(`immutable table ${name} cannot be created`)
+      }
       this.logger.info('auto creating table %c', name)
       return this.query<any>(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}, _pg_mtime BIGINT)`)
+    }
+
+    if (this.config.readonly || this.config.migrateStrategy !== 'auto') {
+      if (create.length || update.length) {
+        throw new Error(`immutable table ${name} cannot be migrated`)
+      }
+      return
     }
 
     const operations = [
@@ -522,7 +532,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 }
 
 export namespace PostgresDriver {
-  export interface Config<T extends Record<string, postgres.PostgresType> = {}> extends postgres.Options<T> {
+  export interface Config<T extends Record<string, postgres.PostgresType> = {}> extends Driver.Config, postgres.Options<T> {
     host: string
     port: number
     user: string
@@ -530,16 +540,19 @@ export namespace PostgresDriver {
     database: string
   }
 
-  export const Config: z<Config> = z.object({
-    host: z.string().default('localhost'),
-    port: z.natural().max(65535).default(5432),
-    user: z.string().default('root'),
-    password: z.string().role('secret'),
-    database: z.string().required(),
-  }).i18n({
-    'en-US': enUS,
-    'zh-CN': zhCN,
-  })
+  export const Config: z<Config> = z.intersect([
+    z.object({
+      host: z.string().default('localhost'),
+      port: z.natural().max(65535).default(5432),
+      user: z.string().default('root'),
+      password: z.string().role('secret'),
+      database: z.string().required(),
+    }).i18n({
+      'en-US': enUS,
+      'zh-CN': zhCN,
+    }),
+    Driver.Config,
+  ])
 }
 
 export default PostgresDriver
