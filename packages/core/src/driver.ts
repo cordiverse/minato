@@ -1,5 +1,5 @@
 import { Awaitable, deepEqual, defineProperty, Dict, mapValues, remove } from 'cosmokit'
-import { Context, Logger, Service } from 'cordis'
+import { Context, Service } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
@@ -76,12 +76,10 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract dropIndex(table: string, name: string): Promise<void>
 
   public database: Database<any, any, C>
-  public logger: Logger
   public types: Dict<Driver.Transformer> = Object.create(null)
 
   constructor(public ctx: C, public config: T) {
     this.database = ctx.model
-    this.logger = ctx.logger(this.constructor.name)
 
     ctx.on('ready', async () => {
       await Promise.resolve()

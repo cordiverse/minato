@@ -77,10 +77,7 @@ function mergeQuery<T>(base: Query.FieldExpr<T>, query: Query.Expr<Flatten<T>> |
   }
 }
 
-export class Database<S = {}, N = {}, C extends Context = Context> extends Service<undefined, C> {
-  static [Service.provide] = 'model'
-  static [Service.immediate] = true
-
+export class Database<S = {}, N = {}, C extends Context = Context> extends Service<C> {
   static readonly transact = Symbol('minato.transact')
   static readonly migrate = Symbol('minato.migrate')
 
@@ -93,9 +90,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   public migrateTasks: Dict<Promise<void>> = Object.create(null)
 
+  constructor(ctx: C) {
+    super(ctx, 'model')
+  }
+
   async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
-    this.ctx.plugin(driver, args[0] as any)
-    await this.ctx.start()
+    await this.ctx.plugin(driver, args[0] as any)
   }
 
   refresh() {

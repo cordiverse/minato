@@ -1,9 +1,7 @@
 import { $, Database, Driver, Primary } from 'minato'
-import { Context, ForkScope, Logger } from 'cordis'
+import { Context, EffectScope } from 'cordis'
 import MongoDriver from '@minatojs/driver-mongo'
 import { expect } from '@minatojs/tests'
-
-const logger = new Logger('mongo')
 
 interface Foo {
   id?: number
@@ -40,7 +38,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   ctx.plugin(Database)
 
   const database = ctx.model as Database<Tables>
-  let fork: ForkScope
+  let fork: EffectScope<Context> | undefined
 
   const resetConfig = async (optimizeIndex: boolean) => {
     fork?.dispose()
@@ -56,8 +54,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   before(() => ctx.start())
 
   beforeEach(async () => {
-    logger.level = 3
-    fork = ctx.plugin(MongoDriver, {
+    fork = ctx.intercept('logger', { level: 3 }).plugin(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
@@ -69,7 +66,6 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   afterEach(async () => {
     await database.dropAll()
     fork?.dispose()
-    logger.level = 2
   })
 
   it('reset optimizeIndex', async () => {

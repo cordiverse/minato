@@ -36,8 +36,6 @@ declare module 'cordis' {
   }
 }
 
-export { Logger, Schema, Schema as z } from 'cordis'
-
 export const Types = Symbol('minato.types')
 export interface Types {}
 
