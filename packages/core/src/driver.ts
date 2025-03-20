@@ -56,7 +56,7 @@ export namespace Driver {
 }
 
 export abstract class Driver<T = any, C extends Context = Context> {
-  static inject = ['model']
+  static inject = ['minato']
 
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
@@ -75,36 +75,27 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract createIndex(table: string, index: Driver.Index): Promise<void>
   abstract dropIndex(table: string, name: string): Promise<void>
 
-  public database: Database<any, any, C>
   public types: Dict<Driver.Transformer> = Object.create(null)
 
-  constructor(public ctx: C, public config: T) {
-    this.database = ctx.model
+  constructor(public ctx: C, public config: T) {}
 
-    ctx.on('ready', async () => {
-      await Promise.resolve()
-      await this.start()
-      ctx.model.drivers.push(this)
-      ctx.model.refresh()
-      const database = Object.create(ctx.model) // FIXME use original model
-      defineProperty(database, 'ctx', ctx)
-      database._driver = this
-      database[Service.tracker] = {
-        associate: 'database',
-        property: 'ctx',
-      }
-      ctx.set('database', Context.associate(database, 'database'))
+  async* [Context.init]() {
+    this.ctx.minato.drivers.push(this)
+    yield () => remove(this.ctx.minato.drivers, this)
+    this.ctx.minato.refresh()
+    const database: Database = Object.create(this.ctx.minato) // FIXME use original model
+    defineProperty(database, 'ctx', this.ctx)
+    defineProperty(database, Service.tracker, {
+      associate: 'database',
+      property: 'ctx',
     })
-
-    ctx.on('dispose', async () => {
-      remove(ctx.model.drivers, this)
-      await this.stop()
-    })
+    defineProperty(database, '_driver', this)
+    this.ctx.set('database', database)
   }
 
   model<S = any>(table: string | Selection.Immutable | Dict<string | Selection.Immutable>): Model<S> {
     if (typeof table === 'string') {
-      const model = this.database.tables[table]
+      const model = this.ctx.minato.tables[table]
       if (model) return model
       throw new TypeError(`unknown table name "${table}"`)
     }
@@ -141,7 +132,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
   }
 
   protected async migrate(name: string, hooks: MigrationHooks) {
-    const database = this.database.makeProxy(Database.migrate)
+    const database = this.ctx.minato.makeProxy(Database.migrate)
     const model = this.model(name)
     await (database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
       return Promise.all([...model.migrations].map(async ([migrate, keys]) => {

@@ -37,7 +37,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   const ctx = new Context()
   ctx.plugin(Database)
 
-  const database = ctx.model as Database<Tables>
+  const database = ctx.minato as Database<Tables>
   let fork: EffectScope<Context> | undefined
 
   const resetConfig = async (optimizeIndex: boolean) => {

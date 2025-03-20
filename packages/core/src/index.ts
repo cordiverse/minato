@@ -12,7 +12,7 @@ export * from './utils.ts'
 
 declare module 'cordis' {
   interface Events {
-    'model'(name: string): void
+    'minato/model'(name: string): void
   }
 
   interface Context {
@@ -20,7 +20,7 @@ declare module 'cordis' {
     [Tables]: Tables
     [Context.Minato]: Context.Minato<this>
     [Context.Database]: Context.Database<this>
-    model: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Minato]
+    minato: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Minato]
     database: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Database]
   }
 
@@ -36,10 +36,10 @@ declare module 'cordis' {
   }
 }
 
-export const Types = Symbol('minato.types')
+export const Types = Symbol.for('minato.types')
 export interface Types {}
 
-export const Tables = Symbol('minato.tables')
+export const Tables = Symbol.for('minato.tables')
 export interface Tables {}
 
 export default Database

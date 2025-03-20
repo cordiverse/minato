@@ -146,7 +146,7 @@ class Executable<S = any, T = any> {
   }
 
   async execute(): Promise<T> {
-    await this.driver.database.prepared()
+    await this.driver.ctx.minato.prepared()
     await this.driver._ensureSession()
     return this.driver[this.type as any](this, ...this.args)
   }
@@ -272,11 +272,11 @@ export class Selection<S = any> extends Executable<S, S[]> {
         (row) => Field.available(this.model.fields[`${name}.${key}`]) ? getCell(row[this.ref], `${name}.${key}`) : getCell(row[name], key),
       ]))
     if (optional) {
-      return this.driver.database
+      return this.driver.ctx.minato
         .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]), { [this.ref]: false, [name]: true })
         .project({ ...fields, [name]: (row) => Eval.ignoreNull(Eval.object(mapValues(joinFields, x => x(row)))) }) as any
     } else {
-      return this.driver.database
+      return this.driver.ctx.minato
         .join({ [this.ref]: this as Selection, [name]: selection }, (t: any) => callback(t[this.ref], t[name]))
         .project({ ...fields, [name]: (row) => Eval.ignoreNull(Eval.object(mapValues(joinFields, x => x(row)))) }) as any
     }

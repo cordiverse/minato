@@ -7,6 +7,7 @@ import { Driver } from './driver.ts'
 import { Eval, isUpdateExpr, Update } from './eval.ts'
 import { Query } from './query.ts'
 import { Type } from './type.ts'
+import { Tables, Types } from './index.ts'
 
 type TableLike<S> = Keys<S> | Selection
 
@@ -77,9 +78,21 @@ function mergeQuery<T>(base: Query.FieldExpr<T>, query: Query.Expr<Flatten<T>> |
   }
 }
 
+export namespace Database {
+  export interface Intercept<C extends Context = Context> {
+    tables: Intercept.Tables<C[typeof Tables], C[typeof Types]>
+  }
+
+  export namespace Intercept {
+    export type Tables<S, N> = (keyof S)[] | {
+      [K in keyof S]?: Model.Intercept<S[K], N>
+    }
+  }
+}
+
 export class Database<S = {}, N = {}, C extends Context = Context> extends Service<C> {
-  static readonly transact = Symbol('minato.transact')
-  static readonly migrate = Symbol('minato.migrate')
+  static readonly transact = Symbol.for('minato.transact')
+  static readonly migrate = Symbol.for('minato.migrate')
 
   public tables: Dict<Model> = Object.create(null)
   public drivers: Driver<any, C>[] = []
@@ -198,7 +211,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       : keys.map(key => model.fields[key]!.relation?.fields || key).flat())
 
     this.prepareTasks[name] = this.prepare(name)
-    ;(this.ctx as Context).emit('model', name)
+    ;(this.ctx as Context).emit('minato/model', name)
   }
 
   private _parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {

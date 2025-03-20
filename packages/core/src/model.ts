@@ -252,6 +252,11 @@ export namespace Model {
       [P in K]?: [string, string]
     }
   }
+
+  export interface Intercept<S, N> extends Partial<Config<FlatKeys<S>>> {
+    create?: boolean
+    fields: Field.Extension<S, N>
+  }
 }
 
 export interface Model extends Model.Config {}
