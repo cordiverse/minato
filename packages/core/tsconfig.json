@@ -3,9 +3,6 @@
   "compilerOptions": {
     "rootDir": "src",
     "outFile": "lib/index.d.ts",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "allowImportingTsExtensions": true,
   },
   "include": [
     "src",

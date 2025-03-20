@@ -1,23 +1,12 @@
 {
   "name": "@minatojs/driver-sqlite",
-  "version": "4.6.0",
+  "version": "5.0.0-alpha.0",
   "description": "SQLite Driver for Minato",
   "type": "module",
-  "main": "lib/index.cjs",
-  "module": "lib/index.mjs",
-  "typings": "lib/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/index.mjs",
-      "require": "./lib/index.cjs"
-    },
-    "./src/*": "./src/*",
-    "./package.json": "./package.json"
-  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "files": [
-    "lib",
-    "src"
+    "lib"
   ],
   "author": "Shigma <shigma10826@gmail.com>",
   "license": "MIT",
@@ -37,16 +26,16 @@
     "sqlite"
   ],
   "peerDependencies": {
-    "minato": "^3.6.1"
+    "minato": "^4.0.0-alpha.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^2.6.0",
-    "cordis": "^3.18.1",
-    "minato": "^3.6.1"
+    "@minatojs/tests": "^3.0.0-alpha.0",
+    "cordis": "^4.0.0-alpha.7",
+    "minato": "^4.0.0-alpha.0"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^5.5.0",
+    "@minatojs/sql-utils": "^6.0.0-alpha.0",
     "@minatojs/sql.js": "^3.1.0",
-    "cosmokit": "^1.6.3"
+    "cosmokit": "^1.7.4"
   }
 }
