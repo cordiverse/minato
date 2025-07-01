@@ -113,9 +113,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         // so we cannot simply use `{ $ne: null }` to filter out null values
         // below is a workaround for https://github.com/koishijs/koishi/issues/893
         ...(nullable || index > unique.length) ? {} : {
-          partialFilterExpression: Object.fromEntries(keys.map((key) => [key, {
-            $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
-          }])),
+          sparse: true,
         },
       })
     })
