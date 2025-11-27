@@ -1,4 +1,4 @@
-import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError, ObjectId } from 'mongodb'
+import { ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError, ObjectId } from 'mongodb'
 import { Binary, deepEqual, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
@@ -517,9 +517,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       name: index.name,
       unique: !!index.unique,
       ...nullable ? {} : {
-        partialFilterExpression: Object.fromEntries(Object.keys(index.keys).map((key) => [key, {
-          $type: [BSONType.date, BSONType.int, BSONType.long, BSONType.string, BSONType.objectId],
-        }])),
+        sparse: true,
       },
     })
   }
