@@ -85,6 +85,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
       regex: 'string',
     }, {
       autoInc: true,
+      unique: ['id'],
     })
 
     const table: Foo[] = []

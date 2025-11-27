@@ -1,5 +1,5 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError, ObjectId } from 'mongodb'
-import { Binary, Dict, isNullable, makeArray, mapValues, noop, omit, pick, remove } from 'cosmokit'
+import { Binary, deepEqual, Dict, isNullable, makeArray, mapValues, noop, omit, pick, remove } from 'cosmokit'
 import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
 import { URLSearchParams } from 'url'
 import { Builder } from './builder'
@@ -107,6 +107,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
       // if the index is already created, skip it
       keys = makeArray(keys)
+      if (index && deepEqual(keys, makeArray(primary))) return
       const name = (index ? 'unique:' : 'primary:') + keys.join('+')
       if (oldSpecs.find(spec => spec.name === name)) return
 
@@ -371,8 +372,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       const coll = this.db.collection(table)
 
       const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-      const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
-        (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
+      const $set = mapValues(update, (item: any, key) => transformer.toUpdateExpr(item, model.getType(key)))
       const $unset = Object.entries($set)
         .filter(([_, value]) => typeof value === 'object')
         .map(([key, _]) => key)
@@ -489,8 +489,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
         const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-        const $set = this.builder.formatUpdateAggr(model.getType(), mapValues(this.builder.dump(update, model),
-          (value: any) => typeof value === 'string' && value.startsWith('$') ? { $literal: value } : transformer.eval(value)))
+        const $set = mapValues(update, (item: any, key) => transformer.toUpdateExpr(item, model.getType(key)))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)
