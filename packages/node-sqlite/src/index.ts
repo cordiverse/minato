@@ -169,19 +169,18 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const DatabaseSync = await import('node:sqlite').then((m) => m.DatabaseSync)
       .catch(e => {
         if (e.toString().includes('ERR_UNKNOWN_BUILTIN_MODULE')) {
-          throw new Error('The sqlite3 module is currently experimental. You have to install Node.JS 22.5+ and run it with --experimental-sqlite to use it.')
+          throw new Error('The sqlite3 module is currently experimental. You have to install Node.JS 22.13+ to use it.')
         } else {
           throw e
         }
       })
 
     this.db = new DatabaseSync(this.path)
-    // TODO: implement create function after https://github.com/nodejs/node/issues/54349 is resolved
-    // this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
-    // this.db.create_function('regexp2', (pattern, str, flags) => +new RegExp(pattern, flags).test(str))
-    // this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
-    // this.db.create_function('modulo', (left, right) => left % right)
-    // this.db.create_function('rand', () => Math.random())
+    this.db.function('regexp', (pattern: string, str: string) => +new RegExp(pattern).test(str))
+    this.db.function('regexp2', (pattern: string, str: string, flags: string) => +new RegExp(pattern, flags).test(str))
+    this.db.function('json_array_contains', (array: string, value: string) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
+    this.db.function('modulo', (left: number, right: number) => left % right)
+    this.db.function('rand', () => Math.random())
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -207,7 +206,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       load: value => isNullable(value) ? value : new Date(Number(value)),
     })
 
-    this.define<ArrayBuffer, ArrayBuffer>({
+    this.define<ArrayBufferLike, ArrayBufferView>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : new Uint8Array(value),
       load: value => isNullable(value) ? value : Binary.fromSource(value),
@@ -278,9 +277,8 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async stats() {
-    // TODO: properly estimate size
     const stats: Driver.Stats = { size: 100, tables: {} }
-    const tableNames: { name: string }[] = this._all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
+    const tableNames: { name: string }[] = this._all(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;`)
     const dbstats: { name: string; size: number }[] = this._all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
     tableNames.forEach(tbl => {
       stats.tables[tbl.name] = this._get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)
