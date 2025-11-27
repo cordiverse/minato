@@ -23,6 +23,7 @@ interface Bar {
     }
   }
   l: string[]
+  la: string[]
 }
 
 interface Baz {
@@ -61,6 +62,10 @@ function JsonTests(database: Database<Tables>) {
     obj: 'json',
     s: 'string',
     l: 'list',
+    la: {
+      type: 'array',
+      inner: 'string',
+    },
   }, {
     autoInc: true,
   })
@@ -100,9 +105,9 @@ function JsonTests(database: Database<Tables>) {
     ])
 
     await setup(database, 'bar', [
-      { uid: 1, pid: 1, value: 0, obj: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } }, s: '1', l: ['1', '2'] },
-      { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2', l: ['5', '3', '4'] },
-      { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3', l: ['2'] },
+      { uid: 1, pid: 1, value: 0, obj: { x: 1, y: 'a', z: '1', o: { a: 1, b: '1' } }, s: '1', l: ['1', '2'], la: ['a', 'b'] },
+      { uid: 1, pid: 1, value: 1, obj: { x: 2, y: 'b', z: '2', o: { a: 2, b: '2' } }, s: '2', l: ['5', '3', '4'], la: ['b', 'c'] },
+      { uid: 1, pid: 2, value: 0, obj: { x: 3, y: 'c', z: '3', o: { a: 3, b: '3' } }, s: '3', l: ['2'], la: ['c'] },
     ])
 
     await setup(database, 'baz', [
@@ -157,20 +162,65 @@ namespace JsonTests {
         { id: 1, nums: [4, 5, 6] },
         { id: 2, nums: [5, 6, 7] },
       ])
+
+      await expect(database.get('bar', {
+        l: { $el: '4' },
+      })).to.eventually.have.shape([
+        { uid: 1, pid: 1, value: 1 },
+      ])
+
+      await expect(database.get('bar', {
+        la: { $el: 'b' },
+      })).to.eventually.have.shape([
+        { uid: 1, pid: 1, value: 0 },
+        { uid: 1, pid: 1, value: 1 },
+      ])
     })
 
     it('$in', async () => {
+      await expect(database.get('bar', {
+        s: { $in: ['1', '2'] }
+      }))
+        .to.eventually.have.shape([
+          { uid: 1, pid: 1, value: 0 },
+          { uid: 1, pid: 1, value: 1 },
+        ])
+    })
+
+    it('$.in', async () => {
       await expect(database.get('baz', row => $.in($.add(3, row.id), row.nums)))
         .to.eventually.deep.equal([
           { id: 1, nums: [4, 5, 6] },
           { id: 2, nums: [5, 6, 7] },
         ])
+
+      await expect(database.get('bar', row => $.in('4', row.l)))
+        .to.eventually.have.shape([
+          { uid: 1, pid: 1, value: 1 },
+        ])
+
+      await expect(database.get('bar', row => $.in('b', row.la)))
+        .to.eventually.have.shape([
+          { uid: 1, pid: 1, value: 0 },
+          { uid: 1, pid: 1, value: 1 },
+        ])
     })
 
-    it('$nin', async () => {
+    it('$.nin', async () => {
       await expect(database.get('baz', row => $.nin($.add(3, row.id), row.nums)))
         .to.eventually.deep.equal([
           { id: 3, nums: [7, 8] },
+        ])
+
+      await expect(database.get('bar', row => $.nin('4', row.l)))
+        .to.eventually.have.shape([
+          { uid: 1, pid: 1, value: 0 },
+          { uid: 1, pid: 2, value: 0 },
+        ])
+
+      await expect(database.get('bar', row => $.nin('b', row.la)))
+        .to.eventually.have.shape([
+          { uid: 1, pid: 2, value: 0 },
         ])
     })
 
@@ -264,6 +314,30 @@ namespace JsonTests {
       })
       await expect(database.get('bax', 1)).to.eventually.deep.equal([
         { id: 1, array: [{ text: 'foo2' }], object: { num: 2 } },
+      ])
+    })
+
+    it('$.literal with empty object', async () => {
+      await setup(database, 'bax', Bax)
+
+      await database.set('bax', 1, {
+        object: {
+          num: 2
+        }
+      })
+
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo' }], object: { num: 2 } },
+      ])
+
+      await database.set('bax', 1, {
+        object: {
+
+        }
+      })
+
+      await expect(database.get('bax', 1)).to.eventually.deep.equal([
+        { id: 1, array: [{ text: 'foo' }], object: {} },
       ])
     })
 
