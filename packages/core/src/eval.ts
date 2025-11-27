@@ -277,10 +277,7 @@ Eval.xor = multary('xor', (args, data) => {
 }, (...args) => Type.fromTerms(args, Type.Boolean))
 
 // typecast
-Eval.literal = multary('literal', ([value, type]) => {
-  if (type) throw new TypeError('literal cast is not supported')
-  else return value
-}, (value, type) => type ? Type.fromField(type) : Type.fromTerm(value))
+Eval.literal = multary('literal', ([value, type]) => value, (value, type) => type ? Type.fromField(type) : Type.fromTerm(value))
 Eval.number = unary('number', (arg, data) => {
   const value = executeEval(data, arg)
   return value instanceof Date ? Math.floor(value.valueOf() / 1000) : Number(value)

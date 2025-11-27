@@ -58,7 +58,9 @@ export namespace Type {
   // FIXME: Type | Field<T> | Field.Type<T> | Keys<N, T> | Field.NewType<T>
   export function fromField<T, N>(field: any): Type<T, N> {
     if (isType(field)) return field
-    if (typeof field === 'string') return defineProperty({ type: field }, kType, true) as never
+    else if (field === 'array') return Array() as never
+    else if (field === 'object') return Object() as never
+    else if (typeof field === 'string') return defineProperty({ type: field }, kType, true) as never
     else if (field.type) return field.type
     else if (field.expr?.[kType]) return field.expr[kType]
     throw new TypeError(`invalid field: ${field}`)
