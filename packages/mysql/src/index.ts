@@ -354,7 +354,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   }
 
   async dropAll() {
-    const data = await this._select('information_schema.tables', ['TABLE_NAME'], 'TABLE_SCHEMA = ?', [this.config.database])
+    const data = await this._select('information_schema.tables', ['TABLE_NAME'], 'TABLE_SCHEMA = ? AND TABLE_TYPE = ?', [this.config.database, 'BASE TABLE'])
     if (!data.length) return
     await this.query([
       'SET foreign_key_checks = 0',
@@ -364,7 +364,9 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   }
 
   async stats() {
-    const data = await this._select('information_schema.tables', ['TABLE_NAME', 'TABLE_ROWS', 'DATA_LENGTH'], 'TABLE_SCHEMA = ?', [this.config.database])
+    const data = await this._select(
+      'information_schema.tables', ['TABLE_NAME', 'TABLE_ROWS', 'DATA_LENGTH'], 'TABLE_SCHEMA = ? AND TABLE_TYPE = ?', [this.config.database, 'BASE TABLE'],
+    )
     const stats: Partial<Driver.Stats> = { size: 0 }
     stats.tables = Object.fromEntries(data.map(({ TABLE_NAME: name, TABLE_ROWS: count, DATA_LENGTH: size }) => {
       stats.size! += +size
