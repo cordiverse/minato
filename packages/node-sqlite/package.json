@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-node-sqlite",
-  "version": "4.5.0",
+  "version": "1.0.0",
   "description": "node:sqlite Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
