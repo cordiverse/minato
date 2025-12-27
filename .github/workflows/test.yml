@@ -16,7 +16,7 @@ jobs:
           - mysql:5.7
           - mysql:8.0
           - mariadb:10.5
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     services:
       mysql:
@@ -37,6 +37,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -59,7 +61,7 @@ jobs:
           - postgres:16
           - postgres:15
           - postgres:14
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     services:
       postgres:
@@ -78,6 +80,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -99,7 +103,7 @@ jobs:
         mongo-image:
           - mongo:6.0
           - mongo:latest
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     services:
       mongo:
@@ -116,6 +120,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -136,7 +142,7 @@ jobs:
       matrix:
         mongo-version:
           - latest
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     steps:
       - name: Check out
@@ -151,6 +157,8 @@ jobs:
           mongodb-version: ${{ matrix.mongo-version }}
           mongodb-replica-set: test-rs
           mongodb-port: 27017
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -170,7 +178,7 @@ jobs:
       fail-fast: false
       matrix:
         driver-name: [sqlite, memory]
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     steps:
       - name: Check out
@@ -179,6 +187,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
