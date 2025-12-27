@@ -212,9 +212,30 @@ export class PostgresBuilder extends Builder {
 
   protected createElementQuery(key: string, value: any) {
     if (this.isJsonQuery(key)) {
-      return this.jsonContains(key, this.encode(value, true, true))
+      const type = Type.getInner(Type.fromTerm(this.state.expr))
+      return this.jsonContains(key, this.encode(`${this.escapePrimitive(value, type)}::${this.transformType(type)}`, true, true))
     } else {
       return `${key} && ARRAY['${value}']::TEXT[]`
+    }
+  }
+
+  protected createMemberQuery(key: string, value: any, notStr = '') {
+    if (Array.isArray(value)) {
+      if (!value.length) return notStr ? this.$true : this.$false
+      if (Array.isArray(value[0])) {
+        return `(${key})${notStr} in (${value.map((val: any[]) => `(${val.map(x => this.escape(x)).join(', ')})`).join(', ')})`
+      }
+      return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+    } else if (value.$exec) {
+      return `(${key})${notStr} in ${this.parseSelection(value.$exec, true)}`
+    } else if (Type.fromTerm(value)?.type === 'list') {
+      const res = this.listContains(this.parseEval(value), key)
+      return notStr ? this.logicalNot(res) : res
+    } else {
+      const obj = this.parseEval(value, false)
+      const type = Type.getInner(Type.fromTerm(this.state.expr))
+      const res = this.jsonContains(obj, this.encode(`${key}::${this.transformType(type)}`, true, true))
+      return notStr ? this.logicalNot(res) : res
     }
   }
 
@@ -230,6 +251,10 @@ export class PostgresBuilder extends Builder {
 
   protected transformJsonField(obj: string, path: string) {
     return this.asEncoded(`jsonb_extract_path(${obj}, ${path.slice(1).replaceAll('.', ',')})`, true)
+  }
+
+  protected listContains(list: any, value: string) {
+    return this.asEncoded(`(${list} @> ARRAY[${value}])`, false)
   }
 
   protected jsonLength(value: string) {
