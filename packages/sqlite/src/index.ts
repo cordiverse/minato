@@ -351,7 +351,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async set(sel: Selection.Mutable, update: {}) {
     const { model, table, query } = sel
-    const { primary } = model, fields = model.avaiableFields()
+    const { primary } = model, fields = model.availableFields()
     const updateFields = [...new Set(Object.keys(update).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -400,7 +400,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, ref } = sel
-    const fields = model.avaiableFields()
+    const fields = model.availableFields()
     const result = { inserted: 0, matched: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!

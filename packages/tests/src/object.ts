@@ -43,7 +43,7 @@ namespace ObjectOperations {
       const table = await setup(database)
       table.push(await database.create('object', { id: '2', meta: { embed: { b: 999 } } }))
       expect(table[table.length - 1]).to.deep.equal({
-        id: '2', meta: { a: '666', embed: { b: 999 } }
+        id: '2', meta: { a: '666', embed: { b: 999 } },
       })
       await expect(database.get('object', {})).to.eventually.deep.equal(table)
     })
@@ -236,7 +236,7 @@ namespace ObjectOperations {
       }).execute()).to.eventually.have.deep.members([{ t: table[1].meta }])
     })
 
-    it('accumlate project', async () => {
+    it('accumulate project', async () => {
       const table = await setup(database)
       await expect(database.select('object', {
         'meta.a': '666',

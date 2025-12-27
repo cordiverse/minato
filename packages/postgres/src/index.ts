@@ -176,7 +176,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign } = table
-    const fields = { ...table.avaiableFields() }
+    const fields = { ...table.availableFields() }
     const unique = [...table.unique]
     const create: string[] = []
     const update: string[] = []
@@ -315,7 +315,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const { model, query, table, tables, ref } = sel
     const builder = new PostgresBuilder(this, tables)
     const filter = builder.parseQuery(query)
-    const fields = model.avaiableFields()
+    const fields = model.availableFields()
     if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
@@ -363,7 +363,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.avaiableFields())
+    const initFields = Object.keys(model.availableFields())
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]

@@ -437,7 +437,7 @@ export class Model<S = any> {
     return this.parse({ ...result, ...data })
   }
 
-  avaiableFields() {
+  availableFields() {
     return filterKeys(this.fields, (_, field) => Field.available(field))
   }
 
