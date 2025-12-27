@@ -117,7 +117,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       },
     })
 
-    this.define<ArrayBuffer, ArrayBuffer>({
+    this.define<ArrayBufferLike, ArrayBufferLike>({
       types: ['binary'],
       dump: value => value,
       load: value => isNullable(value) ? value : Binary.fromSource(value),

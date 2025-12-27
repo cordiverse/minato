@@ -223,7 +223,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       load: value => isNullable(value) ? value : new Date(Number(value)),
     })
 
-    this.define<ArrayBuffer, ArrayBuffer>({
+    this.define<ArrayBufferLike, ArrayBufferView>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : new Uint8Array(value),
       load: value => isNullable(value) ? value : Binary.fromSource(value),

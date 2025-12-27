@@ -38,7 +38,7 @@ interface DType {
   timestamp?: Date
   date?: Date
   time?: Date
-  binary?: ArrayBuffer
+  binary?: ArrayBufferView<ArrayBuffer> | ArrayBuffer
   bigint?: bigint
   bnum?: number
   bnum2?: number

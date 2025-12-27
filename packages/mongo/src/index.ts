@@ -69,7 +69,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
     })
 
-    this.define<ArrayBuffer, ArrayBuffer>({
+    this.define<ArrayBufferLike, ArrayBufferView>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : Buffer.from(value),
       load: (value: any) => isNullable(value) ? value : Binary.fromSource(value.buffer),
