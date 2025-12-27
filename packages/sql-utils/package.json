@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/sql-utils",
-  "version": "5.5.0",
+  "version": "5.6.0",
   "description": "SQL Utilities for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -44,7 +44,7 @@
     "cordis": "^3.18.1"
   },
   "peerDependencies": {
-    "minato": "^3.6.1"
+    "minato": "^3.7.0"
   },
   "dependencies": {
     "cosmokit": "^1.6.3"

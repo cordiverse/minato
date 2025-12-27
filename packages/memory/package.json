@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-memory",
-  "version": "3.6.0",
+  "version": "3.7.0",
   "description": "In-memory Driver for Minato",
   "type": "module",
   "main": "lib/index.cjs",
@@ -37,12 +37,12 @@
     "memory"
   ],
   "peerDependencies": {
-    "minato": "^3.6.1"
+    "minato": "^3.7.0"
   },
   "devDependencies": {
-    "@minatojs/tests": "^2.6.0",
+    "@minatojs/tests": "^2.7.0",
     "cordis": "^3.18.1",
-    "minato": "^3.6.1"
+    "minato": "^3.7.0"
   },
   "dependencies": {
     "cosmokit": "^1.6.3"

@@ -1,6 +1,6 @@
 {
   "name": "minato",
-  "version": "3.6.1",
+  "version": "3.7.0",
   "description": "Type Driven Database Framework",
   "type": "module",
   "main": "lib/index.cjs",
