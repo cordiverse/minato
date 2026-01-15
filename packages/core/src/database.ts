@@ -93,6 +93,11 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   public migrateTasks: Dict<Promise<void>> = Object.create(null)
 
+  constructor(ctx?: C) {
+    if (ctx) super(ctx)
+    else super()
+  }
+
   async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
     this.ctx.plugin(driver, args[0] as any)
     await this.ctx.start()
