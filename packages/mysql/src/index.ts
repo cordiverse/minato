@@ -499,10 +499,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   async withTransaction(callback: (session: any) => Promise<void>) {
     return new Promise<void>((resolve, reject) => {
       this.pool.getConnection((err, conn) => {
-        if (err) {
-          this.ctx.logger?.warn('getConnection failed: ', err)
-          return
-        }
+        if (err) return reject(err)
         conn.beginTransaction(() => callback(conn).then(
           () => conn.commit(() => resolve()),
           (e) => conn.rollback(() => reject(e)),
