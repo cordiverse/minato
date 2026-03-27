@@ -1,5 +1,5 @@
 import { $, Database, Driver, Primary } from 'minato'
-import { Context, EffectScope } from 'cordis'
+import { Context, Fiber } from 'cordis'
 import MongoDriver from '@minatojs/driver-mongo'
 import { expect } from '@minatojs/tests'
 
@@ -38,11 +38,11 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   ctx.plugin(Database)
 
   const database = ctx.minato as Database<Tables>
-  let fork: EffectScope<Context> | undefined
+  let fiber: Fiber<Context> | undefined
 
   const resetConfig = async (optimizeIndex: boolean) => {
-    fork?.dispose()
-    fork = ctx.plugin(MongoDriver, {
+    fiber?.dispose()
+    fiber = ctx.plugin(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
@@ -54,7 +54,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   before(() => ctx.start())
 
   beforeEach(async () => {
-    fork = ctx.intercept('logger', { level: 3 }).plugin(MongoDriver, {
+    fiber = ctx.intercept('logger', { level: 3 }).plugin(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
@@ -65,7 +65,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
 
   afterEach(async () => {
     await database.dropAll()
-    fork?.dispose()
+    fiber?.dispose()
   })
 
   it('reset optimizeIndex', async () => {

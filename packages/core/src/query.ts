@@ -19,7 +19,7 @@ export namespace Query {
     $in?: Extract<T, Indexable, T[]>
     $nin?: Extract<T, Indexable, T[]>
 
-    // arithmatic
+    // arithmetic
     $eq?: Extract<T, Comparable>
     $ne?: Extract<T, Comparable>
     $gt?: Extract<T, Comparable>

@@ -59,7 +59,7 @@ const createRow = (ref: string, expr = {}, prefix = '', model?: Model, intermedi
       type = Type.getInner(expr?.[Type.kType]) ?? Type.fromField('expr')
       return createRow(ref, Eval.get(expr as any, +key), '', model, Eval.get(expr as any, +key))
     } else if (Type.getInner(expr?.[Type.kType], key)) {
-      // type may conatins object layout
+      // type may contains object layout
       type = Type.getInner(expr?.[Type.kType], key)!
     } else if (field) {
       type = Type.fromField(field)

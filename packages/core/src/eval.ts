@@ -79,7 +79,7 @@ export namespace Eval {
     select(...args: Any[]): Expr<any[], false>
     query<T extends object>(row: Row<T>, query: Query.Expr<T>, expr?: Term<boolean>): Expr<boolean, false>
 
-    // univeral
+    // universal
     if<T extends Comparable, A extends boolean>(cond: Any<A>, vThen: Term<T, A>, vElse: Term<T, A>): Expr<T, A>
     ifNull<T extends Comparable, A extends boolean>(...args: Term<T, A>[]): Expr<T, A>
     switch<T, A extends boolean>(branches: Branch<T, A>[], vDefault: Term<T, A>): Expr<T, A>

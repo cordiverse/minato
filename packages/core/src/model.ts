@@ -66,21 +66,21 @@ export namespace Relation {
     return [field, reference].sort().join('_')
   }
 
-  export function parse(def: Definition, key: string, model: Model, relmodel: Model, subprimary?: boolean): [Config, Config] {
+  export function parse(def: Definition, key: string, model: Model, relModel: Model, subprimary?: boolean): [Config, Config] {
     const shared = !def.shared ? {}
       : typeof def.shared === 'string' ? { [def.shared]: def.shared }
         : Array.isArray(def.shared) ? Object.fromEntries(def.shared.map(x => [x, x]))
           : def.shared
     const fields = def.fields ?? ((subprimary || def.type === 'manyToOne'
-      || (def.type === 'oneToOne' && (model.name === relmodel.name || !makeArray(relmodel.primary).every(key => !relmodel.fields[key]?.nullable))))
-      ? makeArray(relmodel.primary).map(x => `${key}.${x}`) : model.primary)
+      || (def.type === 'oneToOne' && (model.name === relModel.name || !makeArray(relModel.primary).every(key => !relModel.fields[key]?.nullable))))
+      ? makeArray(relModel.primary).map(x => `${key}.${x}`) : model.primary)
     const relation: Config = {
       type: def.type,
-      table: def.table ?? relmodel.name,
+      table: def.table ?? relModel.name,
       fields: makeArray(fields),
       shared: shared as any,
-      references: makeArray(def.references ?? relmodel.primary),
-      required: def.type !== 'manyToOne' && model.name !== relmodel.name
+      references: makeArray(def.references ?? relModel.primary),
+      required: def.type !== 'manyToOne' && model.name !== relModel.name
         && makeArray(fields).every(key => !model.fields[key]?.nullable || makeArray(model.primary).includes(key)),
     }
     // remove shared keys from fields and references
@@ -97,7 +97,7 @@ export namespace Relation {
       references: relation.fields,
       shared: Object.fromEntries(Object.entries(shared).map(([k, v]) => [v, k])),
       required: relation.type !== 'oneToMany'
-        && relation.references.every(key => !relmodel.fields[key]?.nullable || makeArray(relmodel.primary).includes(key)),
+        && relation.references.every(key => !relModel.fields[key]?.nullable || makeArray(relModel.primary).includes(key)),
     }
     if (inverse.required) relation.required = false
     return [relation, inverse]
@@ -183,7 +183,7 @@ export namespace Field {
 
   export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
 
-  const NewType = Symbol('minato.newtype')
+  const NewType = Symbol('minato.newType')
   export type NewType<T> = string & { [NewType]: T }
 
   export type Config<O = any> = {
@@ -442,7 +442,7 @@ export class Model<S = any> {
     return this.parse({ ...result, ...data })
   }
 
-  avaiableFields() {
+  availableFields() {
     return filterKeys(this.fields, (_, field) => Field.available(field))
   }
 

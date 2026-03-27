@@ -79,7 +79,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
 
   constructor(public ctx: C, public config: T) {}
 
-  async* [Context.init]() {
+  async* [Service.init]() {
     this.ctx.minato.drivers.push(this)
     yield () => remove(this.ctx.minato.drivers, this)
     this.ctx.minato.refresh()
@@ -119,12 +119,12 @@ export abstract class Driver<T = any, C extends Context = Context> {
 
     const model = new Model('temp')
     for (const key in table) {
-      const submodel = this.model(table[key])
-      for (const field in submodel.fields) {
-        if (!Field.available(submodel.fields[field])) continue
+      const subModel = this.model(table[key])
+      for (const field in subModel.fields) {
+        if (!Field.available(subModel.fields[field])) continue
         model.fields[`${key}.${field}`] = {
-          expr: Eval('', [table[key].ref, field], Type.fromField(submodel.fields[field]!)),
-          type: Type.fromField(submodel.fields[field]!),
+          expr: Eval('', [table[key].ref, field], Type.fromField(subModel.fields[field]!)),
+          type: Type.fromField(subModel.fields[field]!),
         }
       }
     }

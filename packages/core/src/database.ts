@@ -163,16 +163,16 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (!Relation.Type.includes(def.type)) return
       const subprimary = !def.fields && makeArray(model.primary).includes(key)
       const [relation, inverse] = Relation.parse(def, key, model, this.tables[def.table ?? key], subprimary)
-      const relmodel = this.tables[relation.table]
-      if (!relmodel) throw new Error(`relation table ${relation.table} does not exist`)
+      const relModel = this.tables[relation.table]
+      if (!relModel) throw new Error(`relation table ${relation.table} does not exist`)
       ;(model.fields[key] = Field.parse('expr')).relation = relation
       if (def.target) {
-        (relmodel.fields[def.target] ??= Field.parse('expr')).relation = inverse
+        (relModel.fields[def.target] ??= Field.parse('expr')).relation = inverse
       }
 
       if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
         relation.fields.forEach((x, i) => {
-          model.fields[x] ??= { ...relmodel.fields[relation.references[i]] } as any
+          model.fields[x] ??= { ...relModel.fields[relation.references[i]] } as any
           if (!relation.required) {
             model.fields[x]!.nullable = true
             model.fields[x]!.initial = null
@@ -183,7 +183,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         if (this.tables[assocTable]) return
         const shared = Object.entries(relation.shared).map(([x, y]) => [Relation.buildSharedKey(x, y), model.fields[x]!.deftype] as const)
         const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]!.deftype] as const)
-        const references = relation.references.map(x => [Relation.buildAssociationKey(x, relation.table), relmodel.fields[x]?.deftype] as const)
+        const references = relation.references.map(x => [Relation.buildAssociationKey(x, relation.table), relModel.fields[x]?.deftype] as const)
         this.extend(assocTable as any, {
           ...Object.fromEntries([...shared, ...fields, ...references]),
           [name]: {
@@ -331,7 +331,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     let sel = new Selection(this.getDriver(table), table, query)
     if (typeof table !== 'string') return sel
     const whereOnly = include === null, isAssoc = !!include?.$assoc
-    const rawquery = typeof query === 'function' ? query : () => query
+    const rawQuery = typeof query === 'function' ? query : () => query
     const modelFields = this.tables[table].fields
     if (include) include = filterKeys(include, (key) => !!modelFields[key]?.relation)
     for (const key in { ...sel.query, ...sel.query.$not }) {
@@ -368,28 +368,28 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       if (typeof table !== 'string') throw new Error('cannot include relations on derived selection')
       const extraFields: string[] = []
       const applyQuery = (sel: Selection, key: string) => {
-        const query2 = rawquery(sel.row)
-        const relquery = query2[key] !== undefined ? query2[key]
+        const query2 = rawQuery(sel.row)
+        const relQuery = query2[key] !== undefined ? query2[key]
           : query2.$not?.[key] !== undefined ? { $not: query2.$not?.[key] }
             : undefined
-        return relquery === undefined ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relquery))
+        return relQuery === undefined ? sel : sel.where(this.transformRelationQuery(table, sel.row, key, relQuery))
       }
       for (const key in include) {
         if (!include[key] || !modelFields[key]?.relation) continue
         const relation: Relation.Config<S> = modelFields[key]!.relation as any
-        const relmodel = this.tables[relation.table]
+        const relModel = this.tables[relation.table]
         if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
           sel = whereOnly ? sel : sel.join(key, this.select(relation.table,
-            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !relmodel.fields[k]?.relation) : {} as any,
-            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !!relmodel.fields[k]?.relation) : include[key],
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !relModel.fields[k]?.relation) : {} as any,
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !!relModel.fields[k]?.relation) : include[key],
           ), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), !isAssoc)
           sel = applyQuery(sel, key)
         } else if (relation.type === 'oneToMany') {
           sel = whereOnly ? sel : sel.join(key, this.select(relation.table,
-            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !relmodel.fields[k]?.relation) : {} as any,
-            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !!relmodel.fields[k]?.relation) : include[key],
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !relModel.fields[k]?.relation) : {} as any,
+            typeof include[key] === 'object' ? filterKeys(include[key], (k) => !!relModel.fields[k]?.relation) : include[key],
           ), (self, other) => Eval.and(
             ...relation.fields.map((k, i) => Eval.eq(self[k], other[relation.references[i]])),
           ), true)
@@ -487,7 +487,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     query: Query<S[K]>,
     update: Row.Computed<S[K], Update<S[K]>>,
   ): Promise<Driver.WriteResult> {
-    const rawupdate = typeof update === 'function' ? update : () => update
+    const rawUpdate = typeof update === 'function' ? update : () => update
     let sel = this.select(table, query, null)
     if (typeof update === 'function') update = update(sel.row)
     const primary = makeArray(sel.model.primary)
@@ -502,10 +502,10 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       return await this.ensureTransaction(async (database) => {
         const rows = await database.get(table, query)
         sel = database.select(table, query, null)
-        let baseUpdate = omit(rawupdate(sel.row), relations.map(([key]) => key) as any)
+        let baseUpdate = omit(rawUpdate(sel.row), relations.map(([key]) => key) as any)
         baseUpdate = sel.model.format(baseUpdate)
         for (const [key] of relations) {
-          await Promise.all(rows.map(row => database.processRelationUpdate(table, row, key, rawupdate(row as any)[key])))
+          await Promise.all(rows.map(row => database.processRelationUpdate(table, row, key, rawUpdate(row as any)[key])))
         }
         return Object.keys(baseUpdate).length === 0 ? {} : await sel._action('set', baseUpdate).execute()
       })
@@ -610,7 +610,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   async stopAll() {
-    await Promise.all(this.drivers.splice(0, Infinity).map(driver => driver.stop()))
+    await Promise.all(this.drivers.splice(0).map(driver => driver.stop()))
   }
 
   async drop<K extends Keys<S>>(table: K) {
@@ -969,8 +969,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         )
       }
       if (value.$set || typeof value === 'function') {
-        for (const setexpr of makeArray(value.$set ?? value) as any[]) {
-          const [query, update] = setexpr.update ? [setexpr.where, setexpr.update] : [{}, setexpr]
+        for (const setExpr of makeArray(value.$set ?? value) as any[]) {
+          const [query, update] = setExpr.update ? [setExpr.where, setExpr.update] : [{}, setExpr]
           await this.set(relation.table,
             mergeQuery(Object.fromEntries(relation.references.map((k, i) => [k, row[relation.fields[i]]])), query),
             update,
@@ -1037,8 +1037,8 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         ))
       }
       if (value.$set) {
-        for (const setexpr of makeArray(value.$set) as any[]) {
-          const [query, update] = setexpr.update ? [setexpr.where, setexpr.update] : [{}, setexpr]
+        for (const setExpr of makeArray(value.$set) as any[]) {
+          const [query, update] = setExpr.update ? [setExpr.where, setExpr.update] : [{}, setExpr]
           const rows = await this.select(assocTable, (r: any) => ({
             ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(row, v.field)])),
             ...Object.fromEntries(fields.map((k, i) => [k, getCell(row, relation.fields[i])])) as any,
