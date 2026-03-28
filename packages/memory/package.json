@@ -26,14 +26,16 @@
     "memory"
   ],
   "peerDependencies": {
+    "cordis": "^4.0.0-rc.0",
     "minato": "^4.0.0-alpha.0"
   },
   "devDependencies": {
     "@minatojs/tests": "^3.0.0-alpha.0",
-    "cordis": "^4.0.0-alpha.7",
+    "cordis": "^4.0.0-rc.0",
     "minato": "^4.0.0-alpha.0"
   },
   "dependencies": {
-    "cosmokit": "^1.7.4"
+    "cosmokit": "^1.8.1",
+    "schemastery": "^3.18.0"
   }
 }

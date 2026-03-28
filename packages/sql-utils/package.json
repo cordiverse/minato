@@ -30,12 +30,12 @@
     "builder"
   ],
   "devDependencies": {
-    "cordis": "^4.0.0-alpha.7"
+    "cordis": "^4.0.0-rc.0"
   },
   "peerDependencies": {
     "minato": "^4.0.0-alpha.0"
   },
   "dependencies": {
-    "cosmokit": "^1.7.4"
+    "cosmokit": "^1.8.1"
   }
 }

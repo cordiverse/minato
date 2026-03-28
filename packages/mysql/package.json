@@ -26,17 +26,20 @@
     "mysql"
   ],
   "peerDependencies": {
+    "cordis": "^4.0.0-rc.0",
     "minato": "^4.0.0-alpha.0"
   },
   "devDependencies": {
+    "@cordisjs/plugin-logger": "^1.0.1",
     "@minatojs/tests": "^3.0.0-alpha.0",
-    "@types/mysql": "^2.15.26",
-    "cordis": "^4.0.0-alpha.7",
+    "@types/mysql": "^2.15.27",
+    "cordis": "^4.0.0-rc.0",
     "minato": "^4.0.0-alpha.0"
   },
   "dependencies": {
     "@minatojs/sql-utils": "^6.0.0-alpha.0",
-    "@vlasky/mysql": "^2.18.6",
-    "cosmokit": "^1.7.4"
+    "@vlasky/mysql": "^2.18.7",
+    "cosmokit": "^1.8.1",
+    "schemastery": "^3.18.0"
   }
 }

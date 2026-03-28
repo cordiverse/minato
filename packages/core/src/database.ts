@@ -1,5 +1,5 @@
 import { deduplicate, defineProperty, Dict, filterKeys, isNullable, makeArray, mapValues, MaybeArray, noop, omit, pick, remove } from 'cosmokit'
-import { Context, Service, Spread } from 'cordis'
+import { Context, Service } from 'cordis'
 import { AtomicTypes, DeepPartial, FlatKeys, FlatPick, Flatten, getCell, Indexable, Keys, randomId, Row, unravel, Values } from './utils.ts'
 import { Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
@@ -105,10 +105,6 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
 
   constructor(ctx: C) {
     super(ctx, 'model')
-  }
-
-  async connect<T = undefined>(driver: Driver.Constructor<T>, ...args: Spread<T>) {
-    await this.ctx.plugin(driver, args[0] as any)
   }
 
   refresh() {

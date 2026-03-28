@@ -26,16 +26,19 @@
     "mongo",
     "mongodb"
   ],
-  "devDependencies": {
-    "@minatojs/tests": "^3.0.0-alpha.0",
-    "cordis": "^4.0.0-alpha.7",
+  "peerDependencies": {
+    "cordis": "^4.0.0-rc.0",
     "minato": "^4.0.0-alpha.0"
   },
-  "peerDependencies": {
+  "devDependencies": {
+    "@cordisjs/plugin-logger": "^1.0.1",
+    "@minatojs/tests": "^3.0.0-alpha.0",
+    "cordis": "^4.0.0-rc.0",
     "minato": "^4.0.0-alpha.0"
   },
   "dependencies": {
-    "cosmokit": "^1.7.4",
-    "mongodb": "^6.5.0"
+    "cosmokit": "^1.8.1",
+    "mongodb": "^6.21.0",
+    "schemastery": "^3.18.0"
   }
 }

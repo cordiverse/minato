@@ -37,6 +37,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -78,6 +80,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -116,6 +120,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -151,6 +157,8 @@ jobs:
           mongodb-version: ${{ matrix.mongo-version }}
           mongodb-replica-set: test-rs
           mongodb-port: 27017
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test
@@ -179,6 +187,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Unit Test

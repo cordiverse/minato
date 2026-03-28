@@ -1,5 +1,6 @@
 import { clone, deepEqual, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Field, isAggrExpr, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Field, isAggrExpr, RuntimeError, Selection } from 'minato'
+import z from 'schemastery'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {
   static name = 'memory'
@@ -40,19 +41,19 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
 
     if (typeof table === 'object' && !Selection.is(table)) {
       const entries = Object.entries(table).map(([name, sel]) => [name, this.table(sel, env)] as const)
-      const catesian = (entries: (readonly [string, any[]])[]): any[] => {
+      const cartesian = (entries: (readonly [string, any[]])[]): any[] => {
         if (!entries.length) return []
         const [[name, rows], ...tail] = entries
         if (!tail.length) return rows.map(row => ({ [name]: row }))
         return rows.flatMap(row => {
-          let res = catesian(tail).map(tail => ({ ...tail, [name]: row }))
+          let res = cartesian(tail).map(tail => ({ ...tail, [name]: row }))
           if (Object.keys(table).length === tail.length + 1) {
             res = res.map(row => ({ ...env, [ref]: row })).filter(data => executeEval(data, having)).map(x => x[ref])
           }
           return !optional[tail[0]?.[0]] || res.length ? res : [{ [name]: row }]
         })
       }
-      data = catesian(entries)
+      data = cartesian(entries)
     } else {
       data = this.table(table, env).filter(row => executeQuery(row, query, ref, env))
     }
@@ -153,7 +154,7 @@ export class MemoryDriver extends Driver<MemoryDriver.Config> {
       meta.autoInc += 1
       data[primary] = meta.autoInc
     } else {
-      const duplicated = await this.database.get(table, pick(model.format(data), makeArray(primary)))
+      const duplicated = await this.database.get(table as never, pick(model.format(data), makeArray(primary)))
       if (duplicated.length) {
         throw new RuntimeError('duplicate-entry')
       }

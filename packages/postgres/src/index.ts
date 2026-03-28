@@ -1,10 +1,13 @@
 import postgres from 'postgres'
 import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, Selection } from 'minato'
+import { Inject } from 'cordis'
+import type {} from '@cordisjs/plugin-logger'
 import { isBracketed } from '@minatojs/sql-utils'
 import { escapeId, formatTime, PostgresBuilder } from './builder'
 import zhCN from './locales/zh-CN.yml'
 import enUS from './locales/en-US.yml'
+import z from 'schemastery'
 
 interface ColumnInfo {
   table_catalog: string
@@ -71,6 +74,7 @@ function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
 
+@Inject('logger', false)
 export class PostgresDriver extends Driver<PostgresDriver.Config> {
   static name = 'postgres'
 
@@ -85,7 +89,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     this.postgres = postgres({
       onnotice: () => { },
       debug: (_, query, parameters) => {
-        this.logger.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
+        this.ctx.logger?.debug(`> %s` + (parameters.length ? `\nparameters: %o` : ``), query, parameters.length ? parameters : '')
       },
       ...this.config,
     })
@@ -134,7 +138,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
   async query<T extends any[] = any[]>(sql: string): Promise<postgres.RowList<T>> {
     return await (this.session ?? this.postgres).unsafe<T>(sql).catch(e => {
-      this.logger.warn('> %s', sql)
+      this.ctx.logger?.warn('> %s', sql)
       throw e
     })
   }
@@ -176,7 +180,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign } = table
-    const fields = { ...table.avaiableFields() }
+    const fields = { ...table.availableFields() }
     const unique = [...table.unique]
     const create: string[] = []
     const update: string[] = []
@@ -237,7 +241,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     }
 
     if (!columns.length) {
-      this.logger.info('auto creating table %c', name)
+      this.ctx.logger?.info('auto creating table %c', name)
       return this.query<any>(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}, _pg_mtime BIGINT)`)
     }
 
@@ -247,7 +251,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     ]
     if (operations.length) {
       // https://www.postgresql.org/docs/current/sql-altertable.html
-      this.logger.info('auto updating table %c', name)
+      this.ctx.logger?.info('auto updating table %c', name)
       if (rename.length) {
         await Promise.all(rename.map(op => this.query(`ALTER TABLE ${escapeId(name)} ${op}`)))
       }
@@ -256,12 +260,12 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
 
     const dropKeys: string[] = []
     await this.migrate(name, {
-      error: this.logger.warn,
+      error: this.ctx.logger?.warn,
       before: keys => keys.every(key => columns.some(info => info.column_name === key)),
       after: keys => dropKeys.push(...keys),
       finalize: async () => {
         if (!dropKeys.length) return
-        this.logger.info('auto migrating table %c', name)
+        this.ctx.logger?.info('auto migrating table %c', name)
         await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
       },
     })
@@ -315,7 +319,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const { model, query, table, tables, ref } = sel
     const builder = new PostgresBuilder(this, tables)
     const filter = builder.parseQuery(query)
-    const fields = model.avaiableFields()
+    const fields = model.availableFields()
     if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
@@ -363,7 +367,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.avaiableFields())
+    const initFields = Object.keys(model.availableFields())
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -471,7 +475,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
         else if (length <= 2) return autoInc ? 'smallserial' : 'smallint'
         else if (length <= 4) return autoInc ? 'serial' : 'integer'
         else {
-          if (length > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+          if (length > 8) this.ctx.logger?.warn(`type ${type}(${length}) exceeds the max supported length`)
           return autoInc ? 'bigserial' : 'bigint'
         }
       case 'bigint': return 'bigint'

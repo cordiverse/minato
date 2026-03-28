@@ -1,11 +1,14 @@
 import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
 import { createPool, format } from '@vlasky/mysql'
+import { Inject } from 'cordis'
+import type {} from '@cordisjs/plugin-logger'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
-import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection } from 'minato'
 import { escapeId, isBracketed } from '@minatojs/sql-utils'
 import { Compat, MySQLBuilder } from './builder'
 import zhCN from './locales/zh-CN.yml'
 import enUS from './locales/en-US.yml'
+import z from 'schemastery'
 
 declare module 'mysql' {
   interface UntypedFieldInfo {
@@ -44,6 +47,7 @@ interface QueryTask {
   reject: (reason: unknown) => void
 }
 
+@Inject('logger', false)
 export class MySQLDriver extends Driver<MySQLDriver.Config> {
   static name = 'mysql'
 
@@ -157,7 +161,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
 
     const table = this.model(name)
     const { primary, foreign, autoInc } = table
-    const fields = table.avaiableFields()
+    const fields = table.availableFields()
     const unique = [...table.unique]
     const create: string[] = []
     const update: string[] = []
@@ -233,7 +237,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     }
 
     if (!columns.length) {
-      this.logger.info('auto creating table %c', name)
+      this.ctx.logger?.info('auto creating table %c', name)
       return this.query(`CREATE TABLE ${escapeId(name)} (${create.join(', ')}) COLLATE = ${this.sql.escape(this.config.charset ?? 'utf8mb4_general_ci')}`)
     }
 
@@ -243,7 +247,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     ]
     if (operations.length) {
       // https://dev.mysql.com/doc/refman/5.7/en/alter-table.html
-      this.logger.info('auto updating table %c', name)
+      this.ctx.logger?.info('auto updating table %c', name)
       await this.query(`ALTER TABLE ${escapeId(name)} ${operations.join(', ')}`)
     }
 
@@ -254,12 +258,12 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
     // migrate deprecated fields (do not await)
     const dropKeys: string[] = []
     await this.migrate(name, {
-      error: this.logger.warn,
+      error: this.ctx.logger?.warn,
       before: keys => keys.every(key => columns.some(info => info.COLUMN_NAME === key)),
       after: keys => dropKeys.push(...keys),
       finalize: async () => {
         if (!dropKeys.length) return
-        this.logger.info('auto migrating table %c', name)
+        this.ctx.logger?.info('auto migrating table %c', name)
         await this.query(`ALTER TABLE ${escapeId(name)} ${dropKeys.map(key => `DROP ${escapeId(key)}`).join(', ')}`)
       },
     })
@@ -295,17 +299,17 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
 DROP TEMPORARY TABLE IF EXISTS mtt; CREATE TEMPORARY TABLE mtt (value JSON); SELECT json_length(j) into n; set i = 0; WHILE i<n DO
 INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WHILE; SELECT max(value) INTO r FROM mtt; RETURN r; END`)
     } catch (e) {
-      this.logger.warn(`Failed to setup compact functions: ${e}`)
+      this.ctx.logger?.warn(`Failed to setup compact functions: ${e}`)
     }
   }
 
   query<T = any>(sql: string, debug = true): Promise<T> {
     const error = new Error()
     return new Promise((resolve, reject) => {
-      if (debug) this.logger.debug('> %s', sql)
+      if (debug) this.ctx.logger?.debug('> %s', sql)
       ;(this.session ?? this.pool).query(sql, (err: Error, results) => {
         if (!err) return resolve(results)
-        this.logger.warn('> %s', sql)
+        this.ctx.logger?.warn('> %s', sql)
         if (err['code'] === 'ER_DUP_ENTRY') {
           err = new RuntimeError('duplicate-entry', err.message)
         }
@@ -321,7 +325,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       return this.query(sql)
     }
 
-    this.logger.debug('> %s', sql)
+    this.ctx.logger?.debug('> %s', sql)
     return new Promise<any>((resolve, reject) => {
       this._queryTasks.push({ sql, resolve, reject })
       process.nextTick(() => this._flushTasks())
@@ -400,7 +404,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const { model, query, table, tables, ref } = sel
     const builder = new MySQLBuilder(this, tables, this._compat)
     const filter = builder.parseQuery(query)
-    const fields = model.avaiableFields()
+    const fields = model.availableFields()
     if (filter === '0') return {}
     const updateFields = [...new Set(Object.keys(data).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
@@ -447,7 +451,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       Object.assign(merged, item)
       return model.format(executeUpdate(model.create(), item, ref))
     })
-    const initFields = Object.keys(model.avaiableFields())
+    const initFields = Object.keys(model.availableFields())
     const dataFields = [...new Set(Object.keys(merged).map((key) => {
       return initFields.find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -500,7 +504,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     return new Promise<void>((resolve, reject) => {
       this.pool.getConnection((err, conn) => {
         if (err) {
-          this.logger.warn('getConnection failed: ', err)
+          this.ctx.logger?.warn('getConnection failed: ', err)
           return
         }
         conn.beginTransaction(() => callback(conn).then(
@@ -553,11 +557,11 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
       case 'timestamp': return 'datetime(3)'
       case 'boolean': return 'bit'
       case 'integer':
-        if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+        if ((length || 0) > 8) this.ctx.logger?.warn(`type ${type}(${length}) exceeds the max supported length`)
         return getIntegerType(length)
       case 'primary':
       case 'unsigned':
-        if ((length || 0) > 8) this.logger.warn(`type ${type}(${length}) exceeds the max supported length`)
+        if ((length || 0) > 8) this.ctx.logger?.warn(`type ${type}(${length}) exceeds the max supported length`)
         return `${getIntegerType(length)} unsigned`
       case 'bigint': return getIntegerType(8)
       case 'decimal': return `decimal(${precision ?? 10}, ${scale ?? 0}) unsigned`

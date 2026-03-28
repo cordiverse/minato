@@ -56,7 +56,7 @@ export namespace Driver {
 }
 
 export abstract class Driver<T = any, C extends Context = Context> {
-  static inject = ['minato']
+  static inject = ['model']
 
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
@@ -75,27 +75,29 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract createIndex(table: string, index: Driver.Index): Promise<void>
   abstract dropIndex(table: string, name: string): Promise<void>
 
+  protected database!: C['database']
+
   public types: Dict<Driver.Transformer> = Object.create(null)
 
   constructor(public ctx: C, public config: T) {}
 
   async* [Service.init]() {
-    this.ctx.minato.drivers.push(this)
-    yield () => remove(this.ctx.minato.drivers, this)
-    this.ctx.minato.refresh()
-    const database: Database = Object.create(this.ctx.minato) // FIXME use original model
+    this.ctx.model.drivers.push(this)
+    yield () => remove(this.ctx.model.drivers, this)
+    this.ctx.model.refresh()
+    const database: Database = this.database = Object.create(this.ctx.model) // FIXME use original model
     defineProperty(database, 'ctx', this.ctx)
     defineProperty(database, Service.tracker, {
       associate: 'database',
       property: 'ctx',
     })
     defineProperty(database, '_driver', this)
-    this.ctx.set('database', database)
+    yield this.ctx.provide('database', database)
   }
 
   model<S = any>(table: string | Selection.Immutable | Dict<string | Selection.Immutable>): Model<S> {
     if (typeof table === 'string') {
-      const model = this.ctx.minato.tables[table]
+      const model = this.ctx.model.tables[table]
       if (model) return model
       throw new TypeError(`unknown table name "${table}"`)
     }
@@ -132,7 +134,7 @@ export abstract class Driver<T = any, C extends Context = Context> {
   }
 
   protected async migrate(name: string, hooks: MigrationHooks) {
-    const database = this.ctx.minato.makeProxy(Database.migrate)
+    const database = this.ctx.model.makeProxy(Database.migrate)
     const model = this.model(name)
     await (database.migrateTasks[name] = Promise.resolve(database.migrateTasks[name]).then(() => {
       return Promise.all([...model.migrations].map(async ([migrate, keys]) => {

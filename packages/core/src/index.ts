@@ -20,7 +20,7 @@ declare module 'cordis' {
     [Tables]: Tables
     [Context.Minato]: Context.Minato<this>
     [Context.Database]: Context.Database<this>
-    minato: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Minato]
+    model: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Minato]
     database: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Database]
   }
 

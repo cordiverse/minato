@@ -1,11 +1,10 @@
 {
   "extends": "./tsconfig.base",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "minato": ["packages/core/src"],
-      "@minatojs/*": ["packages/*/src"],
-      "@minatojs/driver-*": ["packages/*/src"],
+      "minato": ["./packages/core/src"],
+      "@minatojs/*": ["./packages/*/src"],
+      "@minatojs/driver-*": ["./packages/*/src"],
     },
   },
   "files": [],

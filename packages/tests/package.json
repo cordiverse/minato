@@ -26,17 +26,17 @@
     "unit"
   ],
   "devDependencies": {
-    "@types/chai": "^4.3.16",
-    "@types/chai-as-promised": "^7.1.8",
-    "cordis": "^4.0.0-alpha.7",
+    "@types/chai": "^5.2.3",
+    "@types/chai-as-promised": "^8.0.2",
+    "cordis": "^4.0.0-rc.0",
     "minato": "^4.0.0-alpha.0"
   },
   "peerDependencies": {
     "minato": "^4.0.0-alpha.0"
   },
   "dependencies": {
-    "chai": "^5.1.1",
-    "chai-as-promised": "^7.1.1",
-    "cosmokit": "^1.7.4"
+    "chai": "^5.3.3",
+    "chai-as-promised": "^8.0.2",
+    "cosmokit": "^1.8.1"
   }
 }

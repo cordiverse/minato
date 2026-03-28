@@ -1,5 +1,7 @@
 import { Binary, deepEqual, Dict, difference, isNullable, makeArray, mapValues } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, Selection, z } from 'minato'
+import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, Selection } from 'minato'
+import { Inject } from 'cordis'
+import type {} from '@cordisjs/plugin-logger'
 import { escapeId } from '@minatojs/sql-utils'
 import { resolve } from 'node:path'
 import { access, readFile, writeFile } from 'node:fs/promises'
@@ -9,6 +11,7 @@ import enUS from './locales/en-US.yml'
 import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
 import { pathToFileURL } from 'node:url'
+import z from 'schemastery'
 
 function getTypeDef({ deftype: type }: Field) {
   switch (type) {
@@ -49,6 +52,7 @@ interface SQLiteMasterInfo {
   sql: string
 }
 
+@Inject('logger', false)
 export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   static name = 'sqlite'
 
@@ -113,7 +117,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     }
 
     if (!columns.length) {
-      this.logger.info('auto creating table %c', table)
+      this.ctx.logger?.info('auto creating table %c', table)
       this._run(`CREATE TABLE ${escapeId(table)} (${[...columnDefs, ...indexDefs].join(', ')})`)
     } else if (shouldMigrate) {
       // preserve old columns
@@ -129,7 +133,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
       const temp = table + '_temp'
       const fields = Object.keys(mapping).map(escapeId).join(', ')
-      this.logger.info('auto migrating table %c', table)
+      this.ctx.logger?.info('auto migrating table %c', table)
       this._run(`CREATE TABLE ${escapeId(temp)} (${[...columnDefs, ...indexDefs].join(', ')})`)
       try {
         this._run(`INSERT INTO ${escapeId(temp)} SELECT ${fields} FROM ${escapeId(table)}`)
@@ -140,7 +144,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       }
       this._run(`ALTER TABLE ${escapeId(temp)} RENAME TO ${escapeId(table)}`)
     } else if (alter.length) {
-      this.logger.info('auto updating table %c', table)
+      this.ctx.logger?.info('auto updating table %c', table)
       for (const def of alter) {
         this._run(`ALTER TABLE ${escapeId(table)} ${def}`)
       }
@@ -149,7 +153,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     if (dropKeys) return
     dropKeys = []
     await this.migrate(table, {
-      error: this.logger.warn,
+      error: this.ctx.logger?.warn,
       before: keys => keys.every(key => columns.some(({ name }) => name === key)),
       after: keys => dropKeys!.push(...keys),
       finalize: () => {
@@ -254,10 +258,10 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
       stmt.free()
-      this.logger.debug('> %s', sql, params)
+      this.ctx.logger?.debug('> %s', sql, params)
       return result
     } catch (e) {
-      this.logger.warn('> %s', sql, params)
+      this.ctx.logger?.warn('> %s', sql, params)
       throw e
     }
   }
@@ -351,7 +355,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   async set(sel: Selection.Mutable, update: {}) {
     const { model, table, query } = sel
-    const { primary } = model, fields = model.avaiableFields()
+    const { primary } = model, fields = model.availableFields()
     const updateFields = [...new Set(Object.keys(update).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!
     }))]
@@ -371,7 +375,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
         ...mapValues(update, (_, key) => getCell(row, key)),
         ...Object.fromEntries(primaryFields.map(x => [x, getCell(row, x)])),
       }))
-      return this.database.upsert(table, upsert)
+      return this.database.upsert(table as never, upsert)
     } else {
       const data = await this.database.get(table as never, query)
       for (const row of data) {
@@ -400,7 +404,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async upsert(sel: Selection.Mutable, data: any[], keys: string[]) {
     if (!data.length) return {}
     const { model, table, ref } = sel
-    const fields = model.avaiableFields()
+    const fields = model.availableFields()
     const result = { inserted: 0, matched: 0, modified: 0 }
     const dataFields = [...new Set(Object.keys(Object.assign({}, ...data)).map((key) => {
       return Object.keys(fields).find(field => field === key || key.startsWith(field + '.'))!

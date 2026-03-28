@@ -1,13 +1,16 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError, ObjectId } from 'mongodb'
 import { Binary, deepEqual, Dict, isNullable, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection, z } from 'minato'
-import { URLSearchParams } from 'url'
+import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection } from 'minato'
+import { Inject } from 'cordis'
+import type {} from '@cordisjs/plugin-logger'
 import { Builder } from './builder'
 import zhCN from './locales/zh-CN.yml'
 import enUS from './locales/en-US.yml'
+import z from 'schemastery'
 
 const tempKey = '__temp_minato_mongo__'
 
+@Inject('logger', false)
 export class MongoDriver extends Driver<MongoDriver.Config> {
   static name = 'mongo'
 
@@ -33,14 +36,14 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       username,
     } = this.config
 
-    let mongourl = `${protocol}://`
-    if (username) mongourl += `${encodeURIComponent(username)}${password ? `:${encodeURIComponent(password)}` : ''}@`
-    mongourl += `${host}${port ? `:${port}` : ''}/${authDatabase || database}`
+    let mongoUrl = `${protocol}://`
+    if (username) mongoUrl += `${encodeURIComponent(username)}${password ? `:${encodeURIComponent(password)}` : ''}@`
+    mongoUrl += `${host}${port ? `:${port}` : ''}/${authDatabase || database}`
     if (connectOptions) {
       const params = new URLSearchParams(connectOptions)
-      mongourl += `?${params}`
+      mongoUrl += `?${params}`
     }
-    return mongourl
+    return mongoUrl
   }
 
   async start() {
@@ -56,7 +59,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       { readPreference: 'primary' },
     )).catch(() => {
       this._replSet = false
-      this.logger.warn(`MongoDB is currently running as standalone server, transaction is disabled.
+      this.ctx.logger?.warn(`MongoDB is currently running as standalone server, transaction is disabled.
       Convert to replicaSet to enable the feature.
       See https://www.mongodb.com/docs/manual/tutorial/convert-standalone-to-replica-set/`)
     })
@@ -167,15 +170,15 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       if (!doc || virtual === useVirtualKey) {
         // Empty table or already configured
         await fields.updateOne(meta, { $set: { virtual: useVirtualKey } }, { upsert: true })
-        this.logger.info('Successfully reconfigured table %s', table)
+        this.ctx.logger?.info('Successfully reconfigured table %s', table)
         return
       }
     }
     if (virtual === useVirtualKey) return
-    this.logger.info('Start migrating table %s', table)
+    this.ctx.logger?.info('Start migrating table %s', table)
 
     if (found?.migrate && await this.db.listCollections({ name: '_migrate_' + table }).hasNext()) {
-      this.logger.info('Last time crashed, recover')
+      this.ctx.logger?.info('Last time crashed, recover')
     } else {
       await this.db.dropCollection('_migrate_' + table).catch(noop)
       await this.db.collection(table).aggregate([
@@ -193,7 +196,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       { $set: { virtual: useVirtualKey, migrate: false } },
       { upsert: true },
     )
-    this.logger.info('Successfully migrated table %s', table)
+    this.ctx.logger?.info('Successfully migrated table %s', table)
   }
 
   private async _migratePrimary(table: string) {
@@ -245,7 +248,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
 
     const $unset = {}
     await this.migrate(table, {
-      error: this.logger.warn,
+      error: this.ctx.logger?.warn,
       before: () => true,
       after: keys => keys.forEach(key => $unset[key] = ''),
       finalize: async () => {
@@ -531,7 +534,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   logPipeline(table: string, pipeline: any) {
-    this.logger.debug('%s %s', table, JSON.stringify(pipeline, (_, value) => typeof value === 'bigint' ? `${value}n` : value))
+    this.ctx.logger?.debug('%s %s', table, JSON.stringify(pipeline, (_, value) => typeof value === 'bigint' ? `${value}n` : value))
   }
 }
 
