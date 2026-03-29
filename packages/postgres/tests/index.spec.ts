@@ -1,17 +1,19 @@
 import { Context } from 'cordis'
-import { Model } from 'minato'
+import Database from 'minato'
 import PostgresDriver from '@minatojs/driver-postgres'
-import Logger from 'reggol'
+import Logger from '@cordisjs/plugin-logger'
+// import Logger from 'reggol'
 import test from '@minatojs/tests'
 
-const logger = new Logger('postgres')
+// const logger = new Logger('postgres')
 
-describe('@minatojs/driver-postgres', async () => {
+describe('@minatojs/driver-postgres', () => {
   const ctx = new Context()
-  await ctx.plugin(Model)
 
   before(async () => {
-    logger.level = 3
+    // logger.level = 3
+    await ctx.plugin(Logger)
+    await ctx.plugin(Database)
     await ctx.plugin(PostgresDriver, {
       host: 'localhost',
       port: 5432,
@@ -24,10 +26,10 @@ describe('@minatojs/driver-postgres', async () => {
   after(async () => {
     await ctx.database.dropAll()
     await ctx.database.stopAll()
-    logger.level = 2
+    // logger.level = 2
   })
 
-  test(ctx.database, {
+  test(ctx, {
     query: {
       list: {
         elementQuery: false,

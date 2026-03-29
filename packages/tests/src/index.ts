@@ -19,7 +19,9 @@ type UnitOptions<T> = (T extends (database: Database, options?: infer R) => any 
   [K in keyof T as Exclude<K, Keywords>]?: false | UnitOptions<T[K]>
 }
 
-type Unit<T> = ((database: Database, options?: UnitOptions<T>) => void) & {
+type DatabaseLike = Database | (() => Database) | { model: Database }
+
+type Unit<T> = ((source: DatabaseLike, options?: UnitOptions<T>) => void) & {
   [K in keyof T as Exclude<K, Keywords>]: Unit<T[K]>
 }
 
@@ -32,16 +34,34 @@ function setValue(obj: any, path: string, value: any) {
   }
 }
 
+function resolveGetDb(source: DatabaseLike): () => Database {
+  if (typeof source === 'function') return source
+  if (source instanceof Database) return () => source
+  return () => source.model
+}
+
+function createLazyDatabase(getDb: () => Database): Database {
+  return new Proxy(Object.create(null), {
+    get(_, prop) {
+      const db = getDb()
+      const value = (db as any)[prop]
+      return typeof value === 'function' ? value.bind(db) : value
+    },
+  })
+}
+
 function createUnit<T>(target: T, root = false): Unit<T> {
-  const test: any = (database: Database, options: any = {}) => {
+  const test: any = (source: DatabaseLike, options: any = {}) => {
+    const getDb = resolveGetDb(source)
+
     function callback() {
       if (typeof target === 'function') {
-        target(database, options)
+        target(createLazyDatabase(getDb), options)
       }
 
       for (const key in target) {
         if (options[key] === false || Keywords.includes(key)) continue
-        test[key](database, options[key])
+        test[key](getDb, options[key])
       }
     }
 

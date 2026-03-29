@@ -10,7 +10,7 @@ import init from '@minatojs/sql.js'
 import enUS from './locales/en-US.yml'
 import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import z from 'schemastery'
 
 function getTypeDef({ deftype: type }: Field) {
@@ -166,7 +166,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async start() {
     this.path = this.config.path
     if (this.path !== ':memory:') {
-      this.path = resolve(this.ctx.baseDir, this.path)
+      this.path = fileURLToPath(new URL(this.path, this.ctx.get('baseUrl')))
     }
     const isBrowser = process.env.KOISHI_ENV === 'browser'
     const sqlite = await init({

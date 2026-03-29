@@ -82,135 +82,135 @@ interface Tables {
 }
 
 function RelationTests(database: Database<Tables>) {
-  database.extend('user', {
-    id: 'unsigned',
-    value: 'integer',
-    successor: {
-      type: 'oneToOne',
-      table: 'user',
-      target: 'predecessor',
-    },
-  }, {
-    autoInc: true,
-  })
-
-  database.extend('profile', {
-    id: 'unsigned',
-    name: 'string',
-    user: {
-      type: 'oneToOne',
-      table: 'user',
-      target: 'profile',
-    },
-  }, {
-    unique: [['user', 'name']]
-  })
-
-  database.extend('post', {
-    id2: 'unsigned',
-    score: 'unsigned',
-    content: 'string',
-    author: {
-      type: 'manyToOne',
-      table: 'user',
-      target: 'posts',
-    },
-  }, {
-    autoInc: true,
-    primary: 'id2',
-  })
-
-  database.extend('tag', {
-    id: 'unsigned',
-    name: 'string',
-    posts: {
-      type: 'manyToMany',
-      table: 'post',
-      target: 'tags',
-    },
-  }, {
-    autoInc: true,
-  })
-
-  database.extend('post2tag', {
-    'post.id': 'unsigned',
-    'tag.id': 'unsigned',
-    post: {
-      type: 'manyToOne',
-      table: 'post',
-      target: '_tags',
-    },
-    tag: {
-      type: 'manyToOne',
-      table: 'tag',
-      target: '_posts',
-    },
-  }, {
-    primary: ['post.id', 'tag.id'],
-  })
-
-  database.extend('login', {
-    id: 'string',
-    platform: 'string(64)',
-    name: 'string',
-  }, {
-    primary: ['id', 'platform'],
-  })
-
-  database.extend('guild', {
-    id: 'string',
-    platform2: 'string(64)',
-    name: 'string',
-    logins: {
-      type: 'manyToMany',
-      table: 'login',
-      target: 'guilds',
-      shared: { platform2: 'platform' },
-    },
-  }, {
-    primary: ['id', 'platform2'],
-  })
-
-  database.extend('guildSync', {
-    syncAt: 'unsigned',
-    platform: 'string',
-    guild: {
-      type: 'manyToOne',
-      table: 'guild',
-      target: 'syncs',
-      fields: ['guild.id', 'platform'],
-    },
-    login: {
-      type: 'manyToOne',
-      table: 'login',
-      target: 'syncs',
-      fields: ['login.id', 'platform'],
-    },
-  }, {
-    primary: ['guild', 'login'],
-  })
-
-  database.extend('member', {
-    guild: {
-      type: 'manyToOne',
-      table: 'guild',
-      target: 'members',
-    },
-    user: {
-      type: 'manyToOne',
-      table: 'login',
-    },
-    name: 'string',
-  }, {
-    primary: ['user', 'guild'],
-  })
-
-  async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
-    await database.upsert(name, Array(length).fill({}))
-    await database.remove(name, {})
-  }
-
   before(async () => {
+    database.extend('user', {
+      id: 'unsigned',
+      value: 'integer',
+      successor: {
+        type: 'oneToOne',
+        table: 'user',
+        target: 'predecessor',
+      },
+    }, {
+      autoInc: true,
+    })
+
+    database.extend('profile', {
+      id: 'unsigned',
+      name: 'string',
+      user: {
+        type: 'oneToOne',
+        table: 'user',
+        target: 'profile',
+      },
+    }, {
+      unique: [['user', 'name']]
+    })
+
+    database.extend('post', {
+      id2: 'unsigned',
+      score: 'unsigned',
+      content: 'string',
+      author: {
+        type: 'manyToOne',
+        table: 'user',
+        target: 'posts',
+      },
+    }, {
+      autoInc: true,
+      primary: 'id2',
+    })
+
+    database.extend('tag', {
+      id: 'unsigned',
+      name: 'string',
+      posts: {
+        type: 'manyToMany',
+        table: 'post',
+        target: 'tags',
+      },
+    }, {
+      autoInc: true,
+    })
+
+    database.extend('post2tag', {
+      'post.id': 'unsigned',
+      'tag.id': 'unsigned',
+      post: {
+        type: 'manyToOne',
+        table: 'post',
+        target: '_tags',
+      },
+      tag: {
+        type: 'manyToOne',
+        table: 'tag',
+        target: '_posts',
+      },
+    }, {
+      primary: ['post.id', 'tag.id'],
+    })
+
+    database.extend('login', {
+      id: 'string',
+      platform: 'string(64)',
+      name: 'string',
+    }, {
+      primary: ['id', 'platform'],
+    })
+
+    database.extend('guild', {
+      id: 'string',
+      platform2: 'string(64)',
+      name: 'string',
+      logins: {
+        type: 'manyToMany',
+        table: 'login',
+        target: 'guilds',
+        shared: { platform2: 'platform' },
+      },
+    }, {
+      primary: ['id', 'platform2'],
+    })
+
+    database.extend('guildSync', {
+      syncAt: 'unsigned',
+      platform: 'string',
+      guild: {
+        type: 'manyToOne',
+        table: 'guild',
+        target: 'syncs',
+        fields: ['guild.id', 'platform'],
+      },
+      login: {
+        type: 'manyToOne',
+        table: 'login',
+        target: 'syncs',
+        fields: ['login.id', 'platform'],
+      },
+    }, {
+      primary: ['guild', 'login'],
+    })
+
+    database.extend('member', {
+      guild: {
+        type: 'manyToOne',
+        table: 'guild',
+        target: 'members',
+      },
+      user: {
+        type: 'manyToOne',
+        table: 'login',
+      },
+      name: 'string',
+    }, {
+      primary: ['user', 'guild'],
+    })
+
+    async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
+      await database.upsert(name, Array(length).fill({}))
+      await database.remove(name, {})
+    }
+
     await setupAutoInc(database, 'user', 3)
     await setupAutoInc(database, 'post', 3)
     await setupAutoInc(database, 'tag', 3)

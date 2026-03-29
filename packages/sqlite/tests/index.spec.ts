@@ -1,28 +1,26 @@
-import { join } from 'path'
-import { Database } from 'minato'
+import { Context } from 'cordis'
+import Database from 'minato'
 import SQLiteDriver from '@minatojs/driver-sqlite'
-import Logger from 'reggol'
+import Logger from '@cordisjs/plugin-logger'
 import test from '@minatojs/tests'
 
-const logger = new Logger('sqlite')
-
 describe('@minatojs/driver-sqlite', () => {
-  const database = new Database()
+  const ctx = new Context()
 
   before(async () => {
-    logger.level = 3
-    await database.connect(SQLiteDriver, {
-      path: join(__dirname, 'test.db'),
+    await ctx.plugin(Logger)
+    await ctx.plugin(Database)
+    await ctx.plugin(SQLiteDriver, {
+      path: new URL('test.db', import.meta.url).href,
     })
   })
 
   after(async () => {
-    await database.dropAll()
-    await database.stopAll()
-    logger.level = 2
+    await ctx.database.dropAll()
+    await ctx.database.stopAll()
   })
 
-  test(database, {
+  test(ctx, {
     query: {
       list: {
         elementQuery: false,

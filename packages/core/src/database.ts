@@ -551,6 +551,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     const drivers = new Map<Driver<any, C>, Driver<any, C>>()
     const database = new Proxy(this, {
       get: (target, p, receiver) => {
+        if (p === Symbol.for('cordis.tracker')) return undefined
         if (p === marker) return true
         if (p !== 'getDriver') return Reflect.get(target, p, receiver)
         return (name: any) => {

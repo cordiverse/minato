@@ -1,20 +1,24 @@
-import { Database } from 'minato'
+import { Context } from 'cordis'
+import Database from 'minato'
 import MemoryDriver from '@minatojs/driver-memory'
+import Logger from '@cordisjs/plugin-logger'
 import test from '@minatojs/tests'
 
-describe('@minatojs/driver-memory', () => {
-  const database = new Database()
+const ctx = new Context()
 
+describe('@minatojs/driver-memory', () => {
   before(async () => {
-    await database.connect(MemoryDriver, {})
+    await ctx.plugin(Logger)
+    await ctx.plugin(Database)
+    await ctx.plugin(MemoryDriver)
   })
 
   after(async () => {
-    await database.dropAll()
-    await database.stopAll()
+    await ctx.database.dropAll()
+    await ctx.database.stopAll()
   })
 
-  test(database, {
+  test(ctx, {
     migration: false,
     update: {
       index: false,

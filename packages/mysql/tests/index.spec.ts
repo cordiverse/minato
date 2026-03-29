@@ -1,16 +1,20 @@
-import { Database } from 'minato'
+import { Context } from 'cordis'
+import Database from 'minato'
 import MySQLDriver from '@minatojs/driver-mysql'
-import Logger from 'reggol'
+import Logger from '@cordisjs/plugin-logger'
+// import Logger from 'reggol'
 import test from '@minatojs/tests'
 
-const logger = new Logger('mysql')
+// const logger = new Logger('mysql')
 
 describe('@minatojs/driver-mysql', () => {
-  const database = new Database()
+  const ctx = new Context()
 
   before(async () => {
-    logger.level = 3
-    await database.connect(MySQLDriver, {
+    // logger.level = 3
+    await ctx.plugin(Logger)
+    await ctx.plugin(Database)
+    await ctx.plugin(MySQLDriver, {
       user: 'koishi',
       password: 'koishi@114514',
       database: 'test',
@@ -18,12 +22,12 @@ describe('@minatojs/driver-mysql', () => {
   })
 
   after(async () => {
-    await database.dropAll()
-    await database.stopAll()
-    logger.level = 2
+    await ctx.database.dropAll()
+    await ctx.database.stopAll()
+    // logger.level = 2
   })
 
-  test(database, {
+  test(ctx, {
     query: {
       list: {
         elementQuery: false,

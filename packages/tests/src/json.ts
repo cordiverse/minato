@@ -48,51 +48,51 @@ interface Tables {
 }
 
 function JsonTests(database: Database<Tables>) {
-  database.extend('foo', {
-    id: 'unsigned',
-    value: 'integer',
-  })
+  before(async () => {
+    database.extend('foo', {
+      id: 'unsigned',
+      value: 'integer',
+    })
 
-  database.extend('bar', {
-    id: 'unsigned',
-    uid: 'unsigned',
-    pid: 'unsigned',
-    value: 'integer',
-    obj: 'json',
-    s: 'string',
-    l: 'list',
-  }, {
-    autoInc: true,
-  })
+    database.extend('bar', {
+      id: 'unsigned',
+      uid: 'unsigned',
+      pid: 'unsigned',
+      value: 'integer',
+      obj: 'json',
+      s: 'string',
+      l: 'list',
+    }, {
+      autoInc: true,
+    })
 
-  database.extend('baz', {
-    id: 'unsigned',
-    nums: {
-      type: 'array',
-      inner: 'unsigned',
-    }
-  })
+    database.extend('baz', {
+      id: 'unsigned',
+      nums: {
+        type: 'array',
+        inner: 'unsigned',
+      }
+    })
 
-  database.extend('bax', {
-    id: 'unsigned',
-    array: {
-      type: 'array',
-      inner: {
-        type: 'object',
+    database.extend('bax', {
+      id: 'unsigned',
+      array: {
+        type: 'array',
         inner: {
-          text: 'string',
+          type: 'object',
+          inner: {
+            text: 'string',
+          },
         },
       },
-    },
-    object: {
-      type: 'object',
-      inner: {
-        num: 'unsigned',
+      object: {
+        type: 'object',
+        inner: {
+          num: 'unsigned',
+        },
       },
-    },
-  })
+    })
 
-  before(async () => {
     await setup(database, 'foo', [
       { id: 1, value: 0 },
       { id: 2, value: 2 },

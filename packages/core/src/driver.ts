@@ -1,5 +1,5 @@
 import { Awaitable, deepEqual, defineProperty, Dict, mapValues, remove } from 'cosmokit'
-import { Context, Service } from 'cordis'
+import { Context, Inject, Service } from 'cordis'
 import { Eval, Update } from './eval.ts'
 import { Direction, Modifier, Selection } from './selection.ts'
 import { Field, Model, Relation } from './model.ts'
@@ -55,9 +55,8 @@ export namespace Driver {
   export type Constructor<T> = new (ctx: Context, config: T) => Driver<T>
 }
 
+@Inject('model')
 export abstract class Driver<T = any, C extends Context = Context> {
-  static inject = ['model']
-
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
   abstract drop(table: string): Promise<void>
@@ -75,13 +74,15 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract createIndex(table: string, index: Driver.Index): Promise<void>
   abstract dropIndex(table: string, name: string): Promise<void>
 
-  protected database!: C['database']
+  public database!: C['database']
 
   public types: Dict<Driver.Transformer> = Object.create(null)
 
   constructor(public ctx: C, public config: T) {}
 
   async* [Service.init]() {
+    await this.start()
+    yield () => this.stop()
     this.ctx.model.drivers.push(this)
     yield () => remove(this.ctx.model.drivers, this)
     this.ctx.model.refresh()

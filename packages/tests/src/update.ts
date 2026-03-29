@@ -29,35 +29,37 @@ interface Tables {
 }
 
 function OrmOperations(database: Database<Tables>) {
-  database.extend('temp2', {
-    id: 'unsigned',
-    text: 'string',
-    num: 'integer',
-    double: 'double',
-    bool: 'boolean',
-    list: 'list',
-    timestamp: 'timestamp',
-    date: 'date',
-    time: 'time',
-    bigtext: 'text',
-    binary: 'binary',
-    bigint: {
-      type: 'string',
-      dump: value => value ? value.toString() : value,
-      load: value => value ? BigInt(value) : value,
-    },
-  }, {
-    autoInc: true,
-    indexes: ['text'],
-  })
+  before(() => {
+    database.extend('temp2', {
+      id: 'unsigned',
+      text: 'string',
+      num: 'integer',
+      double: 'double',
+      bool: 'boolean',
+      list: 'list',
+      timestamp: 'timestamp',
+      date: 'date',
+      time: 'time',
+      bigtext: 'text',
+      binary: 'binary',
+      bigint: {
+        type: 'string',
+        dump: value => value ? value.toString() : value,
+        load: value => value ? BigInt(value) : value,
+      },
+    }, {
+      autoInc: true,
+      indexes: ['text'],
+    })
 
-  database.extend('temp3', {
-    ida: 'unsigned',
-    idb: 'string',
-    value: 'string',
-  }, {
-    primary: ['ida', 'idb'],
-    unique: ['value'],
+    database.extend('temp3', {
+      ida: 'unsigned',
+      idb: 'string',
+      value: 'string',
+    }, {
+      primary: ['ida', 'idb'],
+      unique: ['value'],
+    })
   })
 }
 

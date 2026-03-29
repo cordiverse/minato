@@ -21,23 +21,23 @@ interface Tables {
 }
 
 function SelectionTests(database: Database<Tables>) {
-  database.extend('foo', {
-    id: 'unsigned',
-    value: 'integer',
-  })
-
-  database.migrate('foo', { deprecated: 'unsigned' }, async () => { })
-
-  database.extend('bar', {
-    id: 'unsigned',
-    uid: 'unsigned',
-    pid: 'unsigned',
-    value: 'integer',
-  }, {
-    autoInc: true,
-  })
-
   before(async () => {
+    database.extend('foo', {
+      id: 'unsigned',
+      value: 'integer',
+    })
+
+    database.migrate('foo', { deprecated: 'unsigned' }, async () => { })
+
+    database.extend('bar', {
+      id: 'unsigned',
+      uid: 'unsigned',
+      pid: 'unsigned',
+      value: 'integer',
+    }, {
+      autoInc: true,
+    })
+
     await setup(database, 'foo', [
       { id: 1, value: 0 },
       { id: 2, value: 2 },
