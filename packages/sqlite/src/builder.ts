@@ -22,8 +22,8 @@ export class SQLiteBuilder extends Builder {
     this.evalOperators.$concat = (args) => `(${args.map(arg => this.parseEval(arg)).join('||')})`
     this.evalOperators.$modulo = ([left, right]) => `modulo(${this.parseEval(left)}, ${this.parseEval(right)})`
     this.evalOperators.$log = ([left, right]) => isNullable(right)
-      ? `log(${this.parseEval(left)})`
-      : `log(${this.parseEval(left)}) / log(${this.parseEval(right)})`
+      ? `ln(${this.parseEval(left)})`
+      : `ln(${this.parseEval(left)}) / ln(${this.parseEval(right)})`
     this.evalOperators.$length = (expr) => this.createAggr(expr, value => `count(${value})`, value => this.isEncoded() ? this.jsonLength(value)
       : this.asEncoded(`iif(${value}, LENGTH(${value}) - LENGTH(REPLACE(${value}, ${this.escape(',')}, ${this.escape('')})) + 1, 0)`, false))
     this.evalOperators.$number = (arg) => {

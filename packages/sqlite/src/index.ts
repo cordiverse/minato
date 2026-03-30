@@ -3,14 +3,11 @@ import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, S
 import { Inject } from 'cordis'
 import type {} from '@cordisjs/plugin-logger'
 import { escapeId } from '@minatojs/sql-utils'
-import { resolve } from 'node:path'
-import { access, readFile, writeFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import init from '@minatojs/sql.js'
+import type { DatabaseSync, StatementSync } from 'node:sqlite'
 import enUS from './locales/en-US.yml'
 import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import z from 'schemastery'
 
 function getTypeDef({ deftype: type }: Field) {
@@ -57,7 +54,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   static name = 'sqlite'
 
   path!: string
-  db!: init.Database
+  db!: DatabaseSync
   sql = new SQLiteBuilder(this)
   beforeUnload?: () => void
 
@@ -168,40 +165,15 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     if (this.path !== ':memory:') {
       this.path = fileURLToPath(new URL(this.path, this.ctx.get('baseUrl')))
     }
-    const isBrowser = process.env.KOISHI_ENV === 'browser'
-    const sqlite = await init({
-      locateFile: (file: string) => process.env.KOISHI_BASE
-        ? process.env.KOISHI_BASE + '/' + file
-        : isBrowser
-          ? '/modules/@koishijs/plugin-database-sqlite/' + file
-          // @ts-ignore
-          : createRequire(import.meta.url || pathToFileURL(__filename).href).resolve('@minatojs/sql.js/dist/' + file),
-    })
 
-    if (this.path !== ':memory:') {
-      const dir = resolve(this.path, '..')
-      try {
-        await access(dir)
-      } catch {
-        throw new Error(`The database directory '${resolve(this.path, '..')}' is not accessible. You may have to create it first.`)
-      }
-    }
-    if (!isBrowser || this.path === ':memory:') {
-      this.db = new sqlite.Database(this.path)
-    } else {
-      const buffer = await readFile(this.path).catch(() => null)
-      this.db = new sqlite.Database(this.path, buffer)
-      if (isBrowser) {
-        window.addEventListener('beforeunload', this.beforeUnload = () => {
-          this._export()
-        })
-      }
-    }
-    this.db.create_function('regexp', (pattern, str) => +new RegExp(pattern).test(str))
-    this.db.create_function('regexp2', (pattern, str, flags) => +new RegExp(pattern, flags).test(str))
-    this.db.create_function('json_array_contains', (array, value) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
-    this.db.create_function('modulo', (left, right) => left % right)
-    this.db.create_function('rand', () => Math.random())
+    const { DatabaseSync } = await import('node:sqlite')
+    this.db = new DatabaseSync(this.path)
+
+    this.db.function('regexp', (pattern: string, str: string) => +new RegExp(pattern).test(str))
+    this.db.function('regexp2', (pattern: string, str: string, flags: string) => +new RegExp(pattern, flags).test(str))
+    this.db.function('json_array_contains', (array: string, value: string) => +(JSON.parse(array) as any[]).includes(JSON.parse(value)))
+    this.db.function('modulo', (left: number, right: number) => left % right)
+    this.db.function('rand', () => Math.random())
 
     this.define<boolean, number>({
       types: ['boolean'],
@@ -227,7 +199,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       load: value => isNullable(value) ? value : new Date(Number(value)),
     })
 
-    this.define<ArrayBuffer, ArrayBuffer>({
+    this.define<ArrayBuffer, ArrayBufferView>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : new Uint8Array(value),
       load: value => isNullable(value) ? value : Binary.fromSource(value),
@@ -247,17 +219,12 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async stop() {
     await new Promise(resolve => setTimeout(resolve, 0))
     this.db?.close()
-    if (this.beforeUnload) {
-      this.beforeUnload()
-      window.removeEventListener('beforeunload', this.beforeUnload)
-    }
   }
 
-  _exec(sql: string, params: any, callback: (stmt: init.Statement) => any) {
+  _exec(sql: string, params: any, callback: (stmt: StatementSync) => any) {
     try {
       const stmt = this.db.prepare(sql)
       const result = callback(stmt)
-      stmt.free()
       this.ctx.logger?.debug('> %s', sql, params)
       return result
     } catch (e) {
@@ -268,28 +235,20 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
 
   _all(sql: string, params: any = [], config?: { useBigInt: boolean }) {
     return this._exec(sql, params, (stmt) => {
-      stmt.bind(params)
-      const result: any[] = []
-      while (stmt.step()) {
-        // @ts-ignore
-        result.push(stmt.getAsObject(null, config))
-      }
-      return result
+      stmt.setReadBigInts(config?.useBigInt || false)
+      return stmt.all(...params)
     })
   }
 
   _get(sql: string, params: any = [], config?: { useBigInt: boolean }) {
-    // @ts-ignore
-    return this._exec(sql, params, stmt => stmt.getAsObject(params, config))
-  }
-
-  _export() {
-    const data = this.db.export()
-    return writeFile(this.path, data)
+    return this._exec(sql, params, (stmt) => {
+      stmt.setReadBigInts(config?.useBigInt || false)
+      return stmt.get(...params)
+    })
   }
 
   _run(sql: string, params: any = [], callback?: () => any) {
-    this._exec(sql, params, stmt => stmt.run(params))
+    this._exec(sql, params, stmt => stmt.run(...params))
     const result = callback?.()
     return result
   }
@@ -306,8 +265,13 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async stats() {
-    const stats: Driver.Stats = { size: this.db.size(), tables: {} }
-    const tableNames: { name: string }[] = this._all('SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;')
+    const pageCount = this._get(`PRAGMA page_count`) as { page_count?: number | bigint }
+    const pageSize = this._get(`PRAGMA page_size`) as { page_size?: number | bigint }
+    const stats: Driver.Stats = {
+      size: Number(pageCount?.page_count ?? 0) * Number(pageSize?.page_size ?? 0),
+      tables: {},
+    }
+    const tableNames: { name: string }[] = this._all("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
     const dbstats: { name: string; size: number }[] = this._all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
     tableNames.forEach(tbl => {
       stats.tables[tbl.name] = this._get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)

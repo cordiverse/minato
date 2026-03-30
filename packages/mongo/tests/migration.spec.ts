@@ -51,8 +51,6 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
     await ctx.events.flush()
   }
 
-  before(() => ctx.start())
-
   beforeEach(async () => {
     fiber = ctx.intercept('logger', { level: 3 }).plugin(MongoDriver, {
       host: 'localhost',
