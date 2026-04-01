@@ -222,19 +222,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     const meta = { _id: table }, found = await metaTable.findOne(meta)
     if (!isNullable(found?.autoInc)) return
 
-    const coll = this.db.collection(table)
-    // Primary _id cannot be modified thus should always meet the requirements
-    if (!this.getVirtualKey(table)) {
-      const bulk = coll.initializeOrderedBulkOp()
-      await coll.find().forEach((data) => {
-        bulk
-          .find({ [primary]: data[primary] })
-          .update({ $set: { [primary]: +data[primary] } })
-      })
-      if (bulk.batches.length) await bulk.execute()
-    }
-
-    const [latest] = await coll.find().sort(this.getVirtualKey(table) ? '_id' : primary, -1).limit(1).toArray()
+    const [latest] = await this.db.collection(table).find().sort(this.getVirtualKey(table) ? '_id' : primary, -1).limit(1).toArray()
     await metaTable.updateOne(meta, {
       $set: { autoInc: latest ? +latest[this.getVirtualKey(table) ? '_id' : primary] : 0, virtual: !!this.getVirtualKey(table) },
     }, { upsert: true })
