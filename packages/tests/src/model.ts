@@ -38,7 +38,7 @@ interface DType {
   timestamp?: Date
   date?: Date
   time?: Date
-  binary?: ArrayBuffer
+  binary?: ArrayBuffer | Buffer
   bigint?: bigint
   bnum?: number
   bnum2?: number
@@ -91,6 +91,10 @@ function toBinary(source: string): ArrayBuffer {
   return new TextEncoder().encode(source).buffer
 }
 
+function fromBinary(source: ArrayBuffer): string {
+  return new TextDecoder().decode(source)
+}
+
 function flatten(type: any, prefix) {
   if (typeof type === 'object' && type?.type === 'object') {
     const result = {}
@@ -121,7 +125,7 @@ function ModelOperations(database: Database<Tables, Types>) {
     const bnum = database.define({
       type: 'binary',
       dump: value => isNullable(value) ? value : toBinary(String(value)),
-      load: value => isNullable(value) ? value : +Buffer.from(value),
+      load: value => isNullable(value) ? value : +fromBinary(value),
       initial: 0,
     })
 

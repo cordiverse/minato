@@ -302,6 +302,9 @@ export class Model<S = any> {
     this.checkIndex(this.primary)
     this.unique.forEach(index => this.checkIndex(index))
     this.indexes.forEach(index => this.checkIndex(index))
+
+    // update type cache
+    defineProperty(this, 'type', Type.Object(mapValues(this.fields, field => Type.fromField(field!))) as any)
   }
 
   private parseIndex(index: MaybeArray<string> | Driver.Index): Driver.Index {

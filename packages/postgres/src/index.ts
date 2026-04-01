@@ -113,7 +113,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
       },
     })
 
-    this.define<ArrayBuffer, ArrayBuffer>({
+    this.define<ArrayBuffer, any>({
       types: ['binary'],
       dump: value => value,
       load: value => isNullable(value) ? value : Binary.fromSource(value),

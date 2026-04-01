@@ -65,14 +65,8 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       charset: 'utf8mb4_general_ci',
       multipleStatements: true,
       typeCast: (field, next) => {
-        const { orgName, orgTable } = field.packet
-        const meta = this.database.tables[orgTable]?.fields[orgName]
-
         if (field.type === 'BIT') {
           return Boolean(field.buffer()?.readUint8(0))
-        } else if (meta?.type?.type === 'json') {
-        // for backward compatibility
-          return field.string() || meta.initial
         } else if (field.type === 'LONGLONG') {
           return field.string()
         } else {
@@ -121,7 +115,7 @@ export class MySQLDriver extends Driver<MySQLDriver.Config> {
       },
     })
 
-    this.define<ArrayBuffer, ArrayBuffer>({
+    this.define<ArrayBuffer, any>({
       types: ['binary'],
       dump: value => value,
       load: value => isNullable(value) ? value : Binary.fromSource(value),

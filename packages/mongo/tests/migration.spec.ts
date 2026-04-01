@@ -1,6 +1,7 @@
 import { $, Database, Driver, Primary } from 'minato'
 import { Context, Fiber } from 'cordis'
 import MongoDriver from '@minatojs/driver-mongo'
+import Logger from '@cordisjs/plugin-logger'
 import { expect } from '@minatojs/tests'
 
 interface Foo {
@@ -35,35 +36,39 @@ interface Tables {
 
 describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   const ctx = new Context()
-  ctx.plugin(Database)
 
-  const database = ctx.minato as Database<Tables>
+  let database: Database<Tables>
   let fiber: Fiber<Context> | undefined
 
   const resetConfig = async (optimizeIndex: boolean) => {
-    fiber?.dispose()
-    fiber = ctx.plugin(MongoDriver, {
+    await fiber?.dispose()
+    fiber = await ctx.plugin(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
       optimizeIndex,
     })
-    await ctx.events.flush()
+    database.refresh()
   }
 
+  before(async () => {
+    await ctx.plugin(Database)
+    await ctx.plugin(Logger)
+    database = ctx.model as Database<Tables>
+  })
+
   beforeEach(async () => {
-    fiber = ctx.intercept('logger', { level: 3 }).plugin(MongoDriver, {
+    fiber = await ctx.plugin(MongoDriver, {
       host: 'localhost',
       port: 27017,
       database: 'test',
       optimizeIndex: false,
     })
-    await ctx.events.flush()
   })
 
   afterEach(async () => {
     await database.dropAll()
-    fiber?.dispose()
+    await fiber?.dispose()
   })
 
   it('reset optimizeIndex', async () => {

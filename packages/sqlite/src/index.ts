@@ -199,7 +199,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       load: value => isNullable(value) ? value : new Date(Number(value)),
     })
 
-    this.define<ArrayBuffer, ArrayBufferView>({
+    this.define<ArrayBuffer, any>({
       types: ['binary'],
       dump: value => isNullable(value) ? value : new Uint8Array(value),
       load: value => isNullable(value) ? value : Binary.fromSource(value),
@@ -381,7 +381,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
       const chunk = data.slice(i, i + step)
       const results = await this.database.get(table as never, {
         $or: chunk.map(item => Object.fromEntries(keys.map(key => [key, item[key]]))),
-      })
+      } as any) as any[]
       for (const item of chunk) {
         const row = results.find(row => {
           // flatten key to respect model
