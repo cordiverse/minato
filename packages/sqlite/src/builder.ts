@@ -1,6 +1,6 @@
 import { Builder, escapeId } from '@minatojs/sql-utils'
 import { Binary, Dict, isNullable } from 'cosmokit'
-import { Driver, Field, Model, randomId, RegExpLike, Type } from 'minato'
+import { Driver, Field, isEvalExpr, Model, randomId, RegExpLike, Type } from 'minato'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {
@@ -32,6 +32,9 @@ export class SQLiteBuilder extends Builder {
       const res = Field.date.includes(type.type as any) ? `cast(${value} / 1000 as integer)` : `cast(${this.parseEval(arg)} as double)`
       return this.asEncoded(`ifnull(${res}, 0)`, false)
     }
+
+    this.evalOperators.$in = ([key, value]) => this.asEncoded(this.createMemberEval(key, value, ''), false)
+    this.evalOperators.$nin = ([key, value]) => this.asEncoded(this.createMemberEval(key, value, ' NOT'), false)
 
     const binaryXor = (left: string, right: string) => `((${left} & ~${right}) | (~${left} & ${right}))`
     this.evalOperators.$xor = (args) => {
@@ -66,6 +69,25 @@ export class SQLiteBuilder extends Builder {
     return super.escapePrimitive(value, type)
   }
 
+  protected createMemberEval(rawKey: any, value: any, notStr = '') {
+    const key = this.parseEval(rawKey, false)
+    if (Array.isArray(value)) {
+      if (!value.length) return notStr ? this.$true : this.$false
+      if (Array.isArray(value[0])) {
+        return `(${key})${notStr} in (${value.map((val: any[]) => `(${val.map(x => this.escape(x)).join(', ')})`).join(', ')})`
+      }
+      return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
+    } else if (value.$exec) {
+      return `(${key})${notStr} in ${this.parseSelection(value.$exec, true)}`
+    } else if (Type.fromTerm(value)?.type === 'list') {
+      const res = this.listContains(this.parseEval(value), key)
+      return notStr ? this.logicalNot(res) : res
+    } else {
+      const res = this.jsonContains(this.parseEval(value, false), isEvalExpr(rawKey) ? this.encode(key, true, true) : this.escape(rawKey, 'json'))
+      return notStr ? this.logicalNot(res) : res
+    }
+  }
+
   protected createElementQuery(key: string, value: any) {
     if (this.isJsonQuery(key)) {
       return this.jsonContains(key, this.escape(value, 'json'))
@@ -80,6 +102,10 @@ export class SQLiteBuilder extends Builder {
     } else {
       return `regexp(${this.escape(typeof value === 'string' ? value : value.source)}, ${key})`
     }
+  }
+
+  protected listContains(list: any, value: string) {
+    return `(',' || ${list} || ',') LIKE '%,' || ${value} || ',%'`
   }
 
   protected jsonLength(value: string) {

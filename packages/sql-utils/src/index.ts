@@ -217,6 +217,9 @@ export class Builder {
       return `${key}${notStr} in (${value.map(val => this.escape(val)).join(', ')})`
     } else if (value.$exec) {
       return `(${key})${notStr} in ${this.parseSelection(value.$exec, true)}`
+    } else if (Type.fromTerm(value)?.type === 'list') {
+      const res = this.listContains(this.parseEval(value), key)
+      return notStr ? this.logicalNot(res) : res
     } else {
       const res = this.jsonContains(this.parseEval(value, false), this.encode(key, true, true))
       return notStr ? this.logicalNot(res) : res
@@ -231,9 +234,13 @@ export class Builder {
     }
   }
 
+  protected listContains(list: any, value: string) {
+    return `find_in_set(${value}, ${list})`
+  }
+
   protected createElementQuery(key: string, value: any) {
     if (this.isJsonQuery(key)) {
-      return this.jsonContains(key, this.encode(value, true, true))
+      return this.jsonContains(key, this.encode(this.escape(value), true, true))
     } else {
       return `find_in_set(${this.escape(value)}, ${key})`
     }
