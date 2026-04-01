@@ -4,9 +4,9 @@ import MemoryDriver from '@minatojs/driver-memory'
 import Logger from '@cordisjs/plugin-logger'
 import test from '@minatojs/tests'
 
-const ctx = new Context()
-
 describe('@minatojs/driver-memory', () => {
+  const ctx = new Context()
+
   before(async () => {
     await ctx.plugin(Logger)
     await ctx.plugin(Database)
