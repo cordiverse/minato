@@ -95,10 +95,11 @@ export namespace Type {
     return fields.length ? Object(globalThis.Object.fromEntries(fields)) : undefined
   }
 
-  export function transform(value: any, type: Type, callback: (value: any, type?: Type) => any) {
+  export function transform<T = any>(value: any, type: Type, callback: (value: any, type?: Type) => T) {
     if (!isNullable(value) && type?.inner) {
       if (Type.isArray(type)) {
-        return (value as any[]).map(x => callback(x, Type.getInner(type))).filter(x => !type.ignoreNull || !isEmpty(x))
+        const innerType = Type.getInner(type)
+        return (value as any[]).map(x => callback(x, innerType)).filter(x => !type.ignoreNull || !isEmpty(x))
       } else {
         if (type.ignoreNull && isEmpty(value)) return null
         return mapValues(value, (x, k) => callback(x, Type.getInner(type, k)))

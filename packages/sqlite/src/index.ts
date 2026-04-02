@@ -295,7 +295,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     const sql = builder.get(sel)
     if (!sql) return []
     const rows: any[] = this._all(sql, [], { useBigInt: true })
-    return rows.map(row => builder.load(row, model))
+    return builder.load(rows, model)
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {

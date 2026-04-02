@@ -381,7 +381,7 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
     const sql = builder.get(sel)
     if (!sql) return []
     return Promise.all([...builder.prequeries, sql].map(x => this.queue(x))).then((data) => {
-      return data.at(-1).map((row) => builder.load(row, model))
+      return builder.load(data.at(-1), model)
     })
   }
 

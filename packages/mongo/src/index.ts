@@ -334,7 +334,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     return this.db
       .collection(transformer.table)
       .aggregate(transformer.pipeline, { allowDiskUse: true, session: this.session })
-      .toArray().then(rows => rows.map(row => this.builder.load(row, sel.model)))
+      .toArray().then(rows => this.builder.load(rows, sel.model))
   }
 
   async eval(sel: Selection.Immutable, expr: Eval.Expr) {

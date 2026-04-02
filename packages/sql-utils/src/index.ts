@@ -609,32 +609,79 @@ export class Builder {
   /**
    * Convert value from Field.Type to Type.
    */
+  load(rows: any[], model: Model): any[]
+  load(value: any, type: Model | Type | Eval.Expr | undefined, root?: boolean): any
   load(value: any, type: Model | Type | Eval.Expr | undefined, root: boolean = true): any {
     if (!type) return value
 
-    if (Type.isType(type) || isEvalExpr(type)) {
-      type = Type.isType(type) ? type : Type.fromTerm(type)
-      const converter = this.driver.types[(root && value && type.type === 'json') ? 'json' : type.type]
-      const ancestor = this.driver.database.types[type.type]?.type
-      let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined, root)
-      res = this.transform(res, type, 'load')
-      res = converter?.load ? converter.load(res) : res
-      res = Type.transform(res, type, (value, type) => this.load(value, type, false))
-      return (!isNullable(res) && type.inner && !Type.isArray(type)) ? unravel(res) : res
+    const load = this.compileLoad(type, root)
+
+    if (root && Array.isArray(value) && type instanceof Model) {
+      return value.map(load)
     }
 
-    const result = {}
-    for (const key in value) {
-      if (!(key in type.fields)) continue
-      result[key] = value[key]
-      let subroot = root
-      if (subroot && result[key] && this.isEncoded(key)) {
-        subroot = false
-        result[key] = this.driver.types['json'].load(result[key])
+    return load(value)
+  }
+
+  compileTransform(type: Type | Eval.Expr | undefined, method: 'encode' | 'decode' | 'load' | 'dump') {
+    if (!type) return (value: string) => value
+    const resolvedType = Type.isType(type) ? type : Type.fromTerm(type)
+    const ancestorType = this.driver.database.types[resolvedType.type]?.type
+    const transformer = this.transformers[resolvedType.type] ?? this.transformers[ancestorType!]
+    return transformer?.[method] ? (value: string) => transformer[method]!(value) : (value: string) => value
+  }
+
+  compileLoad(type: Model | Type | Eval.Expr | undefined, root: boolean = true) {
+    if (!type) return (value: any) => value
+
+    // Handle Type/Eval.Expr types
+    if (Type.isType(type) || isEvalExpr(type)) {
+      const resolvedType = Type.isType(type) ? type : Type.fromTerm(type)
+      const converter = this.driver.types[(root && resolvedType.type === 'json') ? 'json' : resolvedType.type]
+      const ancestor = this.driver.database.types[resolvedType.type]?.type
+      const ancestorLoad = ancestor ? this.compileLoad(Type.fromField(ancestor), root) : null
+      const transformLoad = this.compileTransform(resolvedType, 'load')
+      const innerLoads = new WeakMap<Type, (value: any) => any>()
+      const getInnerLoad = (type?: Type) => {
+        if (!type) return (value: any) => value
+        let load = innerLoads.get(type)
+        if (!load) {
+          load = this.compileLoad(type, false)
+          innerLoads.set(type, load)
+        }
+        return load
       }
-      result[key] = this.load(result[key], type.fields[key]!.type, subroot)
+
+      return (value: any) => {
+        let res = ancestorLoad ? ancestorLoad(value) : value
+        res = transformLoad(res)
+        if (converter?.load) res = converter.load(res)
+        if (resolvedType.inner) {
+          res = Type.transform(res, resolvedType, (x, type) => getInnerLoad(type ?? Type.getInner(resolvedType))(x))
+        }
+        return (!isNullable(res) && resolvedType.inner && !Type.isArray(resolvedType)) ? unravel(res) : res
+      }
     }
-    return type.parse(result)
+
+    // Handle Model types
+    const fields = type.fields
+    const fieldKeys = Object.keys(fields)
+    const jsonLoad = this.driver.types['json'].load
+    const loads = fieldKeys.map(key => this.compileLoad(fields[key]!.type, true))
+
+    return (value: any) => {
+      const result = {}
+      for (let i = 0; i < fieldKeys.length; i++) {
+        const key = fieldKeys[i]
+        if (!(key in value)) continue
+        let val = value[key]
+        if (val && this.isEncoded(key)) {
+          val = jsonLoad(val)
+        }
+        result[key] = loads[i](val)
+      }
+      return type.parse(result)
+    }
   }
 
   /**

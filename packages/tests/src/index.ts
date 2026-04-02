@@ -8,6 +8,7 @@ import Selection from './selection'
 import Json from './json'
 import Transaction from './transaction'
 import Relation from './relation'
+import Performance from './performance'
 import './setup'
 
 export { expect } from 'chai'
@@ -21,7 +22,7 @@ type UnitOptions<T> = (T extends (database: Database, options?: infer R) => any 
 
 type DatabaseLike = Database | (() => Database) | { model: Database }
 
-type Unit<T> = ((source: DatabaseLike, options?: UnitOptions<T>) => void) & {
+type Unit<T> = ((source: DatabaseLike, options?: UnitOptions<T>, overrideOptions?: UnitOptions<T>) => void) & {
   [K in keyof T as Exclude<K, Keywords>]: Unit<T[K]>
 }
 
@@ -51,7 +52,7 @@ function createLazyDatabase(getDb: () => Database): Database {
 }
 
 function createUnit<T>(target: T, root = false): Unit<T> {
-  const test: any = (source: DatabaseLike, options: any = {}) => {
+  const test: any = (source: DatabaseLike, options: any = {}, overrideOptions?: any) => {
     const getDb = resolveGetDb(source)
 
     function callback() {
@@ -60,13 +61,20 @@ function createUnit<T>(target: T, root = false): Unit<T> {
       }
 
       for (const key in target) {
+        if (overrideOptions && !overrideOptions[key]) continue
         if (options[key] === false || Keywords.includes(key)) continue
-        test[key](getDb, options[key])
+        test[key](getDb, options[key], overrideOptions?.[key] === true ? undefined : overrideOptions?.[key])
       }
     }
 
-    process.argv.filter(x => x.startsWith('--+')).forEach(x => setValue(options, x.slice(3), true))
-    process.argv.filter(x => x.startsWith('---')).forEach(x => setValue(options, x.slice(3), false))
+    if (root) {
+      process.argv.filter(x => x.startsWith('--+')).forEach(x => setValue(options, x.slice(3), true))
+      process.argv.filter(x => x.startsWith('---')).forEach(x => setValue(options, x.slice(3), false))
+      if (process.argv.some(x => x.startsWith('--!'))) {
+        overrideOptions = {}
+        process.argv.filter(x => x.startsWith('--!')).forEach(x => setValue(overrideOptions, x.slice(3), true))
+      }
+    }
 
     const title = target['name']
     if (!root && title) {
@@ -94,6 +102,7 @@ namespace Tests {
   export const json = Json
   export const transaction = Transaction
   export const relation = Relation
+  export const performance = Performance
 }
 
 export default createUnit(Tests, true)
