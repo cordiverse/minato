@@ -44,7 +44,7 @@ function getEnumerableSymbols(target) {
   return keys
 }
 
-config.deepEqual = (expected, actual, options) => {
+config.deepEqual = (expected, actual) => {
   return util.eql(expected, actual, {
     comparator: (expected, actual) => {
       if (isNullable(expected) && isNullable(actual)) return true
@@ -55,7 +55,7 @@ config.deepEqual = (expected, actual, options) => {
           ...getEnumerableSymbols(expected),
           ...getEnumerableSymbols(actual),
         ])
-        return [...keys].every(key => config.deepEqual!(expected[key], actual[key], options))
+        return [...keys].every(key => config.deepEqual(expected[key], actual[key]))
       }
       return null
     },

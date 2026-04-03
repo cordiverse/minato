@@ -1,3 +1,5 @@
+export * from './shape'
+
 import { Database } from 'minato'
 import ModelOperations from './model'
 import QueryOperators from './query'
@@ -16,7 +18,7 @@ const Keywords = ['name']
 type Keywords = 'name'
 
 type UnitOptions<T> = (T extends (database: Database, options?: infer R) => any ? R : {}) & {
-  [K in keyof T as Exclude<K, Keywords>]?: false | UnitOptions<T[K]>
+  [K in keyof T as Exclude<K, Keywords>]?: boolean | UnitOptions<T[K]>
 }
 
 type DatabaseLike = Database | (() => Database) | { model: Database }
