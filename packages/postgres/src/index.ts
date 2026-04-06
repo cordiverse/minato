@@ -302,7 +302,7 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
     const query = builder.get(sel)
     if (!query) return []
     return this.queue(query).then(data => {
-      return data.map(row => builder.load(row, sel.model))
+      return builder.load(data, sel.model)
     })
   }
 

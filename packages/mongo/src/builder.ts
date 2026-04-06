@@ -608,26 +608,60 @@ export class Builder {
     return res
   }
 
+  load(rows: any[], model: Model): any[]
+  load(value: any, type: Model | Type | Eval.Expr | undefined): any
   load(value: any, type: Model | Type | Eval.Expr | undefined): any {
     if (!type) return value
+    const load = this.compileLoad(type)
+    if (Array.isArray(value) && type instanceof Model) {
+      return value.map(load)
+    }
+    return load(value)
+  }
+
+  compileLoad(type: Model | Type | Eval.Expr | undefined) {
+    if (!type) return (value: any) => value
 
     if (Type.isType(type) || isEvalExpr(type)) {
-      type = Type.isType(type) ? type : Type.fromTerm(type)
-      const converter = this.driver.types[type.type]
-      const ancestor = this.driver.database.types[type.type]?.type
-      let res = this.load(value, ancestor ? Type.fromField(ancestor) : undefined)
-      res = converter?.load ? converter.load(res) : res
-      res = Type.transform(res, type, (value, type) => this.load(value, type))
-      return res
+      const resolvedType = Type.isType(type) ? type : Type.fromTerm(type)
+      const converter = this.driver.types[resolvedType.type]
+      const ancestor = this.driver.database.types[resolvedType.type]?.type
+      const ancestorLoad = ancestor ? this.compileLoad(Type.fromField(ancestor)) : null
+      const innerLoads = new WeakMap<Type, (value: any) => any>()
+      const getInnerLoad = (type?: Type) => {
+        if (!type) return (value: any) => value
+        let load = innerLoads.get(type)
+        if (!load) {
+          load = this.compileLoad(type)
+          innerLoads.set(type, load)
+        }
+        return load
+      }
+
+      return (value: any) => {
+        let res = ancestorLoad ? ancestorLoad(value) : value
+        res = converter?.load ? converter.load(res) : res
+        if (resolvedType.inner) {
+          res = Type.transform(res, resolvedType, (value, type) => getInnerLoad(type ?? Type.getInner(resolvedType))(value))
+        }
+        return res
+      }
     }
 
-    value = type.format(value, false)
-    const result = {}
-    for (const key in value) {
-      if (!(key in type.fields)) continue
-      result[key] = this.load(value[key], type.fields[key]!.type)
+    const fields = type.fields
+    const fieldKeys = Object.keys(fields)
+    const loads = fieldKeys.map(key => this.compileLoad(fields[key]!.type))
+
+    return (value: any) => {
+      value = type.format(value, false)
+      const result = {}
+      for (let i = 0; i < fieldKeys.length; i++) {
+        const key = fieldKeys[i]
+        if (!(key in value)) continue
+        result[key] = loads[i](value[key])
+      }
+      return type.parse(result)
     }
-    return type.parse(result)
   }
 
   toUpdateExpr(value: any, type: Type | undefined, root: boolean = true) {
