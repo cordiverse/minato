@@ -323,6 +323,17 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     return row
   }
 
+  public mapVirtualUpdateKey(key: string, virtualKey?: string) {
+    return key === virtualKey ? '_id' : key
+  }
+
+  public mapVirtualUpdate(update: Dict, virtualKey?: string, transform?: (value: any, key: string) => any) {
+    return Object.fromEntries(Object.entries(update).map(([key, value]) => [
+      this.mapVirtualUpdateKey(key, virtualKey),
+      transform ? transform(value, key) : value,
+    ]))
+  }
+
   private transformQuery(sel: Selection.Immutable, query: Query.Expr, table: string) {
     return new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table)).query(sel, query)
   }
@@ -361,8 +372,9 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       if (!filter) return {}
       const coll = this.db.collection(table)
 
-      const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-      const $set = mapValues(update, (item: any, key) => transformer.toUpdateExpr(item, model.getType(key)))
+      const virtualKey = this.getVirtualKey(table)
+      const transformer = new Builder(this, Object.keys(sel.tables), virtualKey, '$' + tempKey + '.')
+      const $set = this.mapVirtualUpdate(update, virtualKey, (item, key) => transformer.toUpdateExpr(item, model.getType(key)))
       const $unset = Object.entries($set)
         .filter(([_, value]) => typeof value === 'object')
         .map(([key, _]) => key)
@@ -441,6 +453,7 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
     if (!data.length) return {}
     const { table, ref, model } = sel
     const coll = this.db.collection(table)
+    const virtualKey = this.getVirtualKey(table)
 
     // If ensure primary, we must figure out number of insertions
     if (this.shouldEnsurePrimary(table)) {
@@ -456,7 +469,10 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
         const item = original.find(item => keys.every(key => item[key]?.valueOf() === update[key]?.valueOf()))
         if (item) {
           const updateFields = new Set(Object.keys(update).map(key => key.split('.', 1)[0]))
-          const override = this.builder.dump(omit(pick(executeUpdate(item, update, ref), updateFields), keys), model)
+          const override = this.mapVirtualUpdate(
+            this.builder.dump(omit(pick(executeUpdate(item, update, ref), updateFields), keys), model),
+            virtualKey,
+          )
           const query = this.transformQuery(sel, pick(item, keys), table)
           if (!query) continue
           bulk.find(query).updateOne({ $set: override })
@@ -475,25 +491,30 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
       const bulk = coll.initializeUnorderedBulkOp()
       const initial = model.create()
       const hasInitial = !!Object.keys(initial).length
+      const initialDump = this.mapVirtualUpdate(this.builder.dump(initial, model), virtualKey)
 
       for (const update of data) {
         const query = this.transformQuery(sel, pick(update, keys), table)!
-        const transformer = new Builder(this, Object.keys(sel.tables), this.getVirtualKey(table), '$' + tempKey + '.')
-        const $set = mapValues(update, (item: any, key) => transformer.toUpdateExpr(item, model.getType(key)))
+        const transformer = new Builder(this, Object.keys(sel.tables), virtualKey, '$' + tempKey + '.')
+        const $set = this.mapVirtualUpdate(omit(update, keys), virtualKey, (item, key) => transformer.toUpdateExpr(item, model.getType(key)))
         const $unset = Object.entries($set)
           .filter(([_, value]) => typeof value === 'object')
           .map(([key, _]) => key)
         const preset = Object.fromEntries(transformer.walkedKeys.map(key => [tempKey + '.' + key, {
-          $ifNull: ['$' + key, initial[key]],
+          $ifNull: ['$' + key, initialDump[key]],
         }]))
 
-        bulk.find(query).upsert().updateOne([
+        const pipeline: any[] = [
           ...transformer.walkedKeys.length ? [{ $set: preset }] : [],
-          ...hasInitial ? [{ $replaceRoot: { newRoot: { $mergeObjects: [initial, '$$ROOT'] } } }] : [],
+          ...hasInitial ? [{ $replaceRoot: { newRoot: { $mergeObjects: [initialDump, '$$ROOT'] } } }] : [],
           ...$unset.length ? [{ $unset }] : [],
-          { $set },
+          ...Object.keys($set).length ? [{ $set }] : [],
           ...transformer.walkedKeys.length ? [{ $unset: [tempKey] }] : [],
-        ])
+        ]
+        if (!pipeline.length) {
+          pipeline.push({ $replaceRoot: { newRoot: '$$ROOT' } })
+        }
+        bulk.find(query).upsert().updateOne(pipeline)
       }
       const result = await bulk.execute({ session: this.session })
       return { inserted: result.insertedCount + result.upsertedCount, matched: result.matchedCount, modified: result.modifiedCount }

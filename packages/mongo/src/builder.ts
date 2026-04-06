@@ -579,7 +579,9 @@ export class Builder {
       }
       this.evalKey = $
     } else if (sel.type === 'set') {
-      const $set = mapValues(update, (expr, key) => this.eval(isEvalExpr(expr) ? expr : Eval.literal(expr, model.getType(key))))
+      const $set = this.driver.mapVirtualUpdate(update, this.virtualKey, (expr, key) => {
+        return this.eval(isEvalExpr(expr) ? expr : Eval.literal(expr, model.getType(key)))
+      })
       this.pipeline.push(...this.flushLookups(), { $set }, {
         $merge: {
           into: table,

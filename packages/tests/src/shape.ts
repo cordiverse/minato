@@ -1,6 +1,26 @@
 import { Binary, deepEqual, isNullable } from 'cosmokit'
 import { inspect } from 'util'
 
+declare global {
+  namespace Chai {
+    interface Assertion {
+      shape(expected: any, message?: string): Assertion
+    }
+
+    interface Ordered {
+      shape(expected: any, message?: string): Assertion
+    }
+
+    interface Eventually {
+      shape(expected: any, message?: string): PromisedAssertion
+    }
+
+    interface PromisedOrdered {
+      shape(expected: any, message?: string): PromisedAssertion
+    }
+  }
+}
+
 function flag(obj, key, value?) {
   var flags = obj.__flags || (obj.__flags = Object.create(null));
   if (arguments.length === 3) {
