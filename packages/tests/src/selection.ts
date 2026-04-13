@@ -15,12 +15,14 @@ interface Bar {
   value: number
 }
 
-interface Tables {
-  foo: Foo
-  bar: Bar
+declare module 'minato' {
+  interface Tables {
+    foo: Foo
+    bar: Bar
+  }
 }
 
-function SelectionTests(database: Database<Tables>) {
+function SelectionTests(database: Database) {
   before(async () => {
     database.extend('foo', {
       id: 'unsigned',
@@ -56,7 +58,7 @@ function SelectionTests(database: Database<Tables>) {
 }
 
 namespace SelectionTests {
-  export function sort(database: Database<Tables>) {
+  export function sort(database: Database) {
     it('shorthand', async () => {
       await expect(database.get('foo', {}, {
         sort: { id: 'desc', value: 'asc' }
@@ -108,7 +110,7 @@ namespace SelectionTests {
     })
   }
 
-  export function project(database: Database<Tables>) {
+  export function project(database: Database) {
     it('shorthand', async () => {
       await expect(database.get('foo', {}, ['id'])).to.eventually.deep.equal([
         { id: 1 },
@@ -168,7 +170,7 @@ namespace SelectionTests {
     })
   }
 
-  export function aggregate(database: Database<Tables>) {
+  export function aggregate(database: Database) {
     it('shorthand', async () => {
       await expect(database.eval('foo', row => $.sum(row.id))).to.eventually.equal(6)
       await expect(database.eval('foo', row => $.count(row.value))).to.eventually.equal(2)
@@ -200,7 +202,7 @@ namespace SelectionTests {
     })
   }
 
-  export function group(database: Database<Tables>) {
+  export function group(database: Database) {
     it('multiple', async () => {
       await expect(database
         .select('foo')
@@ -287,7 +289,7 @@ namespace SelectionTests {
     })
   }
 
-  export function join(database: Database<Tables>) {
+  export function join(database: Database) {
     it('inner join', async () => {
       await expect(database
         .join(['foo', 'bar'])
@@ -487,7 +489,7 @@ namespace SelectionTests {
     })
   }
 
-  export function subquery(database: Database<Tables>) {
+  export function subquery(database: Database) {
     it('select', async () => {
       await expect(database.select('foo')
         .project({

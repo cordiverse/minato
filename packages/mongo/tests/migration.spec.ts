@@ -59,7 +59,7 @@ interface Tables {
 describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
   const ctx = new Context()
 
-  let database: Database<Tables>
+  let database: Database
   let fiber: Fiber<Context> | undefined
 
   const resetConfig = async (optimizeIndex: boolean) => {
@@ -82,7 +82,7 @@ describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
       database: 'test',
       optimizeIndex: false,
     })
-    database = ctx.model as Database<Tables>
+    database = ctx.model as Database
   })
 
   after(async () => {

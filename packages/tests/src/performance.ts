@@ -20,12 +20,14 @@ interface PerfNested {
   }[]
 }
 
-interface Tables {
-  perf: Perf
-  perfNested: PerfNested
+declare module 'minato' {
+  interface Tables {
+    perf: Perf
+    perfNested: PerfNested
+  }
 }
 
-function PerformanceTests(database: Database<Tables>) {
+function PerformanceTests(database: Database) {
   const benchmark = async <T>(label: string = '', repeat: number, task: (index: number) => Promise<T>) => {
     await task(0)
     const start = performance.now()

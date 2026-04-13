@@ -1,5 +1,5 @@
 import { mapValues, isNullable, deduplicate, omit } from 'cosmokit'
-import { $, Database, Field, getCell, Type, unravel } from 'minato'
+import { $, Database, Field, getCell, Tables, Type, unravel } from 'minato'
 import { expect } from 'chai'
 
 interface DType {
@@ -73,18 +73,20 @@ interface RecursiveY {
   x?: RecursiveX
 }
 
-interface Tables {
-  dtypes: DType
-  dobjects: DObject
-  recurxs: RecursiveX
-}
+declare module 'minato' {
+  interface Tables {
+    dtypes: DType
+    dobjects: DObject
+    recurxs: RecursiveX
+  }
 
-interface Types {
-  bigint2: bigint
-  custom: Custom
-  recurx: RecursiveX
-  recury: RecursiveY
-  string2: string
+  interface Types {
+    bigint2: bigint
+    custom: Custom
+    recurx: RecursiveX
+    recury: RecursiveY
+    string2: string
+  }
 }
 
 function toBinary(source: string): ArrayBuffer {
@@ -107,7 +109,7 @@ function flatten(type: any, prefix) {
   }
 }
 
-function ModelOperations(database: Database<Tables, Types>) {
+function ModelOperations(database: Database) {
   before(() => {
     database.define('bigint2', {
       type: 'string',
@@ -159,7 +161,7 @@ function ModelOperations(database: Database<Tables, Types>) {
       },
     })
 
-    const baseFields: Field.Extension<DType, Types> = {
+    const baseFields: Field.Extension<DType> = {
       id: 'unsigned',
       text: {
         type: 'string',
@@ -311,7 +313,7 @@ namespace ModelOperations {
     { id: 7, baz: [{ nested: { id: 1, list: ['1', '1', '4'], array: [1, 1, 4], object2: { num: 10, text: 'ab', embed: { bool: false, bigint: BigInt(1e163) } }, bigint: BigInt(1e63), bnum: 114514, bnum2: 12345 } }, { nested: { id: 2 } }] },
   ]
 
-  async function setup<K extends keyof Tables>(database: Database<Tables>, name: K, table: Tables[K][]) {
+  async function setup<K extends keyof Tables>(database: Database, name: K, table: Tables[K][]) {
     await database.remove(name, {})
     const result: Tables[K][] = []
     for (const item of table) {
@@ -327,7 +329,7 @@ namespace ModelOperations {
     nullableComparator?: boolean
   }
 
-  export const fields = function Fields(database: Database<Tables, Types>, options: ModelOptions = {}) {
+  export const fields = function Fields(database: Database, options: ModelOptions = {}) {
     const { cast = true, typeModel = true } = options
 
     it('basic', async () => {
@@ -536,7 +538,7 @@ namespace ModelOperations {
     })
   }
 
-  export const object = function ObjectFields(database: Database<Tables, Types>, options: ModelOptions = {}) {
+  export const object = function ObjectFields(database: Database, options: ModelOptions = {}) {
     const { aggregateNull = true, nullableComparator = true, typeModel = true } = options
 
     it('basic', async () => {

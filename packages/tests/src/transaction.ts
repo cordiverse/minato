@@ -1,4 +1,4 @@
-import { $, Database } from 'minato'
+import { $, Database, Tables } from 'minato'
 import { expect } from 'chai'
 
 interface Bar {
@@ -12,11 +12,13 @@ interface Bar {
   time?: Date
 }
 
-interface Tables {
-  temptx: Bar
+declare module 'minato' {
+  interface Tables {
+    temptx: Bar
+  }
 }
 
-function TransactionOperations(database: Database<Tables>) {
+function TransactionOperations(database: Database) {
   before(() => {
     database.extend('temptx', {
       id: 'unsigned',
@@ -48,7 +50,7 @@ namespace TransactionOperations {
     { id: 7, time: new Date('1970-01-01 12:00:00') },
   ]
 
-  async function setup<K extends keyof Tables>(database: Database<Tables>, name: K, table: Tables[K][]) {
+  async function setup<K extends keyof Tables>(database: Database, name: K, table: Tables[K][]) {
     await database.remove(name, {})
     const result: Tables[K][] = []
     for (const item of table) {
@@ -57,7 +59,7 @@ namespace TransactionOperations {
     return result
   }
 
-  export function commit(database: Database<Tables>) {
+  export function commit(database: Database) {
     it('create', async () => {
       const table = barTable.map(bar => merge(database.tables.temptx.create(), bar))
       let counter = 0
@@ -142,7 +144,7 @@ namespace TransactionOperations {
     })
   }
 
-  export function abort(database: Database<Tables>) {
+  export function abort(database: Database) {
     it('create', async () => {
       const table = barTable.map(bar => merge(database.tables.temptx.create(), bar))
       let counter = 0

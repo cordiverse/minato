@@ -16,30 +16,13 @@ declare module 'cordis' {
   }
 
   interface Context {
-    [Types]: Types
-    [Tables]: Tables
-    [Context.Minato]: Context.Minato<this>
-    [Context.Database]: Context.Database<this>
-    model: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Minato]
-    database: Database<this[typeof Tables], this[typeof Types], this> & this[typeof Context.Database]
-  }
-
-  namespace Context {
-    const Minato: unique symbol
-    const Database: unique symbol
-    // https://github.com/typescript-eslint/typescript-eslint/issues/6720
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    interface Minato<C extends Context = Context> {}
-    // https://github.com/typescript-eslint/typescript-eslint/issues/6720
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    interface Database<C extends Context = Context> {}
+    model: Database
+    database: Database
   }
 }
 
-export const Types = Symbol.for('minato.types')
 export interface Types {}
 
-export const Tables = Symbol.for('minato.tables')
 export interface Tables {}
 
 export default Database

@@ -13,11 +13,13 @@ interface Foo {
   regex?: string
 }
 
-interface Tables {
-  temp1: Foo
+declare module 'minato' {
+  interface Tables {
+    temp1: Foo
+  }
 }
 
-function QueryOperators(database: Database<Tables>) {
+function QueryOperators(database: Database) {
   before(() => {
     database.extend('temp1', {
       id: 'unsigned',
@@ -40,7 +42,7 @@ namespace QueryOperators {
     nullableComparator?: boolean
   }
 
-  export const comparison = function Comparison(database: Database<Tables>, options: QueryOptions = {}) {
+  export const comparison = function Comparison(database: Database, options: QueryOptions = {}) {
     const { nullableComparator = true } = options
 
     before(async () => {
@@ -127,7 +129,7 @@ namespace QueryOperators {
     })
   }
 
-  export const existence = function Existence(database: Database<Tables>) {
+  export const existence = function Existence(database: Database) {
     before(async () => {
       await database.remove('temp1', {})
       await database.create('temp1', { date: new Date('2010-01-01') })
@@ -152,7 +154,7 @@ namespace QueryOperators {
     })
   }
 
-  export const membership = function Membership(database: Database<Tables>) {
+  export const membership = function Membership(database: Database) {
     before(async () => {
       await database.remove('temp1', {})
       await database.create('temp1', { value: 3 })
@@ -200,7 +202,7 @@ namespace QueryOperators {
     regexFor?: boolean
   }
 
-  export const regexp = function RegularExpression(database: Database<Tables>, options: RegExpOptions = {}) {
+  export const regexp = function RegularExpression(database: Database, options: RegExpOptions = {}) {
     const { regexBy = true, regexFor = true } = options
 
     before(async () => {
@@ -273,7 +275,7 @@ namespace QueryOperators {
     })
   }
 
-  export const bitwise = function Bitwise(database: Database<Tables>) {
+  export const bitwise = function Bitwise(database: Database) {
     before(async () => {
       await database.remove('temp1', {})
       await database.create('temp1', { value: 3 })
@@ -338,7 +340,7 @@ namespace QueryOperators {
     elementQuery?: boolean
   }
 
-  export const list = function List(database: Database<Tables>, options: ListOptions = {}) {
+  export const list = function List(database: Database, options: ListOptions = {}) {
     const { size = true, element = true, elementQuery = element } = options
 
     before(async () => {
@@ -385,7 +387,7 @@ namespace QueryOperators {
     })
   }
 
-  export const evaluation = function Evaluation(database: Database<Tables>) {
+  export const evaluation = function Evaluation(database: Database) {
     before(async () => {
       await database.remove('temp1', {})
       await database.create('temp1', { id: 1, value: 8 })
@@ -401,7 +403,7 @@ namespace QueryOperators {
   }
 
   namespace Logical {
-    export const queryLevel = function LogicalQueryLevel(database: Database<Tables>) {
+    export const queryLevel = function LogicalQueryLevel(database: Database) {
       before(async () => {
         await database.remove('temp1', {})
         await database.create('temp1', { id: 1 })
@@ -457,7 +459,7 @@ namespace QueryOperators {
       })
     }
 
-    export const fieldLevel = function LogicalFieldLevel(database: Database<Tables>) {
+    export const fieldLevel = function LogicalFieldLevel(database: Database) {
       before(async () => {
         await database.remove('temp1', {})
         await database.create('temp1', { id: 1 })

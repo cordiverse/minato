@@ -79,31 +79,27 @@ function mergeQuery<T>(base: Query.FieldExpr<T>, query: Query.Expr<Flatten<T>> |
 }
 
 export namespace Database {
-  export interface Intercept<C extends Context = Context> {
-    tables: Intercept.Tables<C[typeof Tables], C[typeof Types]>
-  }
-
-  export namespace Intercept {
-    export type Tables<S, N> = (keyof S)[] | {
-      [K in keyof S]?: Model.Intercept<S[K], N>
+  export interface Intercept {
+    tables: (keyof Tables)[] | {
+      [K in keyof Tables]?: Model.Intercept<Tables[K]>
     }
   }
 }
 
-export class Database<S = {}, N = {}, C extends Context = Context> extends Service<C> {
+export class Database extends Service {
   static readonly transact = Symbol.for('minato.transact')
   static readonly migrate = Symbol.for('minato.migrate')
 
   public tables: Dict<Model> = Object.create(null)
-  public drivers: Driver<any, C>[] = []
+  public drivers: Driver[] = []
   public types: Dict<Field.Transform> = Object.create(null)
 
-  private _driver: Driver<any, C> | undefined
+  private _driver: Driver | undefined
   private stashed = new Set<string>()
   private prepareTasks: Dict<Promise<void>> = Object.create(null)
   public migrateTasks: Dict<Promise<void>> = Object.create(null)
 
-  constructor(ctx: C) {
+  constructor(ctx: Context) {
     super(ctx, 'model')
   }
 
@@ -118,7 +114,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await Promise.all(Object.values(this.prepareTasks))
   }
 
-  private getDriver(table: string | Selection): Driver<any, C> {
+  private getDriver(table: string | Selection): Driver {
     if (Selection.is(table)) return table.driver as any
     const model: Model = this.tables[table]
     if (!model) throw new Error(`cannot resolve table "${table}"`)
@@ -141,7 +137,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await driver.prepareIndexes(name)
   }
 
-  extend<K extends Keys<S>>(name: K, fields: Field.Extension<S[K], N>, config: Partial<Model.Config<FlatKeys<S[K]>>> = {}) {
+  extend<K extends Keys<Tables>>(name: K, fields: Field.Extension<Tables[K]>, config: Partial<Model.Config<FlatKeys<Tables[K]>>> = {}) {
     let model = this.tables[name]
     if (!model) {
       model = this.tables[name] = new Model(name)
@@ -180,7 +176,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         const shared = Object.entries(relation.shared).map(([x, y]) => [Relation.buildSharedKey(x, y), model.fields[x]!.deftype] as const)
         const fields = relation.fields.map(x => [Relation.buildAssociationKey(x, name), model.fields[x]!.deftype] as const)
         const references = relation.references.map(x => [Relation.buildAssociationKey(x, relation.table), relModel.fields[x]?.deftype] as const)
-        this.extend(assocTable as any, {
+        this.extend(assocTable as never, {
           ...Object.fromEntries([...shared, ...fields, ...references]),
           [name]: {
             type: 'manyToOne',
@@ -281,12 +277,12 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return type
   }
 
-  define<K extends Exclude<Keys<N>, Field.Type | 'object' | 'array'>>(
+  define<K extends Exclude<Keys<Types>, Field.Type | 'object' | 'array'>>(
     name: K,
-    field: Field.Definition<N[K], N> | Field.Transform<N[K], any, N>,
+    field: Field.Definition<Types[K]> | Field.Transform<Types[K], any>,
   ): K
 
-  define<T>(field: Field.Definition<T, N> | Field.Transform<T, any, N>): Field.NewType<T>
+  define<T>(field: Field.Definition<T> | Field.Transform<T, any>): Field.NewType<T>
   define(name: any, field?: any) {
     if (typeof name === 'object') {
       field = name
@@ -308,20 +304,20 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return name as any
   }
 
-  migrate<K extends Keys<S>>(
+  migrate<K extends Keys<Tables>>(
     name: K,
-    fields: Field.Extension<S[K], N>,
+    fields: Field.Extension<Tables[K]>,
     callback: Model.Migration<this>,
   ) {
     this.extend(name, fields, { callback })
   }
 
   select<T>(table: Selection<T>, query?: Query<T>): Selection<T>
-  select<K extends Keys<S>>(
+  select<K extends Keys<Tables>>(
     table: K,
-    query?: Query<S[K]>,
-    include?: Relation.Include<S[K], Values<S>> | null,
-  ): Selection<S[K]>
+    query?: Query<Tables[K]>,
+    include?: Relation.Include<Tables[K], Values<Tables>> | null,
+  ): Selection<Tables[K]>
 
   select(table: any, query?: any, include?: any) {
     let sel = new Selection(this.getDriver(table), table, query)
@@ -372,7 +368,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
       for (const key in include) {
         if (!include[key] || !modelFields[key]?.relation) continue
-        const relation: Relation.Config<S> = modelFields[key]!.relation as any
+        const relation: Relation.Config<Tables> = modelFields[key]!.relation as any
         const relModel = this.tables[relation.table]
         if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
           sel = whereOnly ? sel : sel.join(key, this.select(relation.table,
@@ -397,7 +393,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             [key]: row => Eval.ignoreNull(Eval.array(row[key])),
           })
         } else if (relation.type === 'manyToMany') {
-          const assocTable: any = Relation.buildAssociationTable(relation.table, table)
+          const assocTable = Relation.buildAssociationTable(relation.table, table) as never
           const references = relation.fields.map(x => Relation.buildAssociationKey(x, table))
           const shared = Object.entries(relation.shared).map(([x, y]) => [Relation.buildSharedKey(x, y), {
             field: x,
@@ -422,24 +418,24 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel
   }
 
-  join<const X extends Join1.Input<S>>(
+  join<const X extends Join1.Input<Tables>>(
     tables: X,
-    callback?: Join1.Predicate<S, X>,
+    callback?: Join1.Predicate<Tables, X>,
     optional?: boolean[],
-  ): Selection<Join1.Output<S, X>>
+  ): Selection<Join1.Output<Tables, X>>
 
-  join<X extends Join2.Input<S>>(
+  join<X extends Join2.Input<Tables>>(
     tables: X,
-    callback?: Join2.Predicate<S, X>,
+    callback?: Join2.Predicate<Tables, X>,
     optional?: Dict<boolean, Keys<X>>,
-  ): Selection<Join2.Output<S, X>>
+  ): Selection<Join2.Output<Tables, X>>
 
   join(tables: any, query = (...args: any[]) => Eval.and(), optional?: any) {
     const oldTables = tables
     if (Array.isArray(oldTables)) {
       tables = Object.fromEntries(oldTables.map((name) => [name, this.select(name)]))
     }
-    let sels = mapValues(tables, (t: TableLike<S>) => {
+    let sels = mapValues(tables, (t: TableLike<Tables>) => {
       return typeof t === 'string' ? this.select(t) : t
     })
     if (Object.keys(sels).length === 0) throw new Error('no tables to join')
@@ -460,28 +456,28 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return this.select(sel)
   }
 
-  async get<K extends Keys<S>>(table: K, query: Query<S[K]>): Promise<S[K][]>
+  async get<K extends Keys<Tables>>(table: K, query: Query<Tables[K]>): Promise<Tables[K][]>
 
-  async get<K extends Keys<S>, P extends FlatKeys<S[K]> = any>(
+  async get<K extends Keys<Tables>, P extends FlatKeys<Tables[K]> = any>(
     table: K,
-    query: Query<S[K]>,
-    cursor?: Driver.Cursor<P, S, K>,
-  ): Promise<FlatPick<S[K], P>[]>
+    query: Query<Tables[K]>,
+    cursor?: Driver.Cursor<P, Tables, K>,
+  ): Promise<FlatPick<Tables[K], P>[]>
 
-  async get<K extends Keys<S>>(table: K, query: Query<S[K]>, cursor?: any) {
+  async get<K extends Keys<Tables>>(table: K, query: Query<Tables[K]>, cursor?: any) {
     let fields = Array.isArray(cursor) ? cursor : cursor?.fields
     fields = fields ? Object.fromEntries(fields.map(x => [x, true])) : cursor?.include
     return this.select(table, query, fields).execute(cursor) as any
   }
 
-  async eval<K extends Keys<S>, T>(table: K, expr: Selection.Callback<S[K], T, true>, query?: Query<S[K]>): Promise<T> {
+  async eval<K extends Keys<Tables>, T>(table: K, expr: Selection.Callback<Tables[K], T, true>, query?: Query<Tables[K]>): Promise<T> {
     return this.select(table, query).execute(typeof expr === 'function' ? expr : () => expr)
   }
 
-  async set<K extends Keys<S>>(
+  async set<K extends Keys<Tables>>(
     table: K,
-    query: Query<S[K]>,
-    update: Row.Computed<S[K], Update<S[K]>>,
+    query: Query<Tables[K]>,
+    update: Row.Computed<Tables[K], Update<Tables[K]>>,
   ): Promise<Driver.WriteResult> {
     const rawUpdate = typeof update === 'function' ? update : () => update
     let sel = this.select(table, query, null)
@@ -491,7 +487,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       throw new TypeError(`cannot modify primary key`)
     }
 
-    const relations: [string, Relation.Config<S>][] = Object.entries(sel.model.fields)
+    const relations: [string, Relation.Config<Tables>][] = Object.entries(sel.model.fields)
       .filter(([key, field]) => key in update && field!.relation)
       .map(([key, field]) => [key, field!.relation!] as const) as any
     if (relations.length) {
@@ -512,13 +508,13 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return sel._action('set', update).execute()
   }
 
-  async remove<K extends Keys<S>>(table: K, query: Query<S[K]>): Promise<Driver.WriteResult> {
+  async remove<K extends Keys<Tables>>(table: K, query: Query<Tables[K]>): Promise<Driver.WriteResult> {
     const sel = this.select(table, query, null)
     return sel._action('remove').execute()
   }
 
-  async create<K extends Keys<S>>(table: K, data: Create<S[K], S>): Promise<S[K]>
-  async create<K extends Keys<S>>(table: K, data: any): Promise<S[K]> {
+  async create<K extends Keys<Tables>>(table: K, data: Create<Tables[K], Tables>): Promise<Tables[K]>
+  async create<K extends Keys<Tables>>(table: K, data: any): Promise<Tables[K]> {
     const sel = this.select(table)
 
     if (!this.hasRelation(table, data)) {
@@ -535,20 +531,20 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
   }
 
-  async upsert<K extends Keys<S>>(
+  async upsert<K extends Keys<Tables>>(
     table: K,
-    upsert: Row.Computed<S[K], Update<S[K]>[]>,
-    keys?: MaybeArray<FlatKeys<S[K], Indexable>>,
+    upsert: Row.Computed<Tables[K], Update<Tables[K]>[]>,
+    keys?: MaybeArray<FlatKeys<Tables[K], Indexable>>,
   ): Promise<Driver.WriteResult> {
-    const sel = this.select(table)
+    const sel = this.select<never>(table)
     if (typeof upsert === 'function') upsert = upsert(sel.row)
     upsert = upsert.map(item => sel.model.format(item))
     keys = makeArray(keys || sel.model.primary) as any
     return sel._action('upsert', upsert, keys).execute()
   }
 
-  makeProxy(marker: any, getDriver?: (driver: Driver<any, C>, database: this) => Driver<any, C>) {
-    const drivers = new Map<Driver<any, C>, Driver<any, C>>()
+  makeProxy(marker: any, getDriver?: (driver: Driver, database: this) => Driver) {
+    const drivers = new Map<Driver, Driver>()
     const database = new Proxy(this, {
       get: (target, p, receiver) => {
         if (p === Symbol.for('cordis.tracker')) return undefined
@@ -610,7 +606,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     await Promise.all(this.drivers.splice(0).map(driver => driver.stop()))
   }
 
-  async drop<K extends Keys<S>>(table: K) {
+  async drop<K extends Keys<Tables>>(table: K) {
     if (this[Database.transact]) throw new Error('cannot drop table in transaction')
     await this.getDriver(table).drop(table)
   }
@@ -640,7 +636,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
   }
 
   private transformRelationQuery(table: any, row: any, key: any, query: Query.FieldExpr) {
-    const relation: Relation.Config<S> = this.tables[table].fields[key]!.relation! as any
+    const relation: Relation.Config<Tables> = this.tables[table].fields[key]!.relation! as any
     const results: Eval.Expr<boolean>[] = []
     if (relation.type === 'oneToOne' || relation.type === 'manyToOne') {
       if (query === null) {
@@ -678,7 +674,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }
     } else if (relation.type === 'manyToMany') {
       const assocTable: any = Relation.buildAssociationTable(table, relation.table)
-      const fields: any[] = relation.fields.map(x => Relation.buildAssociationKey(x, table))
+      const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table)) as never[]
       const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
       if (query.$or) results.push(Eval.or(...query.$or.map((q: any) => this.transformRelationQuery(table, row, key, q).$expr)))
       if (query.$and) results.push(...query.$and.map((q: any) => this.transformRelationQuery(table, row, key, q).$expr))
@@ -702,7 +698,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return { $expr: Eval.and(...results) } as any
   }
 
-  private async createOrUpdate<K extends Keys<S>>(table: K, data: any, upsert: boolean = true): Promise<S[K]> {
+  private async createOrUpdate<K extends Keys<Tables>>(table: K, data: any, upsert: boolean = true): Promise<Tables[K]> {
     const sel = this.select(table)
     data = { ...data }
     const tasks = ['']
@@ -739,7 +735,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         continue
       }
       const value = data[key]
-      const relation: Relation.Config<S> = this.tables[table].fields[key]!.relation! as any
+      const relation: Relation.Config<Tables> = this.tables[table].fields[key]!.relation! as any
       if (relation.type === 'oneToOne') {
         if (value.$literal) {
           data[key] = value.$literal
@@ -841,7 +837,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
             else result.push(...await this.get(relation.table, item))
           }
         }
-        await this.upsert(assocTable as any, result.map(r => ({
+        await this.upsert(assocTable as never, result.map(r => ({
           ...Object.fromEntries(shared.map(([k, v]) => [k, getCell(r, v.reference) ?? getCell(data, v.field)])),
           ...Object.fromEntries(fields.map((k, i) => [k, getCell(data, relation.fields[i])])),
           ...Object.fromEntries(references.map((k, i) => [k, getCell(r, relation.references[i])])),
@@ -851,9 +847,9 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     return data
   }
 
-  private async processRelationUpdate(table: any, row: any, key: any, value: Relation.Modifier) {
+  private async processRelationUpdate(table: never, row: any, key: any, value: Relation.Modifier) {
     const model = this.tables[table], update = Object.create(null)
-    const relation: Relation.Config<S> = this.tables[table].fields[key]!.relation! as any
+    const relation: Relation.Config<Tables> = this.tables[table].fields[key]!.relation! as any
     if (relation.type === 'oneToOne') {
       if (value === null) {
         value = relation.required ? { $remove: {} } : { $disconnect: {} }
@@ -953,7 +949,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     } else if (relation.type === 'oneToMany') {
       if (Array.isArray(value)) {
         const $create: any[] = [], $upsert: any[] = []
-        value.forEach(item => this.hasRelation(relation.table, item) ? $create.push(item) : $upsert.push(item))
+        value.forEach(item => this.hasRelation(relation.table, item as never) ? $create.push(item) : $upsert.push(item))
         value = { $remove: {}, $create, $upsert }
       }
       if (value.$remove) {
@@ -995,7 +991,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
         )
       }
     } else if (relation.type === 'manyToMany') {
-      const assocTable = Relation.buildAssociationTable(table, relation.table) as Keys<S>
+      const assocTable = Relation.buildAssociationTable(table, relation.table) as Keys<Tables>
       const fields = relation.fields.map(x => Relation.buildAssociationKey(x, table))
       const references = relation.references.map(x => Relation.buildAssociationKey(x, relation.table))
       const shared = Object.entries(relation.shared).map(([x, y]) => [Relation.buildSharedKey(x, y), {
@@ -1004,7 +1000,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
       }] as const)
       if (Array.isArray(value)) {
         const $create: any[] = [], $upsert: any[] = []
-        value.forEach(item => this.hasRelation(relation.table, item) ? $create.push(item) : $upsert.push(item))
+        value.forEach(item => this.hasRelation(relation.table, item as never) ? $create.push(item) : $upsert.push(item))
         value = { $disconnect: {}, $create, $upsert }
       }
       if (value.$remove) {
@@ -1090,7 +1086,7 @@ export class Database<S = {}, N = {}, C extends Context = Context> extends Servi
     }
   }
 
-  private hasRelation<K extends Keys<S>>(table: K, data: Create<S[K], S>): boolean
+  private hasRelation<K extends Keys<Tables>>(table: K, data: Create<Tables[K], Tables>): boolean
   private hasRelation(table: any, data: any) {
     for (const key in data) {
       if (data[key] !== undefined && this.tables[table].fields[key]?.relation) return true

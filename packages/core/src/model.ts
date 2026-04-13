@@ -7,6 +7,7 @@ import { Driver } from './driver.ts'
 import { Query } from './query.ts'
 import { Selection } from './selection.ts'
 import { Create } from './database.ts'
+import { Types } from './index.ts'
 
 const Primary = Symbol('minato.primary')
 export type Primary = (string | number) & { [Primary]: true }
@@ -140,31 +141,32 @@ export namespace Field {
 
   type Shorthand<S extends string> = S | `${S}(${any})`
 
-  export type Object<T = any, N = any> = {
+  export type Object<T = any> = {
     type: 'object'
-    inner?: Extension<T, N>
+    inner?: Extension<T>
   } & Omit<Field<T>, 'type'>
 
-  export type Array<T = any, N = any> = {
+  export type Array<T = any> = {
     type: 'array'
-    inner?: Literal<T, N> | Definition<T, N> | Transform<T, any, N>
+    inner?: Literal<T> | Definition<T> | Transform<T, any>
   } & Omit<Field<T[]>, 'type'>
 
-  export type Transform<S = any, T = S, N = any> = {
-    type: Type<T> | Keys<N, T> | NewType<T> | 'object' | 'array'
+  export type Transform<S = any, T = S> = {
+    type: Type<T> | Keys<Types, T> | NewType<T> | 'object' | 'array'
     dump: (value: S | null) => T | null | void
     load: (value: T | null) => S | null | void
     initial?: S
-  } & Omit<Definition<T, N>, 'type' | 'initial'>
+  } & Omit<Definition<T>, 'type' | 'initial'>
 
-  export type Definition<T, N> =
-    | (Omit<Field<T>, 'type'> & { type: Type<T> | Keys<N, T> | NewType<T> })
-    | (T extends object ? Object<T, N> : never)
-    | (T extends (infer I)[] ? Array<I, N> : never)
+  export type Definition<T> =
+    | (Omit<Field<T>, 'type'> & { type: Type<T> | Keys<Types, T> | NewType<T> })
+    | (T extends object ? Object<T> : never)
+    // eslint-disable-next-line @typescript-eslint/array-type
+    | (T extends (infer I)[] ? Array<I> : never)
 
-  export type Literal<T, N> =
+  export type Literal<T> =
     | Shorthand<Type<T>>
-    | Keys<N, T>
+    | Keys<Types, T>
     | NewType<T>
     | (T extends object ? 'object' : never)
     | (T extends unknown[] ? 'array' : never)
@@ -173,15 +175,15 @@ export namespace Field {
     type: Type<T> | Field<T>['type']
   } & Omit<Field<T>, 'type'>
 
-  type MapField<O = any, N = any> = {
+  type MapField<O = any> = {
     [K in keyof O]?:
-      | Literal<O[K], N>
-      | Definition<O[K], N>
-      | Transform<O[K], any, N>
+      | Literal<O[K]>
+      | Definition<O[K]>
+      | Transform<O[K], any>
       | (O[K] extends object | undefined ? Relation.Definition<FlatKeys<O>> : never)
   }
 
-  export type Extension<O = any, N = any> = MapField<Flatten<O>, N>
+  export type Extension<O = any> = MapField<Flatten<O>>
 
   const NewType = Symbol('minato.newType')
   export type NewType<T> = string & { [NewType]: T }
@@ -253,9 +255,9 @@ export namespace Model {
     }
   }
 
-  export interface Intercept<S, N> extends Partial<Config<FlatKeys<S>>> {
+  export interface Intercept<S> extends Partial<Config<FlatKeys<S>>> {
     create?: boolean
-    fields: Field.Extension<S, N>
+    fields: Field.Extension<S>
   }
 }
 

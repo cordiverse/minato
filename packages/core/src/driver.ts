@@ -56,7 +56,7 @@ export namespace Driver {
 }
 
 @Inject('model')
-export abstract class Driver<T = any, C extends Context = Context> {
+export abstract class Driver<T = any> {
   abstract start(): Promise<void>
   abstract stop(): Promise<void>
   abstract drop(table: string): Promise<void>
@@ -74,11 +74,11 @@ export abstract class Driver<T = any, C extends Context = Context> {
   abstract createIndex(table: string, index: Driver.Index): Promise<void>
   abstract dropIndex(table: string, name: string): Promise<void>
 
-  public database!: C['database']
+  public database!: Database
 
   public types: Dict<Driver.Transformer> = Object.create(null)
 
-  constructor(public ctx: C, public config: T) {}
+  constructor(public ctx: Context, public config: T) {}
 
   async* [Service.init]() {
     await this.start()

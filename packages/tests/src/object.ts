@@ -16,11 +16,13 @@ interface ObjectModel {
   }
 }
 
-interface Tables {
-  object: ObjectModel
+declare module 'minato' {
+  interface Tables {
+    object: ObjectModel
+  }
 }
 
-function ObjectOperations(database: Database<Tables>) {
+function ObjectOperations(database: Database) {
   before(() => {
     database.extend('object', {
       'id': 'string',
@@ -31,7 +33,7 @@ function ObjectOperations(database: Database<Tables>) {
 }
 
 namespace ObjectOperations {
-  async function setup(database: Database<Tables>) {
+  async function setup(database: Database) {
     await database.remove('object', {})
     const result: ObjectModel[] = []
     result.push(await database.create('object', { id: '0', meta: { a: '233', embed: { b: 2, c: 'hello' } } }))
@@ -40,7 +42,7 @@ namespace ObjectOperations {
     return result
   }
 
-  export const create = function Create(database: Database<Tables>) {
+  export const create = function Create(database: Database) {
     it('initial value', async () => {
       const table = await setup(database)
       table.push(await database.create('object', { id: '2', meta: { embed: { b: 999 } } }))
@@ -51,7 +53,7 @@ namespace ObjectOperations {
     })
   }
 
-  export const get = function Get(database: Database<Tables>) {
+  export const get = function Get(database: Database) {
     it('field extraction', async () => {
       await setup(database)
       const table = await database.get('object', {}, ['meta'])
@@ -67,7 +69,7 @@ namespace ObjectOperations {
     })
   }
 
-  export const upsert = function Upsert(database: Database<Tables>) {
+  export const upsert = function Upsert(database: Database) {
     it('object literal', async () => {
       const table = await setup(database)
       table[0].meta = { a: '233', embed: { b: 114 } }
@@ -124,7 +126,7 @@ namespace ObjectOperations {
     })
   }
 
-  export const modify = function Modify(database: Database<Tables>) {
+  export const modify = function Modify(database: Database) {
     it('object literal', async () => {
       const table = await setup(database)
       table[0].meta = { a: '0', embed: { b: 114 } }
@@ -219,7 +221,7 @@ namespace ObjectOperations {
     })
   }
 
-  export const misc = function Misc(database: Database<Tables>) {
+  export const misc = function Misc(database: Database) {
     it('join selections with dot fields', async () => {
       await setup(database)
       await database.set('object', '1', { 'meta.embed.b': 3 })

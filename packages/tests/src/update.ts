@@ -1,4 +1,4 @@
-import { $, Database } from 'minato'
+import { $, Database, Tables } from 'minato'
 import { deepEqual, omit } from 'cosmokit'
 import { expect } from 'chai'
 
@@ -23,12 +23,14 @@ interface Baz {
   value?: string
 }
 
-interface Tables {
-  temp2: Bar
-  temp3: Baz
+declare module 'minato' {
+  interface Tables {
+    temp2: Bar
+    temp3: Baz
+  }
 }
 
-function OrmOperations(database: Database<Tables>) {
+function OrmOperations(database: Database) {
   before(() => {
     database.extend('temp2', {
       id: 'unsigned',
@@ -89,7 +91,7 @@ namespace OrmOperations {
     { ida: 2, idb: 'b', value: 'd' },
   ]
 
-  async function setup<K extends keyof Tables>(database: Database<Tables>, name: K, table: Tables[K][]) {
+  async function setup<K extends keyof Tables>(database: Database, name: K, table: Tables[K][]) {
     await database.remove(name, {})
     const result: Tables[K][] = []
     for (const item of table) {
@@ -98,7 +100,7 @@ namespace OrmOperations {
     return result
   }
 
-  export const create = function Create(database: Database<Tables>) {
+  export const create = function Create(database: Database) {
     it('auto increment primary key', async () => {
       const table = barTable.map(bar => merge(database.tables.temp2.create(), bar))
       for (const index in barTable) {
@@ -165,7 +167,7 @@ namespace OrmOperations {
     })
   }
 
-  export const set = function Set(database: Database<Tables>) {
+  export const set = function Set(database: Database) {
     it('basic support', async () => {
       const table = await setup(database, 'temp2', barTable)
       const data = table.find(bar => bar.timestamp)!
@@ -239,7 +241,7 @@ namespace OrmOperations {
     })
   }
 
-  export const upsert = function Upsert(database: Database<Tables>) {
+  export const upsert = function Upsert(database: Database) {
     it('update existing records', async () => {
       const table = await setup(database, 'temp2', barTable)
       const data = [
@@ -343,7 +345,7 @@ namespace OrmOperations {
     })
   }
 
-  export const remove = function Remove(database: Database<Tables>) {
+  export const remove = function Remove(database: Database) {
     it('basic support', async () => {
       await setup(database, 'temp3', bazTable)
       await expect(database.remove('temp3', { ida: 1, idb: 'a' })).to.eventually.have.shape({ matched: 1 })
@@ -365,7 +367,7 @@ namespace OrmOperations {
     })
   }
 
-  export const stats = function Stats(database: Database<Tables>) {
+  export const stats = function Stats(database: Database) {
     it('basic support', async () => {
       const stats = await database.stats()
       expect(stats.size).to.be.a('number')
@@ -374,7 +376,7 @@ namespace OrmOperations {
     })
   }
 
-  export const misc = function Misc(database: Database<Tables>) {
+  export const misc = function Misc(database: Database) {
     it('date type', async () => {
       const table = await setup(database, 'temp2', barTable)
       await expect(database.get('temp2', {})).to.eventually.have.shape(table)
@@ -430,7 +432,7 @@ namespace OrmOperations {
     })
   }
 
-  export const index = function Index(database: Database<Tables>) {
+  export const index = function Index(database: Database) {
     it('basic support', async () => {
       const driver = Object.values(database.drivers)[0]
       const index = {
@@ -489,14 +491,14 @@ namespace OrmOperations {
     })
   }
 
-  export const drop = function Drop(database: Database<Tables>) {
+  export const drop = function Drop(database: Database) {
     it('make coverage happy', async () => {
       // @ts-expect-error
       await expect(database.drop('unknown')).to.be.rejected
     })
   }
 
-  export function subquery(database: Database<Tables>) {
+  export function subquery(database: Database) {
     it('set query', async () => {
       await setup(database, 'temp2', barTable)
       await database.set('temp2', row => $.eq(row.text, database.select('temp2', r => $.eq(r.id, 2)).evaluate(r => $.max(r.text))), { text: 'ok' })

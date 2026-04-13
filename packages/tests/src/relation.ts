@@ -1,4 +1,4 @@
-import { $, Database, Relation } from 'minato'
+import { $, Database, Relation, Tables } from 'minato'
 import { expect } from 'chai'
 import { setup } from './utils'
 
@@ -69,19 +69,21 @@ interface GuildSync {
   login?: Login
 }
 
-interface Tables {
-  user: User
-  profile: Profile
-  post: Post
-  tag: Tag
-  post2tag: Post2Tag
-  guildSync: GuildSync
-  login: Login
-  guild: Guild
-  member: Member
+declare module 'minato' {
+  interface Tables {
+    user: User
+    profile: Profile
+    post: Post
+    tag: Tag
+    post2tag: Post2Tag
+    guildSync: GuildSync
+    login: Login
+    guild: Guild
+    member: Member
+  }
 }
 
-function RelationTests(database: Database<Tables>) {
+function RelationTests(database: Database) {
   before(async () => {
     database.extend('user', {
       id: 'unsigned',
@@ -206,7 +208,7 @@ function RelationTests(database: Database<Tables>) {
       primary: ['user', 'guild'],
     })
 
-    async function setupAutoInc<S, K extends keyof S & string>(database: Database<S>, name: K, length: number) {
+    async function setupAutoInc(database: Database, name: keyof Tables, length: number) {
       await database.upsert(name, Array(length).fill({}))
       await database.remove(name, {})
     }
@@ -262,7 +264,7 @@ namespace RelationTests {
     nullableComparator?: boolean
   }
 
-  export function select(database: Database<Tables>, options: RelationOptions = {}) {
+  export function select(database: Database, options: RelationOptions = {}) {
     const { nullableComparator = true } = options
 
     it('basic support', async () => {
@@ -368,7 +370,7 @@ namespace RelationTests {
     })
   }
 
-  export function query(database: Database<Tables>) {
+  export function query(database: Database) {
     it('oneToOne / manyToOne', async () => {
       const users = await setup(database, 'user', userTable)
       const profiles = await setup(database, 'profile', profileTable)
@@ -756,7 +758,7 @@ namespace RelationTests {
     })
   }
 
-  export function create(database: Database<Tables>, options: RelationOptions = {}) {
+  export function create(database: Database, options: RelationOptions = {}) {
     const { nullableComparator = true } = options
 
     it('basic support', async () => {
@@ -1196,7 +1198,7 @@ namespace RelationTests {
     })
   }
 
-  export function modify(database: Database<Tables>, options: RelationOptions = {}) {
+  export function modify(database: Database, options: RelationOptions = {}) {
     const { nullableComparator = true } = options
 
     it('oneToOne / manyToOne', async () => {

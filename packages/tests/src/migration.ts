@@ -16,12 +16,14 @@ interface Qux2 {
   flag: boolean
 }
 
-interface Tables {
-  qux: Qux
-  qux2: Qux2
+declare module 'minato' {
+  interface Tables {
+    qux: Qux
+    qux2: Qux2
+  }
 }
 
-function MigrationTests(database: Database<Tables>) {
+function MigrationTests(database: Database) {
   beforeEach(async () => {
     await database.drop('qux').catch(noop)
   })
