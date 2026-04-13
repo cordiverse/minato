@@ -1,6 +1,6 @@
 {
   "name": "minato",
-  "version": "4.0.0-alpha.0",
+  "version": "4.0.0",
   "description": "Type Driven Database Framework",
   "type": "module",
   "main": "lib/index.js",
@@ -39,7 +39,7 @@
       "pattern": [
         "@minatojs/driver-*",
         "@minatojs/plugin-*",
-        "minato-driver-*",
+        "@minatojs/driver-*",
         "minato-plugin-*"
       ]
     },
@@ -50,10 +50,10 @@
     }
   },
   "devDependencies": {
-    "cordis": "^4.0.0-rc.0"
+    "cordis": "^4.0.0-rc.1"
   },
   "peerDependencies": {
-    "cordis": "^4.0.0-rc.0"
+    "cordis": "^4.0.0-rc.1"
   },
   "dependencies": {
     "cosmokit": "^1.8.1"

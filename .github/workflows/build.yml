@@ -10,9 +10,9 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
       - name: Enable Corepack
         run: corepack enable
       - name: Install
@@ -23,14 +23,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
       - name: Enable Corepack
         run: corepack enable
       - name: Install
         run: yarn --no-immutable
       - name: Build
         run: yarn build
+      - name: Publish
+        if: >-
+          github.event_name == 'push' &&
+          contains(fromJson('["refs/heads/main"]'), github.ref)
+        run: |-
+          yarn config set npmPublishProvenance true
+          yarn config set npmRegistryServer https://registry.npmjs.org/
+          yarn yakumo publish --debug
