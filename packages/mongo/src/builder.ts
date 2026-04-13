@@ -109,12 +109,18 @@ export class Builder {
           this.walkedKeys.push(this.getActualKey(arg))
           return this.recursivePrefix + this.getActualKey(arg)
         }
-        const [joinRoot, ...rest] = (arg[1] as string).split('.')
-        if (this.tables.includes(`${arg[0]}.${joinRoot}`)) {
-          return this.recursivePrefix + rest.join('.')
-        } else if (`${arg[0]}.${joinRoot}` in this.joinTables) {
-          return `$$${this.joinTables[`${arg[0]}.${joinRoot}`]}.` + rest.join('.')
-        } else if (this.tables.includes(arg[0])) {
+        const parts = (arg[1] as string).split('.')
+        for (let i = 1; i < parts.length; i++) {
+          const joinRoot = parts.slice(0, i).join('.')
+          const rest = parts.slice(i)
+          const fullKey = `${arg[0]}.${joinRoot}`
+          if (this.tables.includes(fullKey)) {
+            return this.recursivePrefix + rest.join('.')
+          } else if (fullKey in this.joinTables) {
+            return `$$${this.joinTables[fullKey]}.` + rest.join('.')
+          }
+        }
+        if (this.tables.includes(arg[0])) {
           this.walkedKeys.push(this.getActualKey(arg[1]))
           return this.recursivePrefix + this.getActualKey(arg[1])
         } else if (this.refTables.includes(arg[0])) {
@@ -525,7 +531,7 @@ export class Builder {
         if (!this.table) {
           this.table = predecessor.table
           this.pipeline.push(...predecessor.flushLookups(), ...predecessor.pipeline, {
-            $replaceRoot: { newRoot: { [name]: '$$ROOT' } },
+            $replaceRoot: { newRoot: unravel({ [name]: '$$ROOT' }) },
           })
           refs[name] = subtable.ref
           return
