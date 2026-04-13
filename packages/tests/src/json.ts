@@ -447,7 +447,7 @@ namespace JsonTests {
     it('$.object on cell', async () => {
       const res = await database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('json.bar', {
-          x: row => $.array($.object(row['json.foo'])),
+          x: row => $.array($.object(row.json.foo)),
         })
         .execute(['x'])
 
@@ -461,10 +461,10 @@ namespace JsonTests {
     it('$.array groupBy', async () => {
       await expect(database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['json.foo'], {
-          x: row => $.array(row['json.bar'].obj.x),
-          y: row => $.array(row['json.bar'].obj.y),
+          x: row => $.array(row.json.bar.obj.x),
+          y: row => $.array(row.json.bar.obj.y),
         })
-        .orderBy(row => row['json.foo'].id)
+        .orderBy(row => row.json.foo.id)
         .execute()
       ).to.eventually.have.shape([
         { json: { foo: { id: 1, value: 0 } }, x: [1, 2], y: ['a', 'b'] },
@@ -473,10 +473,10 @@ namespace JsonTests {
 
       await expect(database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['json.foo'], {
-          x: row => $.array(row['json.bar'].obj.x),
-          y: row => $.array(row['json.bar'].obj.y),
+          x: row => $.array(row.json.bar.obj.x),
+          y: row => $.array(row.json.bar.obj.y),
         })
-        .orderBy(row => row['json.foo'].id)
+        .orderBy(row => row.json.foo.id)
         .execute(row => $.array(row.y))
       ).to.eventually.have.shape([
         ['a', 'b'],
@@ -485,10 +485,10 @@ namespace JsonTests {
 
       await expect(database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy(['json.foo'], {
-          x: row => $.array(row['json.bar'].obj.x),
-          y: row => $.array(row['json.bar'].obj.y),
+          x: row => $.array(row.json.bar.obj.x),
+          y: row => $.array(row.json.bar.obj.y),
         })
-        .orderBy(row => row['json.foo'].id)
+        .orderBy(row => row.json.foo.id)
         .execute(row => $.count(row.y))
       ).to.eventually.deep.equal(2)
     })
@@ -517,15 +517,15 @@ namespace JsonTests {
       const res = await database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('json.foo', {
           bars: row => $.array($.object({
-            value: row['json.bar'].value,
-            obj: row['json.bar'].obj,
+            value: row.json.bar.value,
+            obj: row.json.bar.obj,
           })),
-          x: row => $.array(row['json.bar'].obj.x),
-          y: row => $.array(row['json.bar'].obj.y),
-          z: row => $.array(row['json.bar'].obj.z),
-          o: row => $.array(row['json.bar'].obj.o),
+          x: row => $.array(row.json.bar.obj.x),
+          y: row => $.array(row.json.bar.obj.y),
+          z: row => $.array(row.json.bar.obj.z),
+          o: row => $.array(row.json.bar.obj.o),
         })
-        .orderBy(row => row['json.foo'].id)
+        .orderBy(row => row.json.foo.id)
         .execute()
 
       expect(res).to.have.shape([
@@ -561,13 +561,13 @@ namespace JsonTests {
       const res = await database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('json.foo', {
           bars: row => $.array($.object({
-            value: row['json.bar'].value,
-            value2: $.add(row['json.bar'].value, row['json.foo'].value),
+            value: row.json.bar.value,
+            value2: $.add(row.json.bar.value, row.json.foo.value),
           })),
-          x: row => $.array($.add(1, row['json.bar'].obj.x)),
-          y: row => $.array(row['json.bar'].obj.y),
+          x: row => $.array($.add(1, row.json.bar.obj.x)),
+          y: row => $.array(row.json.bar.obj.y),
         })
-        .orderBy(row => row['json.foo'].id)
+        .orderBy(row => row.json.foo.id)
         .execute()
 
       expect(res).to.have.shape([
@@ -588,9 +588,9 @@ namespace JsonTests {
 
     it('$.array nested', async () => {
       const res = await database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
-        .orderBy(row => row['json.foo'].id)
+        .orderBy(row => row.json.foo.id)
         .groupBy('json.foo', {
-          y: row => $.array(row['json.bar'].obj.x),
+          y: row => $.array(row.json.bar.obj.x),
         })
         .groupBy({}, {
           z: row => $.array(row.y),
@@ -607,7 +607,7 @@ namespace JsonTests {
     it('non-aggr func', async () => {
       const res = await database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
         .groupBy('json.foo', {
-          y: row => $.array(row['json.bar'].obj.x),
+          y: row => $.array(row.json.bar.obj.x),
         })
         .project({
           sum: row => $.sum(row.y),
@@ -627,9 +627,9 @@ namespace JsonTests {
 
     it('non-aggr func inside aggr', async () => {
       const res = await database.join(['json.foo', 'json.bar'], (foo, bar) => $.eq(foo.id, bar.pid))
-        .orderBy(row => row['json.foo'].id)
+        .orderBy(row => row.json.foo.id)
         .groupBy('json.foo', {
-          y: row => $.array(row['json.bar'].obj.x),
+          y: row => $.array(row.json.bar.obj.x),
         })
         .groupBy({}, {
           sum: row => $.avg($.sum(row.y)),

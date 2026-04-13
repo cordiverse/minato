@@ -57,8 +57,16 @@ type Sequence<N extends number, A extends 0[] = []> = A['length'] extends N ? A 
 
 export type Flatten<S, D extends number = 5> = Intersect<FlatMap<S, Sequence<D>>>
 
-export type Row<S> = {
+type DotPrefix<K extends string> = K extends `${infer F}.${string}` ? F : never
+
+export type Row<S> = string extends keyof S ? {
   [K in keyof S]-?: Row.Cell<NonNullable<S[K]>>
+} : {
+  [K in keyof S as K extends `${string}.${string}` ? never : K]-?: Row.Cell<NonNullable<S[K]>>
+} & {
+  [P in DotPrefix<keyof S & string>]: Row<{
+    [K in keyof S & string as K extends `${P}.${infer R}` ? R : never]: S[K]
+  }>
 }
 
 export namespace Row {
