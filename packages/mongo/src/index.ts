@@ -267,14 +267,15 @@ export class MongoDriver extends Driver<MongoDriver.Config> {
   }
 
   async dropAll() {
+    const tables = [...this.tables]
     await Promise.all([
       '_fields',
-      ...Object.keys(this.database.tables),
+      ...tables,
     ].map(name => this.db.dropCollection(name, { session: this.session })))
   }
 
   private async _collStats() {
-    const tables = Object.keys(this.database.tables)
+    const tables = [...this.tables]
     const entries = await Promise.all(tables.map(async (name) => {
       const coll = this.db.collection(name)
       const [{ storageStats: { count, size } }] = await coll.aggregate([{

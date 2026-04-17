@@ -354,18 +354,22 @@ INSERT INTO mtt VALUES(json_extract(j, concat('$[', i, ']'))); SET i=i+1; END WH
   }
 
   async dropAll() {
-    const data = await this._select('information_schema.tables', ['TABLE_NAME'], 'TABLE_SCHEMA = ? AND TABLE_TYPE = ?', [this.config.database, 'BASE TABLE'])
-    if (!data.length) return
+    const tables = [...this.tables]
+    if (!tables.length) return
     await this.query([
       'SET foreign_key_checks = 0',
-      ...data.map(({ TABLE_NAME }) => `DROP TABLE ${escapeId(TABLE_NAME)}`),
+      ...tables.map(table => `DROP TABLE ${escapeId(table)}`),
       'SET foreign_key_checks = 1',
     ].join('; '))
   }
 
   async stats() {
+    const tables = [...this.tables]
+    if (!tables.length) return { size: 0, tables: {} }
     const data = await this._select(
-      'information_schema.tables', ['TABLE_NAME', 'TABLE_ROWS', 'DATA_LENGTH'], 'TABLE_SCHEMA = ? AND TABLE_TYPE = ?', [this.config.database, 'BASE TABLE'],
+      'information_schema.tables', ['TABLE_NAME', 'TABLE_ROWS', 'DATA_LENGTH'],
+      'TABLE_SCHEMA = ? AND TABLE_TYPE = ? AND TABLE_NAME IN (?)',
+      [this.config.database, 'BASE TABLE', tables],
     )
     const stats: Partial<Driver.Stats> = { size: 0 }
     stats.tables = Object.fromEntries(data.map(({ TABLE_NAME: name, TABLE_ROWS: count, DATA_LENGTH: size }) => {

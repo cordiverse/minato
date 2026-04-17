@@ -75,7 +75,7 @@ export abstract class Driver<T = any> {
   abstract dropIndex(table: string, name: string): Promise<void>
 
   public database!: Database
-
+  public tables: Set<string> = new Set()
   public types: Dict<Driver.Transformer> = Object.create(null)
 
   constructor(public ctx: Context, public config: T) {}

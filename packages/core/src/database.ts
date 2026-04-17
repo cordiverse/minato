@@ -130,6 +130,8 @@ export class Database extends Service {
     const driver = this.getDriver(name)
     if (!driver) return
 
+    driver.tables.add(name)
+
     const { fields } = driver.model(name)
     Object.values(fields).forEach(field => field?.transformers?.forEach(x => driver.define(x)))
 
