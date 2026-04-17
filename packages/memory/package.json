@@ -26,12 +26,12 @@
     "memory"
   ],
   "peerDependencies": {
-    "cordis": "^4.0.0-rc.1",
+    "cordis": "^4.0.0-rc.3",
     "minato": "^4.0.0"
   },
   "devDependencies": {
     "@minatojs/tests": "^3.0.0",
-    "cordis": "^4.0.0-rc.1",
+    "cordis": "^4.0.0-rc.3",
     "minato": "^4.0.0"
   },
   "dependencies": {

@@ -30,7 +30,7 @@
     "builder"
   ],
   "devDependencies": {
-    "cordis": "^4.0.0-rc.1",
+    "cordis": "^4.0.0-rc.3",
     "minato": "^4.0.0"
   },
   "peerDependencies": {

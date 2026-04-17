@@ -163,7 +163,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   async start() {
     this.path = this.config.path
     if (this.path !== ':memory:') {
-      this.path = fileURLToPath(new URL(this.path, this.ctx.get('baseUrl')))
+      this.path = fileURLToPath(new URL(this.path, this.ctx.baseUrl))
     }
 
     const { DatabaseSync } = await import('node:sqlite')
