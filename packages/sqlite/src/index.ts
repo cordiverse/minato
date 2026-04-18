@@ -258,24 +258,24 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   }
 
   async dropAll() {
-    const tables = Object.keys(this.database.tables)
+    const tables = [...this.tables]
     for (const table of tables) {
       this._run(`DROP TABLE ${escapeId(table)}`)
     }
   }
 
   async stats() {
+    const tables = [...this.tables]
     const pageCount = this._get(`PRAGMA page_count`) as { page_count?: number | bigint }
     const pageSize = this._get(`PRAGMA page_size`) as { page_size?: number | bigint }
     const stats: Driver.Stats = {
       size: Number(pageCount?.page_count ?? 0) * Number(pageSize?.page_size ?? 0),
       tables: {},
     }
-    const tableNames: { name: string }[] = this._all("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
     const dbstats: { name: string; size: number }[] = this._all('SELECT name, pgsize as size FROM "dbstat" WHERE aggregate=TRUE;')
-    tableNames.forEach(tbl => {
-      stats.tables[tbl.name] = this._get(`SELECT COUNT(*) as count FROM ${escapeId(tbl.name)};`)
-      stats.tables[tbl.name].size = dbstats.find(o => o.name === tbl.name)!.size
+    tables.forEach(name => {
+      stats.tables[name] = this._get(`SELECT COUNT(*) as count FROM ${escapeId(name)};`)
+      stats.tables[name].size = dbstats.find(o => o.name === name)?.size ?? 0
     })
     return stats
   }

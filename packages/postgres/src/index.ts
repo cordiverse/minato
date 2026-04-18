@@ -47,21 +47,6 @@ interface IndexInfo {
   indexdef: string
 }
 
-interface TableInfo {
-  table_catalog: string
-  table_schema: string
-  table_name: string
-  table_type: string
-  self_referencing_column_name: null
-  reference_generation: null
-  user_defined_type_catalog: null
-  user_defined_type_schema: null
-  user_defined_type_name: null
-  is_insertable_into: string
-  is_typed: string
-  commit_action: null
-}
-
 interface QueryTask {
   sql: string
   resolve: (value: any) => void
@@ -276,15 +261,14 @@ export class PostgresDriver extends Driver<PostgresDriver.Config> {
   }
 
   async dropAll() {
-    const tables: TableInfo[] = await this.queue(`SELECT * FROM information_schema.tables WHERE table_schema = 'public'`)
+    const tables = [...this.tables]
     if (!tables.length) return
-    await this.query(`DROP TABLE IF EXISTS ${tables.map(t => escapeId(t.table_name)).join(',')} CASCADE`)
+    await this.query(`DROP TABLE IF EXISTS ${tables.map(t => escapeId(t)).join(',')} CASCADE`)
   }
 
   async stats(): Promise<Partial<Driver.Stats>> {
-    const names = Object.keys(this.database.tables)
-    const tables = (await this.queue<TableInfo[]>(`SELECT * FROM information_schema.tables WHERE table_schema = 'public'`))
-      .map(t => t.table_name).filter(name => names.includes(name))
+    const tables = [...this.tables]
+    if (!tables.length) return { size: 0, tables: {} }
     const tableStats = await this.queue(
       tables.map(
         (name) => `SELECT '${name}' AS name, pg_total_relation_size('${escapeId(name)}') AS size, COUNT(*) AS count FROM ${escapeId(name)}`,
