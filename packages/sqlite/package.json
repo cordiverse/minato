@@ -1,6 +1,6 @@
 {
   "name": "@minatojs/driver-sqlite",
-  "version": "5.0.2",
+  "version": "5.0.3",
   "description": "SQLite Driver for Minato",
   "type": "module",
   "main": "lib/index.js",
@@ -27,13 +27,13 @@
   ],
   "peerDependencies": {
     "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.0"
+    "minato": "^4.0.1"
   },
   "devDependencies": {
     "@cordisjs/plugin-logger": "^1.0.2",
     "@minatojs/tests": "^3.0.0",
     "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.0"
+    "minato": "^4.0.1"
   },
   "dependencies": {
     "@minatojs/sql-utils": "^6.0.0",

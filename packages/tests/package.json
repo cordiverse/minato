@@ -29,10 +29,10 @@
     "@types/chai": "^5.2.3",
     "@types/chai-as-promised": "^8.0.2",
     "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.0"
+    "minato": "^4.0.1"
   },
   "peerDependencies": {
-    "minato": "^4.0.0"
+    "minato": "^4.0.1"
   },
   "dependencies": {
     "chai": "^5.3.3",

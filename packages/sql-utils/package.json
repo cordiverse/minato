@@ -31,10 +31,10 @@
   ],
   "devDependencies": {
     "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.0"
+    "minato": "^4.0.1"
   },
   "peerDependencies": {
-    "minato": "^4.0.0"
+    "minato": "^4.0.1"
   },
   "dependencies": {
     "cosmokit": "^1.8.1"
