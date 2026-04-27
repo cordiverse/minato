@@ -1,10 +1,10 @@
 import { Context } from 'cordis'
-import Database from 'minato'
-import PostgresDriver from '@minatojs/driver-postgres'
+import Database from '@cordisjs/plugin-database'
+import PostgresDriver from '@cordisjs/plugin-database-postgres'
 import Logger from '@cordisjs/plugin-logger'
-import test from '@minatojs/tests'
+import test from '@cordisjs/database-tests'
 
-describe('@minatojs/driver-postgres', () => {
+describe('@cordisjs/plugin-database-postgres', () => {
   const ctx = new Context()
 
   before(async () => {

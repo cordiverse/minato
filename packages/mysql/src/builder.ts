@@ -1,6 +1,6 @@
-import { Builder, escapeId, isBracketed } from '@minatojs/sql-utils'
+import { Builder, escapeId, isBracketed } from '@cordisjs/sql-utils'
 import { Binary, Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, Selection, Type } from 'minato'
+import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, Selection, Type } from '@cordisjs/plugin-database'
 
 export interface Compat {
   maria?: boolean

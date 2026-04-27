@@ -1,5 +1,5 @@
 import { mapValues, isNullable, deduplicate, omit } from 'cosmokit'
-import { $, Database, Field, getCell, Tables, Type, unravel } from 'minato'
+import { $, Database, Field, getCell, Tables, Type, unravel } from '@cordisjs/plugin-database'
 import { expect } from 'chai'
 
 interface DType {
@@ -73,7 +73,7 @@ interface RecursiveY {
   x?: RecursiveX
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     dtypes: DType
     dobjects: DObject

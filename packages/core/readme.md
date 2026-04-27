@@ -1,9 +1,9 @@
-# minato
+# database
 
-[![Codecov](https://img.shields.io/codecov/c/github/cordiverse/minato?style=flat-square)](https://codecov.io/gh/cordiverse/minato)
-[![downloads](https://img.shields.io/npm/dm/minato?style=flat-square)](https://www.npmjs.com/package/minato)
-[![npm](https://img.shields.io/npm/v/minato?style=flat-square)](https://www.npmjs.com/package/minato)
-[![GitHub](https://img.shields.io/github/license/cordiverse/minato?style=flat-square)](https://github.com/cordiverse/minato/blob/master/LICENSE)
+[![Codecov](https://img.shields.io/codecov/c/github/cordiverse/database?style=flat-square)](https://codecov.io/gh/cordiverse/database)
+[![downloads](https://img.shields.io/npm/dm/@cordisjs/plugin-database?style=flat-square)](https://www.npmjs.com/package/@cordisjs/plugin-database)
+[![npm](https://img.shields.io/npm/v/@cordisjs/plugin-database?style=flat-square)](https://www.npmjs.com/package/@cordisjs/plugin-database)
+[![GitHub](https://img.shields.io/github/license/cordiverse/database?style=flat-square)](https://github.com/cordiverse/database/blob/main/LICENSE)
 
 Type Driven Database Framework.
 
@@ -19,42 +19,11 @@ Type Driven Database Framework.
 
 | Driver | Version | Notes |
 | ------ | ------ | ----- |
-| [Memory](https://github.com/cordiverse/minato/tree/master/packages/memory) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-memory?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-memory) | In-memory driver support |
-| [MongoDB](https://github.com/cordiverse/minato/tree/master/packages/mongo) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mongo?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mongo) | |
-| [MySQL](https://github.com/cordiverse/minato/tree/master/packages/mysql) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-mysql?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-mysql) | MySQL 5.7+, MariaDB 10.5 |
-| [PostgreSQL](https://github.com/cordiverse/minato/tree/master/packages/postgres) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-postgres?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-postgres) | PostgreSQL 14+ |
-| [SQLite](https://github.com/cordiverse/minato/tree/master/packages/sqlite) | [![npm](https://img.shields.io/npm/v/@minatojs/driver-sqlite?style=flat-square)](https://www.npmjs.com/package/@minatojs/driver-sqlite) | |
-
-## Basic Usage
-
-```ts
-import Database from 'minato'
-import MySQLDriver from '@minatojs/driver-mysql'
-
-const database = new Database()
-
-await database.connect(MySQLDriver, {
-  host: 'localhost',
-  port: 3306,
-  user: 'root',
-  password: '',
-  database: 'minato',
-})
-```
-
-## Data Definition
-
-```ts
-database.extend('user', {
-  id: 'number',
-  name: 'string',
-  age: 'number',
-  money: { type: 'number', initial: 100 },
-}, {
-  primary: 'id',
-  autoInc: true,
-})
-```
+| [Memory](https://github.com/cordiverse/database/tree/main/packages/memory) | [![npm](https://img.shields.io/npm/v/@cordisjs/plugin-database-memory?style=flat-square)](https://www.npmjs.com/package/@cordisjs/plugin-database-memory) | In-memory driver support |
+| [MongoDB](https://github.com/cordiverse/database/tree/main/packages/mongo) | [![npm](https://img.shields.io/npm/v/@cordisjs/plugin-database-mongo?style=flat-square)](https://www.npmjs.com/package/@cordisjs/plugin-database-mongo) | |
+| [MySQL](https://github.com/cordiverse/database/tree/main/packages/mysql) | [![npm](https://img.shields.io/npm/v/@cordisjs/plugin-database-mysql?style=flat-square)](https://www.npmjs.com/package/@cordisjs/plugin-database-mysql) | MySQL 5.7+, MariaDB 10.5 |
+| [PostgreSQL](https://github.com/cordiverse/database/tree/main/packages/postgres) | [![npm](https://img.shields.io/npm/v/@cordisjs/plugin-database-postgres?style=flat-square)](https://www.npmjs.com/package/@cordisjs/plugin-database-postgres) | PostgreSQL 14+ |
+| [SQLite](https://github.com/cordiverse/database/tree/main/packages/sqlite) | [![npm](https://img.shields.io/npm/v/@cordisjs/plugin-database-sqlite?style=flat-square)](https://www.npmjs.com/package/@cordisjs/plugin-database-sqlite) | |
 
 ## Documentation
 

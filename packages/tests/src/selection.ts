@@ -1,4 +1,4 @@
-import { $, Database } from 'minato'
+import { $, Database } from '@cordisjs/plugin-database'
 import { expect } from 'chai'
 import { setup } from './utils'
 
@@ -15,7 +15,7 @@ interface Bar {
   value: number
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     foo: Foo
     bar: Bar

@@ -2,7 +2,7 @@ import { Dict, isNullable } from 'cosmokit'
 import {
   Driver, Eval, Field, flatten, isAggrExpr, isComparable, isEvalExpr, isFlat,
   Model, Modifier, Query, randomId, RegExpLike, Selection, Type, unravel,
-} from 'minato'
+} from '@cordisjs/plugin-database'
 
 export function escapeId(value: string) {
   return '`' + value + '`'

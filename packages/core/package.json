@@ -1,5 +1,5 @@
 {
-  "name": "minato",
+  "name": "@cordisjs/plugin-database",
   "version": "4.0.1",
   "description": "Type Driven Database Framework",
   "type": "module",
@@ -16,13 +16,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/minato.git",
+    "url": "git+https://github.com/cordiverse/database.git",
     "directory": "packages/core"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/minato/issues"
+    "url": "https://github.com/cordiverse/database/issues"
   },
-  "homepage": "https://github.com/cordiverse/minato",
+  "homepage": "https://github.com/cordiverse/database",
   "keywords": [
     "orm",
     "query",
@@ -35,14 +35,6 @@
     "cordis"
   ],
   "cordis": {
-    "ecosystem": {
-      "pattern": [
-        "@minatojs/driver-*",
-        "@minatojs/plugin-*",
-        "@minatojs/driver-*",
-        "minato-plugin-*"
-      ]
-    },
     "service": {
       "implements": [
         "model"
@@ -50,10 +42,10 @@
     }
   },
   "devDependencies": {
-    "cordis": "^4.0.0-rc.3"
+    "cordis": "^4.0.0-rc.4"
   },
   "peerDependencies": {
-    "cordis": "^4.0.0-rc.3"
+    "cordis": "^4.0.0-rc.4"
   },
   "dependencies": {
     "cosmokit": "^1.8.1"

@@ -1,6 +1,6 @@
 import { BSONType, ClientSession, Collection, Db, IndexDescription, Long, MongoClient, MongoClientOptions, MongoError, ObjectId } from 'mongodb'
 import { Binary, deepEqual, Dict, isNullable, makeArray, mapValues, noop, omit, pick, remove } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection } from 'minato'
+import { Driver, Eval, executeUpdate, Field, hasSubquery, Query, RuntimeError, Selection } from '@cordisjs/plugin-database'
 import { Inject } from 'cordis'
 import type {} from '@cordisjs/plugin-logger'
 import { Builder } from './builder'
@@ -18,7 +18,7 @@ interface TableMeta {
   fields?: string[]
 }
 
-@Inject('logger', false)
+@Inject('logger', false, { name: 'mongo' })
 export class MongoDriver extends Driver<MongoDriver.Config> {
   static name = 'mongo'
 

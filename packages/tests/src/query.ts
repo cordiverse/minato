@@ -1,4 +1,4 @@
-import { $, Database } from 'minato'
+import { $, Database } from '@cordisjs/plugin-database'
 import { expect } from 'chai'
 
 interface Foo {
@@ -13,7 +13,7 @@ interface Foo {
   regex?: string
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     temp1: Foo
   }

@@ -1,9 +1,9 @@
 import postgres from 'postgres'
 import { Binary, Dict, difference, isNullable, makeArray, pick } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, Selection } from 'minato'
+import { Driver, Eval, executeUpdate, Field, Selection } from '@cordisjs/plugin-database'
 import { Inject } from 'cordis'
 import type {} from '@cordisjs/plugin-logger'
-import { isBracketed } from '@minatojs/sql-utils'
+import { isBracketed } from '@cordisjs/sql-utils'
 import { escapeId, formatTime, PostgresBuilder } from './builder'
 import zhCN from './locales/zh-CN.yml'
 import enUS from './locales/en-US.yml'
@@ -59,7 +59,7 @@ function createIndex(keys: string | string[]) {
   return makeArray(keys).map(escapeId).join(', ')
 }
 
-@Inject('logger', false)
+@Inject('logger', false, { name: 'postgres' })
 export class PostgresDriver extends Driver<PostgresDriver.Config> {
   static name = 'postgres'
 

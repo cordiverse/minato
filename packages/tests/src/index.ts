@@ -1,6 +1,6 @@
 export * from './shape'
 
-import { Database } from 'minato'
+import { Database } from '@cordisjs/plugin-database'
 import ModelOperations from './model'
 import QueryOperators from './query'
 import UpdateOperators from './update'

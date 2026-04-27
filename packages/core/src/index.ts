@@ -12,7 +12,7 @@ export * from './utils.ts'
 
 declare module 'cordis' {
   interface Events {
-    'minato/model'(name: string): void
+    'database/model'(name: string): void
   }
 
   interface Context {

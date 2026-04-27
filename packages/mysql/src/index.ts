@@ -3,8 +3,8 @@ import { createPool, format } from '@vlasky/mysql'
 import { Inject } from 'cordis'
 import type {} from '@cordisjs/plugin-logger'
 import type { OkPacket, Pool, PoolConfig, PoolConnection } from 'mysql'
-import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection } from 'minato'
-import { escapeId, isBracketed } from '@minatojs/sql-utils'
+import { Driver, Eval, executeUpdate, Field, RuntimeError, Selection } from '@cordisjs/plugin-database'
+import { escapeId, isBracketed } from '@cordisjs/sql-utils'
 import { Compat, MySQLBuilder } from './builder'
 import zhCN from './locales/zh-CN.yml'
 import enUS from './locales/en-US.yml'
@@ -47,7 +47,7 @@ interface QueryTask {
   reject: (reason: unknown) => void
 }
 
-@Inject('logger', false)
+@Inject('logger', false, { name: 'mysql' })
 export class MySQLDriver extends Driver<MySQLDriver.Config> {
   static name = 'mysql'
 

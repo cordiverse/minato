@@ -1,4 +1,4 @@
-import { $, Database, Relation, Tables } from 'minato'
+import { $, Database, Relation, Tables } from '@cordisjs/plugin-database'
 import { expect } from 'chai'
 import { setup } from './utils'
 
@@ -69,7 +69,7 @@ interface GuildSync {
   login?: Login
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     user: User
     profile: Profile

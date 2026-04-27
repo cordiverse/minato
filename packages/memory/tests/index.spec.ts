@@ -1,10 +1,10 @@
 import { Context } from 'cordis'
-import Database from 'minato'
-import MemoryDriver from '@minatojs/driver-memory'
+import Database from '@cordisjs/plugin-database'
+import MemoryDriver from '@cordisjs/plugin-database-memory'
 import Logger from '@cordisjs/plugin-logger'
-import test from '@minatojs/tests'
+import test from '@cordisjs/database-tests'
 
-describe('@minatojs/driver-memory', () => {
+describe('@cordisjs/plugin-database-memory', () => {
   const ctx = new Context()
 
   before(async () => {

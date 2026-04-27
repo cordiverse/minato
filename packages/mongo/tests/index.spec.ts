@@ -1,10 +1,10 @@
 import { Context } from 'cordis'
-import Database from 'minato'
-import MongoDriver from '@minatojs/driver-mongo'
+import Database from '@cordisjs/plugin-database'
+import MongoDriver from '@cordisjs/plugin-database-mongo'
 import Logger from '@cordisjs/plugin-logger'
-import test from '@minatojs/tests'
+import test from '@cordisjs/database-tests'
 
-describe('@minatojs/driver-mongo', () => {
+describe('@cordisjs/plugin-database-mongo', () => {
   const ctx = new Context()
 
   before(async () => {

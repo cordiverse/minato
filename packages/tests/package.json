@@ -1,5 +1,5 @@
 {
-  "name": "@minatojs/tests",
+  "name": "@cordisjs/database-tests",
   "version": "3.0.0",
   "description": "Test Cases for Minato",
   "type": "module",
@@ -12,13 +12,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/minato.git",
+    "url": "git+https://github.com/cordiverse/database.git",
     "directory": "packages/tests"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/minato/issues"
+    "url": "https://github.com/cordiverse/database/issues"
   },
-  "homepage": "https://github.com/cordiverse/minato/packages/tests#readme",
+  "homepage": "https://github.com/cordiverse/database/packages/tests#readme",
   "keywords": [
     "orm",
     "database",
@@ -26,13 +26,13 @@
     "unit"
   ],
   "devDependencies": {
+    "@cordisjs/plugin-database": "^4.0.1",
     "@types/chai": "^5.2.3",
     "@types/chai-as-promised": "^8.0.2",
-    "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.1"
+    "cordis": "^4.0.0-rc.4"
   },
   "peerDependencies": {
-    "minato": "^4.0.1"
+    "@cordisjs/plugin-database": "^4.0.1"
   },
   "dependencies": {
     "chai": "^5.3.3",

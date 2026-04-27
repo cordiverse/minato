@@ -1,6 +1,6 @@
-import { Builder, isBracketed } from '@minatojs/sql-utils'
+import { Builder, isBracketed } from '@cordisjs/sql-utils'
 import { Binary, Dict, isNullable, Time } from 'cosmokit'
-import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, RegExpLike, Selection, Type, unravel } from 'minato'
+import { Driver, Field, isAggrExpr, isEvalExpr, Model, randomId, RegExpLike, Selection, Type, unravel } from '@cordisjs/plugin-database'
 
 export function escapeId(value: string) {
   return '"' + value.replace(/"/g, '""') + '"'

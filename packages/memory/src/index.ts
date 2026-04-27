@@ -1,5 +1,5 @@
 import { clone, deepEqual, Dict, makeArray, mapValues, noop, omit, pick } from 'cosmokit'
-import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Field, isAggrExpr, RuntimeError, Selection } from 'minato'
+import { Driver, Eval, executeEval, executeQuery, executeSort, executeUpdate, Field, isAggrExpr, RuntimeError, Selection } from '@cordisjs/plugin-database'
 import z from 'schemastery'
 
 export class MemoryDriver extends Driver<MemoryDriver.Config> {

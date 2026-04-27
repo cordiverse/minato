@@ -1,10 +1,10 @@
 import { Context } from 'cordis'
-import Database from 'minato'
-import MySQLDriver from '@minatojs/driver-mysql'
+import Database from '@cordisjs/plugin-database'
+import MySQLDriver from '@cordisjs/plugin-database-mysql'
 import Logger from '@cordisjs/plugin-logger'
-import test from '@minatojs/tests'
+import test from '@cordisjs/database-tests'
 
-describe('@minatojs/driver-mysql', () => {
+describe('@cordisjs/plugin-database-mysql', () => {
   const ctx = new Context()
 
   before(async () => {

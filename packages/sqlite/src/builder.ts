@@ -1,6 +1,6 @@
-import { Builder, escapeId } from '@minatojs/sql-utils'
+import { Builder, escapeId } from '@cordisjs/sql-utils'
 import { Binary, Dict, isNullable } from 'cosmokit'
-import { Driver, Field, isEvalExpr, Model, randomId, RegExpLike, Type } from 'minato'
+import { Driver, Field, isEvalExpr, Model, randomId, RegExpLike, Type } from '@cordisjs/plugin-database'
 
 export class SQLiteBuilder extends Builder {
   protected escapeMap = {

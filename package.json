@@ -1,5 +1,5 @@
 {
-  "name": "@root/minato",
+  "name": "@root/database",
   "private": true,
   "packageManager": "yarn@4.13.0",
   "type": "module",

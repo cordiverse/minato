@@ -1,5 +1,5 @@
 {
-  "name": "@minatojs/driver-postgres",
+  "name": "@cordisjs/plugin-database-postgres",
   "version": "3.0.1",
   "description": "PostgreSQL Driver for Minato",
   "type": "module",
@@ -16,13 +16,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/minato.git",
+    "url": "git+https://github.com/cordiverse/database.git",
     "directory": "packages/postgres"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/minato/issues"
+    "url": "https://github.com/cordiverse/database/issues"
   },
-  "homepage": "https://github.com/cordiverse/minato/packages/postgres#readme",
+  "homepage": "https://github.com/cordiverse/database/packages/postgres#readme",
   "keywords": [
     "orm",
     "database",
@@ -31,16 +31,17 @@
     "postgresql"
   ],
   "peerDependencies": {
-    "minato": "^4.0.1"
+    "@cordisjs/plugin-database": "^4.0.1",
+    "cordis": "^4.0.0-rc.4"
   },
   "devDependencies": {
+    "@cordisjs/database-tests": "^3.0.0",
+    "@cordisjs/plugin-database": "^4.0.1",
     "@cordisjs/plugin-logger": "^1.0.2",
-    "@minatojs/tests": "^3.0.0",
-    "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.1"
+    "cordis": "^4.0.0-rc.4"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^6.0.0",
+    "@cordisjs/sql-utils": "^6.0.0",
     "cosmokit": "^1.8.1",
     "postgres": "^3.4.8",
     "schemastery": "^3.18.0"

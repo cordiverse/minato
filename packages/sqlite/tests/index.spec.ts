@@ -1,10 +1,10 @@
 import { Context } from 'cordis'
-import Database from 'minato'
-import SQLiteDriver from '@minatojs/driver-sqlite'
+import Database from '@cordisjs/plugin-database'
+import SQLiteDriver from '@cordisjs/plugin-database-sqlite'
 import Logger from '@cordisjs/plugin-logger'
-import test from '@minatojs/tests'
+import test from '@cordisjs/database-tests'
 
-describe('@minatojs/driver-sqlite', () => {
+describe('@cordisjs/plugin-database-sqlite', () => {
   const ctx = new Context()
 
   before(async () => {

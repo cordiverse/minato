@@ -2,9 +2,10 @@
   "extends": "./tsconfig.base",
   "compilerOptions": {
     "paths": {
-      "minato": ["./packages/core/src"],
-      "@minatojs/*": ["./packages/*/src"],
-      "@minatojs/driver-*": ["./packages/*/src"],
+      "@cordisjs/plugin-database": ["./packages/core/src"],
+      "@cordisjs/plugin-database-*": ["./packages/*/src"],
+      "@cordisjs/database-*": ["./packages/*/src"],
+      "@cordisjs/*": ["./packages/*/src"],
     },
   },
   "files": [],

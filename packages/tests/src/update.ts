@@ -1,4 +1,4 @@
-import { $, Database, Tables } from 'minato'
+import { $, Database, Tables } from '@cordisjs/plugin-database'
 import { deepEqual, omit } from 'cosmokit'
 import { expect } from 'chai'
 
@@ -23,7 +23,7 @@ interface Baz {
   value?: string
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     temp2: Bar
     temp3: Baz

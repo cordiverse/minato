@@ -1,5 +1,5 @@
 {
-  "name": "@minatojs/driver-sqlite",
+  "name": "@cordisjs/plugin-database-sqlite",
   "version": "5.0.3",
   "description": "SQLite Driver for Minato",
   "type": "module",
@@ -12,13 +12,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/minato.git",
+    "url": "git+https://github.com/cordiverse/database.git",
     "directory": "packages/sqlite"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/minato/issues"
+    "url": "https://github.com/cordiverse/database/issues"
   },
-  "homepage": "https://github.com/cordiverse/minato/packages/sqlite#readme",
+  "homepage": "https://github.com/cordiverse/database/packages/sqlite#readme",
   "keywords": [
     "orm",
     "database",
@@ -26,17 +26,17 @@
     "sqlite"
   ],
   "peerDependencies": {
-    "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.1"
+    "@cordisjs/plugin-database": "^4.0.1",
+    "cordis": "^4.0.0-rc.4"
   },
   "devDependencies": {
+    "@cordisjs/database-tests": "^3.0.0",
+    "@cordisjs/plugin-database": "^4.0.1",
     "@cordisjs/plugin-logger": "^1.0.2",
-    "@minatojs/tests": "^3.0.0",
-    "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.1"
+    "cordis": "^4.0.0-rc.4"
   },
   "dependencies": {
-    "@minatojs/sql-utils": "^6.0.0",
+    "@cordisjs/sql-utils": "^6.0.0",
     "cosmokit": "^1.8.1",
     "schemastery": "^3.18.0"
   }

@@ -1,4 +1,4 @@
-import { $, Database } from 'minato'
+import { $, Database } from '@cordisjs/plugin-database'
 import { expect } from 'chai'
 import { setup } from './utils'
 
@@ -20,7 +20,7 @@ interface PerfNested {
   }[]
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     perf: Perf
     perfNested: PerfNested

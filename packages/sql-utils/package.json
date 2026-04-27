@@ -1,5 +1,5 @@
 {
-  "name": "@minatojs/sql-utils",
+  "name": "@cordisjs/sql-utils",
   "version": "6.0.0",
   "description": "SQL Utilities for Minato",
   "type": "module",
@@ -12,13 +12,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/minato.git",
+    "url": "git+https://github.com/cordiverse/database.git",
     "directory": "packages/sql-utils"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/minato/issues"
+    "url": "https://github.com/cordiverse/database/issues"
   },
-  "homepage": "https://github.com/cordiverse/minato/packages/sql-utils#readme",
+  "homepage": "https://github.com/cordiverse/database/packages/sql-utils#readme",
   "keywords": [
     "orm",
     "database",
@@ -30,11 +30,11 @@
     "builder"
   ],
   "devDependencies": {
-    "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.1"
+    "@cordisjs/plugin-database": "^4.0.1",
+    "cordis": "^4.0.0-rc.4"
   },
   "peerDependencies": {
-    "minato": "^4.0.1"
+    "@cordisjs/plugin-database": "^4.0.1"
   },
   "dependencies": {
     "cosmokit": "^1.8.1"

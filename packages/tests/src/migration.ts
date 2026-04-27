@@ -1,4 +1,4 @@
-import { Database } from 'minato'
+import { Database } from '@cordisjs/plugin-database'
 import { expect } from 'chai'
 import { deepEqual, noop, omit } from 'cosmokit'
 
@@ -16,7 +16,7 @@ interface Qux2 {
   flag: boolean
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     qux: Qux
     qux2: Qux2

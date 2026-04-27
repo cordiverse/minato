@@ -1,5 +1,5 @@
 import { mapValues } from 'cosmokit'
-import { Database, Tables } from 'minato'
+import { Database, Tables } from '@cordisjs/plugin-database'
 
 export async function setup<K extends keyof Tables>(database: Database, name: K, table: Partial<Tables[K]>[]) {
   await database.remove(name, {})

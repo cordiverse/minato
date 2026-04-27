@@ -205,7 +205,7 @@ export class Database extends Service {
       : keys.map(key => model.fields[key]!.relation?.fields || key).flat())
 
     this.prepareTasks[name] = this.prepare(name)
-    ;(this.ctx as Context).emit('minato/model', name)
+    ;(this.ctx as Context).emit('database/model', name)
   }
 
   private _parseField(field: any, transformers: Driver.Transformer[] = [], setInitial?: (value) => void, setField?: (value) => void): Type {

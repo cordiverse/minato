@@ -1,5 +1,5 @@
 {
-  "name": "@minatojs/driver-mongo",
+  "name": "@cordisjs/plugin-database-mongo",
   "version": "4.0.1",
   "description": "MongoDB Driver for Minato",
   "type": "module",
@@ -12,13 +12,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cordiverse/minato.git",
+    "url": "git+https://github.com/cordiverse/database.git",
     "directory": "packages/mongo"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/minato/issues"
+    "url": "https://github.com/cordiverse/database/issues"
   },
-  "homepage": "https://github.com/cordiverse/minato/packages/mongo#readme",
+  "homepage": "https://github.com/cordiverse/database/packages/mongo#readme",
   "keywords": [
     "orm",
     "database",
@@ -27,14 +27,14 @@
     "mongodb"
   ],
   "peerDependencies": {
-    "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.1"
+    "@cordisjs/plugin-database": "^4.0.1",
+    "cordis": "^4.0.0-rc.4"
   },
   "devDependencies": {
+    "@cordisjs/database-tests": "^3.0.0",
+    "@cordisjs/plugin-database": "^4.0.1",
     "@cordisjs/plugin-logger": "^1.0.2",
-    "@minatojs/tests": "^3.0.0",
-    "cordis": "^4.0.0-rc.3",
-    "minato": "^4.0.1"
+    "cordis": "^4.0.0-rc.4"
   },
   "dependencies": {
     "cosmokit": "^1.8.1",

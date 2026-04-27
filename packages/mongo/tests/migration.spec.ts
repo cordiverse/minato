@@ -1,9 +1,9 @@
-import { $, Database, Driver, Primary } from 'minato'
+import { $, Database, Driver, Primary } from '@cordisjs/plugin-database'
 import { Context, Fiber } from 'cordis'
-import MongoDriver from '@minatojs/driver-mongo'
+import MongoDriver from '@cordisjs/plugin-database-mongo'
 import Logger from '@cordisjs/plugin-logger'
 import { ObjectId } from 'mongodb'
-import { expect } from '@minatojs/tests'
+import { expect } from '@cordisjs/database-tests'
 
 interface Foo {
   id?: number
@@ -49,7 +49,7 @@ interface RawDoc {
   value?: number
 }
 
-declare module 'minato' {
+declare module '@cordisjs/plugin-database' {
   interface Tables {
     mongo1: Foo
     mongo2: Bar
@@ -58,7 +58,7 @@ declare module 'minato' {
   }
 }
 
-describe('@minatojs/driver-mongo/migrate-virtualKey', () => {
+describe('@cordisjs/plugin-database-mongo/migrate-virtualKey', () => {
   const ctx = new Context()
 
   let database: Database

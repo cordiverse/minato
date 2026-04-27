@@ -1,8 +1,8 @@
 import { Binary, deepEqual, Dict, difference, isNullable, makeArray, mapValues } from 'cosmokit'
-import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, Selection } from 'minato'
+import { Driver, Eval, executeUpdate, Field, getCell, hasSubquery, isEvalExpr, Selection } from '@cordisjs/plugin-database'
 import { Inject } from 'cordis'
 import type {} from '@cordisjs/plugin-logger'
-import { escapeId } from '@minatojs/sql-utils'
+import { escapeId } from '@cordisjs/sql-utils'
 import type { DatabaseSync, StatementSync } from 'node:sqlite'
 import enUS from './locales/en-US.yml'
 import zhCN from './locales/zh-CN.yml'
@@ -49,7 +49,7 @@ interface SQLiteMasterInfo {
   sql: string
 }
 
-@Inject('logger', false)
+@Inject('logger', false, { name: 'sqlite' })
 export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
   static name = 'sqlite'
 
