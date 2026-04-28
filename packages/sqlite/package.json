@@ -1,6 +1,6 @@
 {
   "name": "@cordisjs/plugin-database-sqlite",
-  "version": "5.0.3",
+  "version": "5.0.4",
   "description": "SQLite Driver for Minato",
   "type": "module",
   "main": "lib/index.js",

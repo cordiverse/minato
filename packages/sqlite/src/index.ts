@@ -8,6 +8,8 @@ import enUS from './locales/en-US.yml'
 import zhCN from './locales/zh-CN.yml'
 import { SQLiteBuilder } from './builder'
 import { fileURLToPath } from 'node:url'
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 import z from 'schemastery'
 
 function getTypeDef({ deftype: type }: Field) {
@@ -164,6 +166,7 @@ export class SQLiteDriver extends Driver<SQLiteDriver.Config> {
     this.path = this.config.path
     if (this.path !== ':memory:') {
       this.path = fileURLToPath(new URL(this.path, this.ctx.baseUrl))
+      mkdirSync(dirname(this.path), { recursive: true })
     }
 
     const { DatabaseSync } = await import('node:sqlite')
